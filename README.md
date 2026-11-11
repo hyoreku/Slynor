@@ -17,6 +17,34 @@ LibVLC. Отдельный слой умеет искать треки в инт
 > **Статус:** личный проект в активной разработке. Стабильного релиза нет,
 > приёмка на чистой Windows ещё не пройдена. Код и интерфейс меняются без предупреждения.
 
+## Скриншоты
+
+<p align="center">
+  <img src="docs/screenshots/home.jpg" width="100%" alt="Главная страница Slynor">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/library.jpg" width="49%" alt="Моя музыка: библиотека">
+  <img src="docs/screenshots/playlist.jpg" width="49%" alt="Плейлист с собственной обложкой">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/now-playing.jpg" width="49%" alt="Экран «Сейчас играет»">
+  <img src="docs/screenshots/equalizer.jpg" width="49%" alt="10-полосный эквалайзер">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/search.jpg" width="49%" alt="Поиск музыки в интернете">
+  <img src="docs/screenshots/settings-general.jpg" width="49%" alt="Настройки: общие">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/settings-appearance.jpg" width="49%" alt="Оформление: темы и акцентный цвет">
+  <img src="docs/screenshots/settings-network.jpg" width="49%" alt="Сеть и прокси">
+</p>
+
+<sub>Скриншоты сняты на демонстрационном профиле с синтетической библиотекой, а не на личной коллекции. Обложки и названия треков — выдуманные.</sub>
+
 ## Возможности
 
 ### Библиотека
@@ -141,7 +169,7 @@ py -3.13 -m venv .venv
 | `packaging/`, `Slynor.spec`, `BUILD_WINDOWS.ps1` | Сборка portable-версии и установщика |
 | `requirements/` | Раздельные наборы зависимостей и их статус |
 | `tests/`, `tools/` | Тесты, диагностика и служебные скрипты |
-| `docs/` | Документация, карты кода и исторические отчёты этапов |
+| `docs/` | Документация, карты кода, скриншоты и исторические отчёты этапов |
 
 ## Данные и приватность
 
