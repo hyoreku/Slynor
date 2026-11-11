@@ -1,0 +1,26 @@
+Изменения относительно этапа 13
+
+README.md
+backend/catalog_music.py
+backend/main.py
+backend/provider_worker.py
+desktop.py
+desktop_shell.py
+docs/STAGE14_COMPACT_PLAYER_AND_SPOTDL.md
+docs/TEST_REPORT_STAGE14.md
+docs/playerMusic.md
+frontend/css/mini.css
+frontend/css/styles.css
+frontend/index.html
+frontend/js/app.js
+frontend/js/desktop.js
+frontend/js/mini.js
+frontend/js/online.js
+frontend/js/selects.js
+frontend/js/visuals.js
+requirements-download.txt
+tests/test_stage14.py
+tools/test_stage12_ui.cjs
+tools/test_stage13_ui.cjs
+tools/test_stage14_ui.cjs
+docs/CHANGED_FILES_STAGE14.txt

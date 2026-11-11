@@ -1,0 +1,1 @@
+PASS 268 stage22 assertions (includes updated earlier scenarios); API and desktop are mocked. Animations use real Chromium timing.

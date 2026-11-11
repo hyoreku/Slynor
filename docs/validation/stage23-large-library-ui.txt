@@ -1,0 +1,1 @@
+PASS 19 stage23 UI assertions; 25,000-track fixture, mocked API/audio, Chromium not WebView2.

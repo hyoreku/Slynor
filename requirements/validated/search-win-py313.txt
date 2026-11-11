@@ -1,0 +1,85 @@
+# Slynor search runtime — hash-locked set for Windows x64 / CPython 3.13.15.
+# pip 26.2.1; generated 2026-10-27T20:25:04+00:00.
+# Install offline:
+#   python -m pip install --require-hashes --no-index --find-links <wheels> \
+#       -r requirements/validated/search-win-py313.txt
+# Every requirement is both pinned and hashed; do not edit by hand.
+
+aiohappyeyeballs==2.7.1 \
+    --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
+aiohttp==3.14.5 \
+    --hash=sha256:d05e94cdfe0d15d0206f970722d2554780ce562787b21b218b275447f8751319
+aiohttp-jinja2==1.6 \
+    --hash=sha256:0df405ee6ad1b58e5a068a105407dc7dcc1704544c559f1938babde954f945c7
+aiosignal==1.4.0 \
+    --hash=sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e
+anyio==4.15.1 \
+    --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101
+attrs==26.1.0 \
+    --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+beautifulsoup4==4.15.0 \
+    --hash=sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9
+bs4==0.0.2 \
+    --hash=sha256:abf8742c0805ef7f662dce4b51cca104cffe52b835238afc169142ab9b3fbccc
+certifi==2026.7.22 \
+    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+cffi==2.1.1 \
+    --hash=sha256:1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d
+click==8.5.0 \
+    --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
+frozenlist==1.8.0 \
+    --hash=sha256:878be833caa6a3821caf85eb39c5ba92d28e85df26d57afb06b35b2efd937231
+h11==0.16.0 \
+    --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+httpcore==1.0.9 \
+    --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55
+httpx==0.28.1 \
+    --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+idna==3.20 \
+    --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+Jinja2==3.1.6 \
+    --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+linkify-it-py==2.2.0 \
+    --hash=sha256:3adc40eb5af300b2605fcfdb968c24e1d780a90f1f2221af7c15e5111e94d443
+lxml==6.1.3 \
+    --hash=sha256:e477aca0bc0d19f3b4ae9e4f2a1cfd687c31bf772d78734910658186b40b2477
+markdown-it-py==4.2.0 \
+    --hash=sha256:9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a
+MarkupSafe==3.0.4 \
+    --hash=sha256:1f1f9477e174582b0a1b583d60b66e1f2cf5d3fe12cee985e4aedf44766600e5
+mdit-py-plugins==0.6.1 \
+    --hash=sha256:214c82fb2ac524472ab6a5bcab1de80f73b50443e187f401bfd77efbc7c6481d
+mdurl==0.1.2 \
+    --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8
+msgpack==1.2.3 \
+    --hash=sha256:bb89b5dc30469c84bbf8684826eb851d82412ca95690e111b9ac5e8fb343961a
+msoc==0.3.1 \
+    --hash=sha256:fbb8ff186bd3f2efadb4d511927f3f1fd95c6451503c8732c38eac45fe9746d8
+multidict==7.1.0 \
+    --hash=sha256:7de54b49e6da811b0321e412d14efdaa1ee0c0b6609296ea5b9022bc5b2bd843
+platformdirs==4.13.3 \
+    --hash=sha256:f6ad7f447f24f8a3b82cce5976387428bff894a0eca6c3488f4a17f153c130c4
+propcache==0.5.4 \
+    --hash=sha256:0c889f6fa84957bc7e8b4eab71fd16a0455068d5045e3aa40c733071d2b2fd77
+pycparser==3.11 \
+    --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+Pygments==2.21.0 \
+    --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+rich==15.0.0 \
+    --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb
+socksio==1.0.0 \
+    --hash=sha256:95dc1f15f9b34e8d7b16f06d74b8ccf48f609af32ab33c608d08761c5dcbb1f3
+sounddevice==0.5.6 \
+    --hash=sha256:7f4162f514f007b0bf25a3ccfed3f1705bc2ec311888a90232729eec4f57a4f4
+soupsieve==3.0.3 \
+    --hash=sha256:fa30e3ba4809cb81ce1f3209f2fbe3e779fc445f0439bc147a0d7c4601743f21
+textual==8.2.8 \
+    --hash=sha256:267375fd402dc8d981457212efa71f0e3365fd17bba144ba9bb3ed7563cb374a
+textual-dev==1.8.0 \
+    --hash=sha256:227b6d24a485fbbc77e302aa21f4fdf3083beb57eb45cd95bae082c81cbeddeb
+textual-serve==1.1.3 \
+    --hash=sha256:207a472bc6604e725b1adab4ab8bf12f4c4dc25b04eea31e4d04731d8bf30f18
+typing_extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+yarl==1.25.1 \
+    --hash=sha256:1f51020b2eb8a003c84925638ec63c21a750a4bddd3a22ec8eac6a742dadf1b9

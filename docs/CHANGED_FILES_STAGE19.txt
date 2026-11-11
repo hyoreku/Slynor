@@ -1,0 +1,33 @@
+Основа: OwnPlayerMusic_stage18.zip
+Изменены или добавлены:
+BUILD_WINDOWS.ps1
+README.md
+README_STAGE19.md
+START.cmd
+backend/diagnostics.py
+backend/image_assets.py
+backend/main.py
+backend/wallpaper_assets.py
+desktop.py
+desktop_shell.py
+docs/BUILD_WINDOWS.md
+docs/CODE_MAP.md
+docs/TEST_REPORT_STAGE19.md
+docs/playerMusic.md
+frontend/assets/icons/README.md
+frontend/assets/icons/app.ico
+frontend/assets/icons/tray.png
+frontend/index.html
+frontend/js/app.js
+frontend/js/mini.js
+frontend/js/network18.js
+frontend/js/settings16.js
+frontend/js/sidebar.js
+frontend/js/visuals.js
+frontend/mini.html
+packaging/Slynor.iss
+start.py
+tests/test_stage19.py
+tools/test_stage19_ui.cjs
+
+Удалён/переименован: packaging/OwnPlayerMusic.iss → packaging/Slynor.iss

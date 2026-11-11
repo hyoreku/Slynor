@@ -1,0 +1,27 @@
+{
+  "kind": "research metadata step, not Windows acceptance",
+  "input_archive_sha256": "53ea7ec738da1cbbf7480f9e93079f94ea9cbe4ba4975e39be11b5b0e75d1c62",
+  "input_matches_previous_source_files": 246,
+  "source_experiment_tests_passed": 22,
+  "msoc_contract_tests_passed": 3,
+  "previous_stage0_and_preflight_tests_passed": 10,
+  "python_syntax_files": 62,
+  "changed_product_files": [
+    "backend/msoc_worker.py"
+  ],
+  "unchanged_product_files": 100,
+  "actual_sandbox_run_id": "20261022T204407Z-sandbox-7ec4783a",
+  "planned_smoke_attempts": 24,
+  "actual_search_attempts": 4,
+  "errors": {
+    "dns": 4
+  },
+  "actual_http_responses": 0,
+  "download_attempts": 0,
+  "home_run": "not run",
+  "vps_ru_run": "not run",
+  "cpu_ram": "not measured; psutil absent in sandbox controller",
+  "windows_powershell": "not run",
+  "full_unittest": "not run; GUI dependencies unavailable",
+  "core_tool_hashes_match_measured_run": true
+}

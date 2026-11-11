@@ -1,0 +1,346 @@
+{
+  "title": "Slynor provider runtime",
+  "generated": "2026-10-27T20:25:00+00:00",
+  "python": "3.13.15",
+  "pip": "26.2.1",
+  "platform": "Windows-11-10.0.22631-SP0",
+  "machine": "AMD64",
+  "packages": 66,
+  "fields": {
+    "check": "install, pip check, imports spotdl/scdl/yt-dlp 2026.08.19",
+    "limits": "no live provider downloads were run",
+    "native_ffmpeg": "required at runtime, not part of this lock"
+  },
+  "requirements": {
+    "annotated-types": {
+      "version": "0.8.0",
+      "artifact": "annotated_types-0.8.0-py3-none-any.whl",
+      "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0"
+    },
+    "anyio": {
+      "version": "3.7.1",
+      "artifact": "anyio-3.7.1-py3-none-any.whl",
+      "sha256": "91dee416e570e92c64041bd18b900d1d6fa78dff7048769ce5ac5ddad004fbb5"
+    },
+    "beautifulsoup4": {
+      "version": "4.15.0",
+      "artifact": "beautifulsoup4-4.15.0-py3-none-any.whl",
+      "sha256": "d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9"
+    },
+    "brotli": {
+      "version": "1.2.0",
+      "artifact": "brotli-1.2.0-cp313-cp313-win_amd64.whl",
+      "sha256": "b63daa43d82f0cdabf98dee215b375b4058cce72871fd07934f179885aad16e8"
+    },
+    "certifi": {
+      "version": "2026.7.22",
+      "artifact": "certifi-2026.7.22-py3-none-any.whl",
+      "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+    },
+    "cffi": {
+      "version": "2.1.1",
+      "artifact": "cffi-2.1.1-cp313-cp313-win_amd64.whl",
+      "sha256": "1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d"
+    },
+    "charset-normalizer": {
+      "version": "3.5.2",
+      "artifact": "charset_normalizer-3.5.2-cp313-cp313-win_amd64.whl",
+      "sha256": "78456a747de8dc58360ffa581f30a002baf5aa28cb262536545e91f113ed7639"
+    },
+    "click": {
+      "version": "8.5.0",
+      "artifact": "click-8.5.0-py3-none-any.whl",
+      "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360"
+    },
+    "colorama": {
+      "version": "0.4.6",
+      "artifact": "colorama-0.4.6-py2.py3-none-any.whl",
+      "sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"
+    },
+    "curl_cffi": {
+      "version": "0.15.0",
+      "artifact": "curl_cffi-0.15.0-cp310-abi3-win_amd64.whl",
+      "sha256": "5a0c1896a0d5a5ac1eb89cd24b008d2b718dd1df6fd2f75451b59ca66e49e572"
+    },
+    "dacite": {
+      "version": "1.9.2",
+      "artifact": "dacite-1.9.2-py3-none-any.whl",
+      "sha256": "053f7c3f5128ca2e9aceb66892b1a3c8936d02c686e707bee96e19deef4bc4a0"
+    },
+    "datastar-py": {
+      "version": "1.0.3",
+      "artifact": "datastar_py-1.0.3-py3-none-any.whl",
+      "sha256": "38ce441fcd866249662e610d315857bde046e74c3b989a6993e31da88a0a5139"
+    },
+    "Deprecated": {
+      "version": "3.0.0",
+      "artifact": "deprecated-3.0.0-py3-none-any.whl",
+      "sha256": "58204cf4a7f6270d547af5c278ee7a6bb56045a4b3d8441a1cd11660f41b7939"
+    },
+    "dnspython": {
+      "version": "2.9.0",
+      "artifact": "dnspython-2.9.0-py3-none-any.whl",
+      "sha256": "9a4aedb833c3c1b49214d04d44d3032ab7a9135f7c1d29a549b4ff78fd82fda9"
+    },
+    "docopt-ng": {
+      "version": "0.9.0",
+      "artifact": "docopt_ng-0.9.0-py3-none-any.whl",
+      "sha256": "bfe4c8b03f9fca424c24ee0b4ffa84bf7391cb18c29ce0f6a8227a3b01b81ff9"
+    },
+    "fastapi": {
+      "version": "0.103.2",
+      "artifact": "fastapi-0.103.2-py3-none-any.whl",
+      "sha256": "3270de872f0fe9ec809d4bd3d4d890c6d5cc7b9611d721d6438f9dacc8c4ef2e"
+    },
+    "h11": {
+      "version": "0.16.0",
+      "artifact": "h11-0.16.0-py3-none-any.whl",
+      "sha256": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86"
+    },
+    "idna": {
+      "version": "3.20",
+      "artifact": "idna-3.20-py3-none-any.whl",
+      "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c"
+    },
+    "jaconv": {
+      "version": "0.5.0",
+      "artifact": "jaconv-0.5.0-py3-none-any.whl",
+      "sha256": "2914114fe761ca49fc7089e25e6ad4a400c26f262ffce84e13b176916b71610a"
+    },
+    "Jinja2": {
+      "version": "3.1.6",
+      "artifact": "jinja2-3.1.6-py3-none-any.whl",
+      "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+    },
+    "markdown-it-py": {
+      "version": "4.2.0",
+      "artifact": "markdown_it_py-4.2.0-py3-none-any.whl",
+      "sha256": "9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a"
+    },
+    "MarkupSafe": {
+      "version": "3.0.4",
+      "artifact": "markupsafe-3.0.4-cp313-cp313-win_amd64.whl",
+      "sha256": "1f1f9477e174582b0a1b583d60b66e1f2cf5d3fe12cee985e4aedf44766600e5"
+    },
+    "mdurl": {
+      "version": "0.1.2",
+      "artifact": "mdurl-0.1.2-py3-none-any.whl",
+      "sha256": "84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"
+    },
+    "mutagen": {
+      "version": "1.48.1",
+      "artifact": "mutagen-1.48.1-py3-none-any.whl",
+      "sha256": "4f077fe87d3fc7fba259aa63d8c026b18382ca6a42ef37c61e16f1b1b5b82fe7"
+    },
+    "pillow": {
+      "version": "13.0.0",
+      "artifact": "pillow-13.0.0-cp313-cp313-win_amd64.whl",
+      "sha256": "9dda0788a9932776a75d8bcc020076edc308ce2508b51f6739a45e3158b3fc42"
+    },
+    "platformdirs": {
+      "version": "4.13.3",
+      "artifact": "platformdirs-4.13.3-py3-none-any.whl",
+      "sha256": "f6ad7f447f24f8a3b82cce5976387428bff894a0eca6c3488f4a17f153c130c4"
+    },
+    "pycparser": {
+      "version": "3.11",
+      "artifact": "pycparser-3.11-py3-none-any.whl",
+      "sha256": "51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80"
+    },
+    "pycryptodomex": {
+      "version": "3.24.1",
+      "artifact": "pycryptodomex-3.24.1-cp37-abi3-win_amd64.whl",
+      "sha256": "82eb0dd8a95be97f03527b108ee49f9b86a7c534fa47fa7a510be3eab8ea9acd"
+    },
+    "pydantic": {
+      "version": "2.14.1",
+      "artifact": "pydantic-2.14.1-py3-none-any.whl",
+      "sha256": "9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454"
+    },
+    "pydantic_core": {
+      "version": "2.50.1",
+      "artifact": "pydantic_core-2.50.1-cp313-cp313-win_amd64.whl",
+      "sha256": "7816e98acc08119dc0f340ab167048ecc54126316330c1f0caf7c6756c88e28f"
+    },
+    "Pygments": {
+      "version": "2.21.0",
+      "artifact": "pygments-2.21.0-py3-none-any.whl",
+      "sha256": "2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9"
+    },
+    "pykakasi": {
+      "version": "2.3.0",
+      "artifact": "pykakasi-2.3.0-py3-none-any.whl",
+      "sha256": "26d21b090048ff45c6a4d8e962426b7951767216008ec30358e8a9d74af77f29"
+    },
+    "pymongo": {
+      "version": "4.19.0",
+      "artifact": "pymongo-4.19.0-cp313-cp313-win_amd64.whl",
+      "sha256": "2f5719dfbb5527a55dfaf6a68164df118efc13fffd00bc2ee9231488c1e8e03a"
+    },
+    "PyOTP": {
+      "version": "2.10.0",
+      "artifact": "pyotp-2.10.0-py3-none-any.whl",
+      "sha256": "1df2f6a1bcc3bb0716172a5215ddc2f8c7c7fd26a13df9927d52e1746934836c"
+    },
+    "PySocks": {
+      "version": "1.7.1",
+      "artifact": "PySocks-1.7.1-py3-none-any.whl",
+      "sha256": "2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5"
+    },
+    "python-dateutil": {
+      "version": "2.9.0.post0",
+      "artifact": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"
+    },
+    "python-multipart": {
+      "version": "0.0.32",
+      "artifact": "python_multipart-0.0.32-py3-none-any.whl",
+      "sha256": "ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23"
+    },
+    "python-slugify": {
+      "version": "8.0.4",
+      "artifact": "python_slugify-8.0.4-py2.py3-none-any.whl",
+      "sha256": "276540b79961052b66b7d116620b36518847f52d5fd9e3a70164fc8c50faa6b8"
+    },
+    "RapidFuzz": {
+      "version": "3.14.6",
+      "artifact": "rapidfuzz-3.14.6-cp313-cp313-win_amd64.whl",
+      "sha256": "c69fb0e064d10c79908dcda76d7ca8ecdf8393a39acbb74dbad3f709f2c60e95"
+    },
+    "readerwriterlock": {
+      "version": "1.0.10",
+      "artifact": "readerwriterlock-1.0.10-py3-none-any.whl",
+      "sha256": "788c28ca2da19681e466609774252eb55a963286c6f7cf8ace13d0be21a69683"
+    },
+    "redis": {
+      "version": "8.1.0",
+      "artifact": "redis-8.1.0-py3-none-any.whl",
+      "sha256": "a4fe1aac3d3b3cc791d4b3d5931c5a956045dc951ee74d1c913ee3ac4d2ee9fb"
+    },
+    "requests": {
+      "version": "2.34.2",
+      "artifact": "requests-2.34.2-py3-none-any.whl",
+      "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"
+    },
+    "rich": {
+      "version": "13.9.4",
+      "artifact": "rich-13.9.4-py3-none-any.whl",
+      "sha256": "6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90"
+    },
+    "scdl": {
+      "version": "3.0.8",
+      "artifact": "scdl-3.0.8-py3-none-any.whl",
+      "sha256": "82f57a4cf9f4adbbbba03a65141d5e27098a55499eb775e13af0687aba995799"
+    },
+    "six": {
+      "version": "1.17.0",
+      "artifact": "six-1.17.0-py2.py3-none-any.whl",
+      "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+    },
+    "sniffio": {
+      "version": "1.3.1",
+      "artifact": "sniffio-1.3.1-py3-none-any.whl",
+      "sha256": "2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2"
+    },
+    "soundcloud-v2": {
+      "version": "1.7.0",
+      "artifact": "soundcloud_v2-1.7.0-py3-none-any.whl",
+      "sha256": "ff7e37ed65f655f7d66f9819b266915499489ac640a58c3fb173101d7eebeb2b"
+    },
+    "soupsieve": {
+      "version": "3.0.3",
+      "artifact": "soupsieve-3.0.3-py3-none-any.whl",
+      "sha256": "fa30e3ba4809cb81ce1f3209f2fbe3e779fc445f0439bc147a0d7c4601743f21"
+    },
+    "spotapi": {
+      "version": "1.2.8",
+      "artifact": "spotapi-1.2.8-py3-none-any.whl",
+      "sha256": "dc5716b215ef207b97249a70347965981c30102899dbe727b1b5f1e643ba179e"
+    },
+    "spotdl": {
+      "version": "4.5.2",
+      "artifact": "spotdl-4.5.2-py3-none-any.whl",
+      "sha256": "56d22b89aa85fb2c158a6794b0f42e413c73355b47e04930ded3fee82b767282"
+    },
+    "spotipy": {
+      "version": "2.26.0",
+      "artifact": "spotipy-2.26.0-py3-none-any.whl",
+      "sha256": "2726854ddfa0e5624aada592e737832ec75bdc00ae12c102779f8bd995329d49"
+    },
+    "spotipyFree": {
+      "version": "1.9.14",
+      "artifact": "spotipyfree-1.9.14-py3-none-any.whl",
+      "sha256": "ada3cb4f6402e26bbb9816c869d292f897cf12e4f8d44f977bf5aca1b3894164"
+    },
+    "starlette": {
+      "version": "0.27.0",
+      "artifact": "starlette-0.27.0-py3-none-any.whl",
+      "sha256": "918416370e846586541235ccd38a474c08b80443ed31c578a418e2209b3eef91"
+    },
+    "syncedlyrics": {
+      "version": "1.0.1",
+      "artifact": "syncedlyrics-1.0.1-py3-none-any.whl",
+      "sha256": "31ca4322311b454f969e837c7350ecbef241f705f2122ea0183a2902a1a3791a"
+    },
+    "text-unidecode": {
+      "version": "1.3",
+      "artifact": "text_unidecode-1.3-py2.py3-none-any.whl",
+      "sha256": "1311f10e8b895935241623731c2ba64f4c455287888b18189350b67134a822e8"
+    },
+    "typing-inspection": {
+      "version": "0.4.4",
+      "artifact": "typing_inspection-0.4.4-py3-none-any.whl",
+      "sha256": "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147"
+    },
+    "typing_extensions": {
+      "version": "4.16.0",
+      "artifact": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+    },
+    "Unidecode": {
+      "version": "1.4.0",
+      "artifact": "Unidecode-1.4.0-py3-none-any.whl",
+      "sha256": "c3c7606c27503ad8d501270406e345ddb480a7b5f38827eafe4fa82a137f0021"
+    },
+    "urllib3": {
+      "version": "2.8.0",
+      "artifact": "urllib3-2.8.0-py3-none-any.whl",
+      "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3"
+    },
+    "uvicorn": {
+      "version": "0.23.2",
+      "artifact": "uvicorn-0.23.2-py3-none-any.whl",
+      "sha256": "1f9be6558f01239d4fdf22ef8126c39cb1ad0addf76c40e760549d2c2f43ab53"
+    },
+    "validators": {
+      "version": "0.36.0",
+      "artifact": "validators-0.36.0-py3-none-any.whl",
+      "sha256": "c52ad00435e385b95fa4d6dd3081cb20c0660e7fd07b214523c8584dd2edba34"
+    },
+    "websockets": {
+      "version": "14.2",
+      "artifact": "websockets-14.2-cp313-cp313-win_amd64.whl",
+      "sha256": "b439ea828c4ba99bb3176dc8d9b933392a2413c0f6b149fdcba48393f573377f"
+    },
+    "wrapt": {
+      "version": "2.5.1",
+      "artifact": "wrapt-2.5.1-cp313-cp313-win_amd64.whl",
+      "sha256": "09b1893ee4063706574c1813abf479b8b51926633fbdb6f96aab8dc7b0976668"
+    },
+    "yt-dlp": {
+      "version": "2026.8.19",
+      "artifact": "yt_dlp-2026.8.19-py3-none-any.whl",
+      "sha256": "1d57897e94c6665a0a6f9bc54b34e584284e32c034ffab3a7df25d8f7b24eedf"
+    },
+    "yt-dlp-ejs": {
+      "version": "0.8.0",
+      "artifact": "yt_dlp_ejs-0.8.0-py3-none-any.whl",
+      "sha256": "79300e5fca7f937a1eeede11f0456862c1b41107ce1d726871e0207424f4bdb4"
+    },
+    "ytmusicapi": {
+      "version": "1.12.3",
+      "artifact": "ytmusicapi-1.12.3-py3-none-any.whl",
+      "sha256": "f65db840907a43ca23b29bd563951a1e390fbe2089d7aa4ddbe2043824b2acd9"
+    }
+  }
+}

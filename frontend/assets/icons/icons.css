@@ -1,0 +1,12 @@
+/* External masks use CSS geometry, never the SVG export's width/height. */
+[data-ui-icon]{position:relative;font-size:0!important;--ui-icon-size:20px;}
+[data-ui-icon]>svg{display:none!important;}
+[data-ui-icon]::after{content:'';display:block;position:absolute;left:50%;top:50%;width:var(--ui-icon-size);height:var(--ui-icon-size);transform:translate(-50%,-50%);background:currentColor;mask:var(--ui-icon) center/contain no-repeat;-webkit-mask:var(--ui-icon) center/contain no-repeat;pointer-events:none;}
+.nav-icon[data-ui-icon]{width:24px;height:24px;min-width:24px;flex:0 0 24px;--ui-icon-size:22px;}
+#play-toggle-button[data-ui-icon]{--ui-icon-size:19px;}
+.track-play-symbol{font-size:0;}
+.track-play-symbol::after{content:'';width:16px;height:16px;background:currentColor;mask:url('/static/assets/icons/play.svg') center/contain no-repeat;-webkit-mask:url('/static/assets/icons/play.svg') center/contain no-repeat;}
+/* Icon size and hit target are independent; compact native window is only 112px high. */
+body.mini-window [data-ui-icon]{--ui-icon-size:15px;width:28px;height:28px;min-width:28px;min-height:28px;flex:0 0 28px;padding:0;}
+body.mini-window #mini-toggle{--ui-icon-size:16px;}
+body.mini-window #mini-hide,body.mini-window #mini-expand{--ui-icon-size:14px;}

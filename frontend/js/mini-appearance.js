@@ -1,0 +1,16 @@
+(() => {
+ const layer=document.createElement('div');layer.id='mini-background';layer.setAttribute('aria-hidden','true');document.body.prepend(layer);
+ const image=new Image(),video=document.createElement('video'),colors=document.createElement('div');video.muted=true;video.loop=true;video.playsInline=true;video.preload='auto';colors.className='mini-colors';for(let i=0;i<3;i++)colors.append(document.createElement('span'));image.hidden=video.hidden=colors.hidden=true;layer.append(image,video,colors);let current=null,lastMedia='',lastCover='',paletteRevision=0,lastState=null,nativeHidden=false;
+ const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+ function media(){if(!current)return;const visible=!nativeHidden&&!document.hidden&&lastState?.window_visibility?.mini!==false;const url=current.mini_background==='wallpaper'&&current.wallpaper?'/api/assets/wallpapers/'+current.wallpaper:'';if(url!==lastMedia){lastMedia=url;video.pause();video.removeAttribute('src');image.removeAttribute('src');video.hidden=image.hidden=true;if(/\.(mp4|webm)$/.test(url)){video.src=url;video.hidden=false;}else if(url){image.src=url;image.hidden=false;}}
+  if(visible&&!reduced.matches&&video.getAttribute('src'))void video.play().catch(()=>{});else video.pause();
+  if(/\.gif$/.test(url)){if(visible&&!reduced.matches){if(!image.getAttribute('src'))image.src=url;}else image.removeAttribute('src');}
+  colors.hidden=current.mini_background!=='colors';colors.style.animationPlayState=visible&&!reduced.matches?'running':'paused';for(const blob of colors.children)blob.style.animationPlayState=colors.style.animationPlayState;
+ }
+ function palette(){const url=document.getElementById('mini-cover').dataset.url||'';if(lastCover===url)return;lastCover=url;const revision=++paletteRevision;
+  if(!url){colors.style.removeProperty('--mini-c1');colors.style.removeProperty('--mini-c2');colors.style.removeProperty('--mini-c3');return;}
+  void window.coverPalette?.(url).then(rgb=>{if(!rgb||revision!==paletteRevision)return;rgb.forEach((c,i)=>colors.style.setProperty('--mini-c'+(i+1),c.join(',')));});
+ }
+ window.miniAppearance={update(state){lastState=state;const a=state.appearance;if(a&&JSON.stringify(a)!==JSON.stringify(current)){current=a;layer.dataset.mode=a.mini_background;document.documentElement.dataset.theme=a.theme;document.documentElement.style.setProperty('--accent',a.accent);const rgbArray=a.accent.slice(1).match(/../g).map(x=>parseInt(x,16));const rgb=rgbArray.join(',');document.documentElement.style.setProperty('--accent-rgb',rgb);const lin=v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;};const lum=.2126*lin(rgbArray[0])+.7152*lin(rgbArray[1])+.0722*lin(rgbArray[2]);document.documentElement.style.setProperty('--accent-on',lum>.179?'#000000':'#ffffff');layer.style.setProperty('--mini-dim',String(a.dim/100));layer.style.setProperty('--mini-blur',a.blur+'px');}media();palette();}};
+ new MutationObserver(palette).observe(document.getElementById('mini-cover'),{attributes:true,attributeFilter:['data-url'],childList:true});window.addEventListener('native-window-state',e=>{nativeHidden=!!e.detail?.minimized;media();});document.addEventListener('visibilitychange',media);reduced.addEventListener('change',media);
+})();

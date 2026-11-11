@@ -1,0 +1,4 @@
+PASS synthetic audio: .webm (Opus)
+PASS synthetic audio: .aac
+PASS disguised playlist rejected
+Generated locally with FFmpeg; no real online content or VLC playback tested.

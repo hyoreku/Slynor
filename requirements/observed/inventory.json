@@ -1,0 +1,1367 @@
+{
+  "status": "observed_metadata_not_a_validated_lock",
+  "python_observed": "3.13.15 Windows x64 per pyvenv.cfg; not executed here",
+  "groups": {
+    "gui": {
+      "source_environment": ".buildenv",
+      "metadata_count": 37,
+      "seeds": [
+        "fastapi",
+        "uvicorn[standard]",
+        "pywebview",
+        "python-vlc",
+        "mutagen",
+        "Pillow",
+        "numpy",
+        "av",
+        "pystray",
+        "httpx[socks]"
+      ],
+      "packages": [
+        {
+          "name": "annotated-doc",
+          "version": "0.0.5",
+          "metadata_sha256": "8c24d70c5d9153d22123353a906042fd7603df2d15c2196290b0f8a962558c46",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "metadata_sha256": "614985b278f601b8ef863f82783b991cc3ada4b89f592eb71c7c48c5f2ef2298",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "metadata_sha256": "043aecb571af7189e8a6c528f5d8e32545f1b2cdfaaf761d51e6d5b67ea3ca81",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "av",
+          "version": "18.1.0",
+          "metadata_sha256": "120ce4f0236916079ffdf92e01ae9e02cd5b8c7617cbee93b224d90e2f6435e3",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "bottle",
+          "version": "0.13.4",
+          "metadata_sha256": "441619180223f6ae8a92d1e88e4bbd48159c452bedae1e7c9c27f0673fa720d1",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "metadata_sha256": "ef5af1638fbb23676ac3c5777dfcfc2cd9c348fe4172ed5ba3d277655b248090",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "metadata_sha256": "67b6a7595df7ede2195016a05d285faa7d362a8f57c238984edb8bb674b5770d",
+          "license_expression": "MIT-0",
+          "license_header_present": false
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "metadata_sha256": "e87bce0bd194de70dfb8e708e0a6b0483009f25611804eaf87bfeb63e6c20501",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "clr-loader",
+          "version": "0.3.1",
+          "metadata_sha256": "5ef5654ad82dc3ab9cc752f6c72f6ea88a3e401aa3d80243596724566a1ca7c8",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "fastapi",
+          "version": "0.143.3",
+          "metadata_sha256": "364f68b16f489abe36d621da2fa727f774bec90916cd3325b78e422af3b59a5f",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "metadata_sha256": "28f326098ac09fcba79b8f180f96087c841fe2456215cb7b872a9c7d5cd19d64",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "metadata_sha256": "fe2d4fda6199128978779e0cf27f3c045c531863fcdd987eacc74f3a18d41c21",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "httptools",
+          "version": "0.9.0",
+          "metadata_sha256": "623cd71bd31f5a87a9aa677a49ae85785c60ee456ee76d5493ac867ad1a3f97e",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "metadata_sha256": "febb9b0f8f3e80d57c8199c304f35c4336e8581d1d18d7983c92766b82793b25",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "mutagen",
+          "version": "1.48.1",
+          "metadata_sha256": "cd882f5f900d6d0ef2951b0c9898d14b6ab881fda89b924dbebbe12441f94118",
+          "license_expression": "GPL-2.0-or-later",
+          "license_header_present": false
+        },
+        {
+          "name": "numpy",
+          "version": "2.5.4",
+          "metadata_sha256": "e2b909d6a37d76c2bc130f528d7fed0c517322bce16dc7846b6a6df30e200403",
+          "license_expression": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+          "license_header_present": false
+        },
+        {
+          "name": "opentelemetry-api",
+          "version": "1.45.1",
+          "metadata_sha256": "5bc71e90cb421be92a43bf5ad5b0f25dccfa2a24ddceaa2877779879962a4c9e",
+          "license_expression": "Apache-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "pillow",
+          "version": "12.3.0",
+          "metadata_sha256": "2c4378001803cfac65809a50722d46e0da4ce8061e717f103e5d52734bab30f5",
+          "license_expression": "MIT-CMU",
+          "license_header_present": false
+        },
+        {
+          "name": "proxy-tools",
+          "version": "0.1.0",
+          "metadata_sha256": "34f8db57e46ca03c6185c649a15cc52a0c9120f4f781e9b64701044b22a7fc86",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "metadata_sha256": "e3a74c846648bb55f4f907284b745e2003b87b96d9c9d17a8a50cf37804541c9",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1",
+          "metadata_sha256": "4d4c8e8d5e6a27d5208f0d7949f25628e6747133034969d4d1399b1ad5394036",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.1",
+          "metadata_sha256": "790c40c25f95db9b18e1d4b5ae75979ce6027b15d6f924c042553252ff43328f",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pystray",
+          "version": "0.19.5",
+          "metadata_sha256": "073b0620fe49a47061d336d7110779e6ca808e8294b0aa5cd9d437b1979d8fb1",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "metadata_sha256": "87cfee6042412d48df1100ea7822684988c3f2b79de7a250f4717f4df3026d6f",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "python-vlc",
+          "version": "3.0.21203",
+          "metadata_sha256": "65c880343e46da459b2a134a2b7b2638e53f7e638c00c836c5ec79abcb3f3c06",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pythonnet",
+          "version": "3.2.1",
+          "metadata_sha256": "2bf043c02e68e1fa3b8d55469ef42ab0c4cc180e374fe4322ace1848da3e0f62",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pywebview",
+          "version": "6.2.1",
+          "metadata_sha256": "8e7f87b5e50b992bc44d9f1dc03fb5218f0b6da5d6c4b9f21f93916bf44569c7",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pyyaml",
+          "version": "6.0.3",
+          "metadata_sha256": "847a701020334386852b6e07bad1053cb0ce3da9ee1846e7e9d02b24e8bb3f8d",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "six",
+          "version": "1.17.0",
+          "metadata_sha256": "562042078c2752549f6d8a7c86dbc5dd708088a7be6d80672ec7b07100b72468",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "socksio",
+          "version": "1.0.0",
+          "metadata_sha256": "bbfa5fe1625dadce138e24ff9c161b6499c4f33cd6b0adde62ef3531a6870286",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "starlette",
+          "version": "1.8.0",
+          "metadata_sha256": "551e8d74d290002521c655b816b27654e49922b88cb474c8d710a893099036f8",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "metadata_sha256": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+          "license_expression": "PSF-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4",
+          "metadata_sha256": "bad3d9e6342ef6750cf5128ec942327b8bebdce0b6e4d6f67cb15b27ae5118da",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "metadata_sha256": "9399e5ddda3d26e842d6fb5420c38b0857aac568d53badbdc224b3a21339efa8",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "watchfiles",
+          "version": "1.3.0",
+          "metadata_sha256": "3b30e7c9377f43cb59b408185ae7707ec55d5b746395bdaa32a45819ea49d78b",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "websockets",
+          "version": "17.2",
+          "metadata_sha256": "120a5bb2d761950170e22fc77a43536d157f85b1cf2bf9c413324bfdb35e46e7",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        }
+      ]
+    },
+    "provider": {
+      "source_environment": ".providers",
+      "metadata_count": 66,
+      "seeds": [
+        "spotdl",
+        "scdl",
+        "PySocks",
+        "yt-dlp[default]"
+      ],
+      "packages": [
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "metadata_sha256": "614985b278f601b8ef863f82783b991cc3ada4b89f592eb71c7c48c5f2ef2298",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "anyio",
+          "version": "3.7.1",
+          "metadata_sha256": "98e85f5cf07ba8a550877754b69d8d80bcac6b5d231d678304d9d183ef7703f7",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "beautifulsoup4",
+          "version": "4.15.0",
+          "metadata_sha256": "b2f888103259f1607c85f3b1163be1bc49fc9941a3243c3b89a21075bfc6d4fb",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "brotli",
+          "version": "1.2.0",
+          "metadata_sha256": "74bcce6f21c042efe5b1ddfb1cf73670307f21d785680d5f7838c792226f91d1",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "metadata_sha256": "ef5af1638fbb23676ac3c5777dfcfc2cd9c348fe4172ed5ba3d277655b248090",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "metadata_sha256": "67b6a7595df7ede2195016a05d285faa7d362a8f57c238984edb8bb674b5770d",
+          "license_expression": "MIT-0",
+          "license_header_present": false
+        },
+        {
+          "name": "charset-normalizer",
+          "version": "3.5.2",
+          "metadata_sha256": "49e955a09e1a159e0846872798006e8db7d518d8d70c637066fefdb08d3d9f7b",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "metadata_sha256": "e87bce0bd194de70dfb8e708e0a6b0483009f25611804eaf87bfeb63e6c20501",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "colorama",
+          "version": "0.4.6",
+          "metadata_sha256": "7baed29eb50c3b29bdb33ff84e3177bf1bc05784f7685ecdcaa4471c7dd810cc",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "curl-cffi",
+          "version": "0.15.0",
+          "metadata_sha256": "8e8971fdbc18bd5728d7194d52d2d819db03b7e936f40f73fa11554b8f294b1e",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "dacite",
+          "version": "1.9.2",
+          "metadata_sha256": "6afa87a73299a7c813933835b14939d5ca7304a4d515937ad5d8a9815cfa7457",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "datastar-py",
+          "version": "1.0.3",
+          "metadata_sha256": "f1f05baeed4c516e00982bac0dcdc7e877ec1c5d14cdf7aecf3b60906fdda18e",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "deprecated",
+          "version": "3.0.0",
+          "metadata_sha256": "e0f1fb18cd5bd39761fc1de8233112757c443c152fe9898b5b8ca1341a28faf5",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "dnspython",
+          "version": "2.9.0",
+          "metadata_sha256": "d25dbd09b39758cd5cebe518701012a6278731986cd384fc4a7f25e78f7de929",
+          "license_expression": "ISC",
+          "license_header_present": false
+        },
+        {
+          "name": "docopt-ng",
+          "version": "0.9.0",
+          "metadata_sha256": "42d30bd520af195348b0dafbf4a409b12e4a790f71a963a6dd2de32b92b2f595",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "fastapi",
+          "version": "0.103.2",
+          "metadata_sha256": "cf1d7099170e73a8d021a4ea5117263f8399c849b20b56b068d4751796c94cdd",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "metadata_sha256": "28f326098ac09fcba79b8f180f96087c841fe2456215cb7b872a9c7d5cd19d64",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "jaconv",
+          "version": "0.5.0",
+          "metadata_sha256": "244ada3017da08e08483d1543211c76e404b7dd578795844d5ef6d35f9b49993",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "jinja2",
+          "version": "3.1.6",
+          "metadata_sha256": "68c5548fb67c4132a13898d9b31ec50c6bea2abdd915d921f214355c3a6499c8",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "markdown-it-py",
+          "version": "4.2.0",
+          "metadata_sha256": "72c36ff516755443b1ecb61e17b2567a990230b49a504b0eb0c42d5f82448a9c",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "metadata_sha256": "08fa79954ab288d778b0fee4f0e6c7dbc869e545a415747d1324622465d3b08d",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "mdurl",
+          "version": "0.1.2",
+          "metadata_sha256": "b53b29d48f499367053fda3c81e7ce27d2558380ebbf83e66023b02eb7ddd25d",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "mutagen",
+          "version": "1.48.1",
+          "metadata_sha256": "cd882f5f900d6d0ef2951b0c9898d14b6ab881fda89b924dbebbe12441f94118",
+          "license_expression": "GPL-2.0-or-later",
+          "license_header_present": false
+        },
+        {
+          "name": "pillow",
+          "version": "13.0.0",
+          "metadata_sha256": "140f39cb31ec9b46109828a6286f034a4848621263d6aab38d2f142083dd06c5",
+          "license_expression": "MIT-CMU",
+          "license_header_present": false
+        },
+        {
+          "name": "platformdirs",
+          "version": "4.13.3",
+          "metadata_sha256": "3814840758f662bb98053d08f99085fb77721812258573732b092fd7f2120c30",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "metadata_sha256": "e3a74c846648bb55f4f907284b745e2003b87b96d9c9d17a8a50cf37804541c9",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "pycryptodomex",
+          "version": "3.24.1",
+          "metadata_sha256": "e23b7012d6be70d623a1ebd73d716b618cda40662afc506fe3c9e32b05c25dbe",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1",
+          "metadata_sha256": "4d4c8e8d5e6a27d5208f0d7949f25628e6747133034969d4d1399b1ad5394036",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.1",
+          "metadata_sha256": "790c40c25f95db9b18e1d4b5ae75979ce6027b15d6f924c042553252ff43328f",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "metadata_sha256": "1dde075570136774c706bf0009183a793fe0ee262e4a5590cc6eff8453eedd43",
+          "license_expression": "BSD-2-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "pykakasi",
+          "version": "2.3.0",
+          "metadata_sha256": "368dde2a701a1482371c02eb07560c39f09b55a3700911c006b2480823eaccce",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pymongo",
+          "version": "4.19.0",
+          "metadata_sha256": "f3a96699232b20bf530daeca0eab653ff5efb3ad05bddc7b86d6f346679ee87d",
+          "license_expression": "Apache-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "pyotp",
+          "version": "2.10.0",
+          "metadata_sha256": "921222968b5c7aba480db1e9288544cf63407032fade2e195310b19c80659261",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pysocks",
+          "version": "1.7.1",
+          "metadata_sha256": "cdb40c8b38cf38e3f80e1122117db85d78cdad8b88c45f54194a4dd2e14307a6",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "python-dateutil",
+          "version": "2.9.0.post0",
+          "metadata_sha256": "a9d436da322be808332f98d88325998e87cb693a678a9969feb4cfad729a6e93",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.32",
+          "metadata_sha256": "e9d399d7dea5eddf0e4d24b5c24687a82e7e50bf2c2b30f8f8a06a64d887dd86",
+          "license_expression": "Apache-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "python-slugify",
+          "version": "8.0.4",
+          "metadata_sha256": "148d0eff8739c1e7caeda1a10ed13f826564df94c53d65ac41102ff6a2c2ef82",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "rapidfuzz",
+          "version": "3.14.6",
+          "metadata_sha256": "f1e04d5508594b145d98fc8ccfb434f668f315cedc873749a5248c67cd4cbf9a",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "readerwriterlock",
+          "version": "1.0.10",
+          "metadata_sha256": "c37369b6f3ca134803c488da06f6a89e06fbf0a987cc86e6a4bbc4460aa0fe9f",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "redis",
+          "version": "8.1.0",
+          "metadata_sha256": "4668671cc6f1f9d6687255571a069e98f146dff48ba9840f38801b3e8cabba06",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "requests",
+          "version": "2.34.2",
+          "metadata_sha256": "8c384ba3e979480faae2859d3c5e6c1276dd2c3616e322e124d52c8cfc556f27",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "rich",
+          "version": "13.9.4",
+          "metadata_sha256": "760dbd01312b9b05b786a3846c8b26596d98e227a1dfcc3df2bf65f0c7c8ac62",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "scdl",
+          "version": "3.0.8",
+          "metadata_sha256": "3e469b2a6133ea2e3587c9744ba57f637ff6af939a774f03a5cc021aa296a041",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "six",
+          "version": "1.17.0",
+          "metadata_sha256": "562042078c2752549f6d8a7c86dbc5dd708088a7be6d80672ec7b07100b72468",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "sniffio",
+          "version": "1.3.1",
+          "metadata_sha256": "0b318b57098edeccf585e60a889a6b6a7b5c4086f3a9aa62eff76a1d3cee12d9",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "soundcloud-v2",
+          "version": "1.7.0",
+          "metadata_sha256": "294536d7baee6ac6f74134d87381c15e27929d5f3309c1fc39ee9b20b9ddc62d",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "soupsieve",
+          "version": "3.0.3",
+          "metadata_sha256": "f76db712b0fadfee975fb519a46cc7f7b92979dc0ca297004fffc97b0a1f5f7c",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "spotapi",
+          "version": "1.2.8",
+          "metadata_sha256": "369e0e02a0da0cac84724451adb0087e6cdec6fd7d990ca38249d8045e60e8a9",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "spotdl",
+          "version": "4.5.2",
+          "metadata_sha256": "abeb987302f77d4e56ce69ae92bf85862d800c0fa0bf73292ad05b83eb72d31f",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "spotipy",
+          "version": "2.26.0",
+          "metadata_sha256": "fc02e094f5cc9aa7d8b3f4db73e299291fff2ebe1229dfad209e10a135f86158",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "spotipyfree",
+          "version": "1.9.14",
+          "metadata_sha256": "7eef8277a51c3a3739d19b5b5f99e030eeb54b4e43d84f22ded3f67697e4a53f",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "starlette",
+          "version": "0.27.0",
+          "metadata_sha256": "7598b6cde49bc5c4d74adbb52c16628ad1467231bd2d182a4bb8ce7cb31fee08",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "syncedlyrics",
+          "version": "1.0.1",
+          "metadata_sha256": "a4d99bc3fcc34c2eca6ff6d077524faa1c57d3a50cb9e26a90194d76fda99b00",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "text-unidecode",
+          "version": "1.3",
+          "metadata_sha256": "07d8fed65e3ec8df4fe5ef26a41ad70aa010b11527038233cb2d211bb272ae7e",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "metadata_sha256": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+          "license_expression": "PSF-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4",
+          "metadata_sha256": "bad3d9e6342ef6750cf5128ec942327b8bebdce0b6e4d6f67cb15b27ae5118da",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "unidecode",
+          "version": "1.4.0",
+          "metadata_sha256": "ee93814bb7dbe7a3487aeb813bbc6a62f2ee4c8b2fd2a327bf835ea19c5566cf",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "urllib3",
+          "version": "2.8.0",
+          "metadata_sha256": "10898c620e8007c030e07fa5622b68358a43010025dfbd78a1cb797699de2bb4",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.23.2",
+          "metadata_sha256": "99b65b4d54cb3667ba381559583570c6955877e8ebc18a26742a82d1a55a5419",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "validators",
+          "version": "0.36.0",
+          "metadata_sha256": "0b1cdcf9b7a0fcf193a990374d306685b91d3a8446b7aad6c5e7c488e594ca83",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "websockets",
+          "version": "14.2",
+          "metadata_sha256": "42e3da3ebacfc7074fedd173fc0ef011a12b0cf36d70048d3bf518360b113612",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "wrapt",
+          "version": "2.5.1",
+          "metadata_sha256": "08a8f7c73b33cb47350ed0140041873eaf1a3f29db899fe0cdef690214364389",
+          "license_expression": "BSD-2-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "yt-dlp",
+          "version": "2026.8.19",
+          "metadata_sha256": "a8b41b48f428178f38d8f780fcc9ef047cf1f66d0674bfb0215d6cee283847c4",
+          "license_expression": "Unlicense",
+          "license_header_present": false
+        },
+        {
+          "name": "yt-dlp-ejs",
+          "version": "0.8.0",
+          "metadata_sha256": "2d6df8d1b8d23d7c0b8499207e183e3a34a7dfa4c8cd5525a8cbb782ce80b2c7",
+          "license_expression": "Unlicense AND MIT AND ISC",
+          "license_header_present": false
+        },
+        {
+          "name": "ytmusicapi",
+          "version": "1.12.3",
+          "metadata_sha256": "905b7eea690531e22b5ad24df955d8458c7fc9f35770b882c9169d849b561b6b",
+          "license_expression": "MIT",
+          "license_header_present": false
+        }
+      ]
+    },
+    "search": {
+      "source_environment": ".search",
+      "metadata_count": 39,
+      "seeds": [
+        "msoc",
+        "httpx[socks]"
+      ],
+      "packages": [
+        {
+          "name": "aiohappyeyeballs",
+          "version": "2.7.1",
+          "metadata_sha256": "e68d1bf48aec9dcc2767343dedec25e12860085cba180e10bc3d3bdd031602ba",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "aiohttp",
+          "version": "3.14.5",
+          "metadata_sha256": "063c418f586e6e668be019ff7b8cc98ee08e7f836ef205686275c7bd1a6099d7",
+          "license_expression": "Apache-2.0 AND MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "aiohttp-jinja2",
+          "version": "1.6",
+          "metadata_sha256": "b67151894b8e18789491b9b3bb9f3820f4ca5a106b8834250bd3ead8b4adc9df",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "aiosignal",
+          "version": "1.4.0",
+          "metadata_sha256": "09247ef1da8bc696728d47130e702e4307f6f7d101d6c485bff9f3a71ce7008d",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "metadata_sha256": "043aecb571af7189e8a6c528f5d8e32545f1b2cdfaaf761d51e6d5b67ea3ca81",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0",
+          "metadata_sha256": "4cd40e690f23bf37cbcad34efd6758e062df1df07c86833f7e3ce95bf1fa38cc",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "beautifulsoup4",
+          "version": "4.15.0",
+          "metadata_sha256": "b2f888103259f1607c85f3b1163be1bc49fc9941a3243c3b89a21075bfc6d4fb",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "bs4",
+          "version": "0.0.2",
+          "metadata_sha256": "184c0e48508e60bbb5d57411dced9d30eed94e92856691a82141b4824155800f",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "metadata_sha256": "ef5af1638fbb23676ac3c5777dfcfc2cd9c348fe4172ed5ba3d277655b248090",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "metadata_sha256": "67b6a7595df7ede2195016a05d285faa7d362a8f57c238984edb8bb674b5770d",
+          "license_expression": "MIT-0",
+          "license_header_present": false
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "metadata_sha256": "e87bce0bd194de70dfb8e708e0a6b0483009f25611804eaf87bfeb63e6c20501",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "frozenlist",
+          "version": "1.8.0",
+          "metadata_sha256": "4278aeb3d18f1f8b7e6af5b6771ba9a8f327012a42d64509f9d4087b55f71a94",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "metadata_sha256": "28f326098ac09fcba79b8f180f96087c841fe2456215cb7b872a9c7d5cd19d64",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "metadata_sha256": "fe2d4fda6199128978779e0cf27f3c045c531863fcdd987eacc74f3a18d41c21",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "metadata_sha256": "febb9b0f8f3e80d57c8199c304f35c4336e8581d1d18d7983c92766b82793b25",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "jinja2",
+          "version": "3.1.6",
+          "metadata_sha256": "68c5548fb67c4132a13898d9b31ec50c6bea2abdd915d921f214355c3a6499c8",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "linkify-it-py",
+          "version": "2.2.0",
+          "metadata_sha256": "5bc112f7a322ec1d8b3a71c3357daf6340353f773ad386fa9784c22de8339eb9",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "lxml",
+          "version": "6.1.3",
+          "metadata_sha256": "4038f4e4decac1c15eb5fd883abf1370f2df9b176b53bd172dd709d4542e2a48",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "markdown-it-py",
+          "version": "4.2.0",
+          "metadata_sha256": "72c36ff516755443b1ecb61e17b2567a990230b49a504b0eb0c42d5f82448a9c",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "metadata_sha256": "08fa79954ab288d778b0fee4f0e6c7dbc869e545a415747d1324622465d3b08d",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "mdit-py-plugins",
+          "version": "0.6.1",
+          "metadata_sha256": "cd9486029c276a4bf819a85ca25f32f3bcff07a7e1c577dd45be523c7f0c472e",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "mdurl",
+          "version": "0.1.2",
+          "metadata_sha256": "b53b29d48f499367053fda3c81e7ce27d2558380ebbf83e66023b02eb7ddd25d",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "msgpack",
+          "version": "1.2.3",
+          "metadata_sha256": "5b52ab4f3f844df9d2ad0b0835284af51fe1a16e37284ee2e313fd4046cb70de",
+          "license_expression": "Apache-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "msoc",
+          "version": "0.3.1",
+          "metadata_sha256": "d9759c3329806eb7828e39d1b82991f78cbb966e9faca90bce7b7fe414583440",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "multidict",
+          "version": "7.1.0",
+          "metadata_sha256": "266d7fbaa481b22d7e1ae273ab43ddfcee1b1b1baeb9af505cbce24382d2b28c",
+          "license_expression": "Apache-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "platformdirs",
+          "version": "4.13.3",
+          "metadata_sha256": "3814840758f662bb98053d08f99085fb77721812258573732b092fd7f2120c30",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "propcache",
+          "version": "0.5.4",
+          "metadata_sha256": "30f8056d018d2771659b9389094ab2fbee28840e8ccf67ba2179effd2f588383",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "metadata_sha256": "e3a74c846648bb55f4f907284b745e2003b87b96d9c9d17a8a50cf37804541c9",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "metadata_sha256": "1dde075570136774c706bf0009183a793fe0ee262e4a5590cc6eff8453eedd43",
+          "license_expression": "BSD-2-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "rich",
+          "version": "15.0.0",
+          "metadata_sha256": "fad34fc603fac4481bf81f8dd629492fc302c0ec31909c86644751512afb2e3b",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "socksio",
+          "version": "1.0.0",
+          "metadata_sha256": "bbfa5fe1625dadce138e24ff9c161b6499c4f33cd6b0adde62ef3531a6870286",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "sounddevice",
+          "version": "0.5.6",
+          "metadata_sha256": "0e95620083c46c892d3c78f5cae5db01d63814db395c1b170d2c013cb9e0b4de",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "soupsieve",
+          "version": "3.0.3",
+          "metadata_sha256": "f76db712b0fadfee975fb519a46cc7f7b92979dc0ca297004fffc97b0a1f5f7c",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "textual",
+          "version": "8.2.8",
+          "metadata_sha256": "fa4831c4001c94a8d8177cccd05099d8fa021575c81a3bd53eae3b995eb22f1e",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "textual-dev",
+          "version": "1.8.0",
+          "metadata_sha256": "ca9ad9ebc117e20cb8b21507ac2df18f969e1322e86c600387e2fd3699f52f2d",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "textual-serve",
+          "version": "1.1.3",
+          "metadata_sha256": "e734c92536cb0b1c552f2e89e1d69a13b75ae3c09a06bdc0057cc56ad12cd4cf",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "metadata_sha256": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+          "license_expression": "PSF-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "yarl",
+          "version": "1.25.1",
+          "metadata_sha256": "a6e8eb9810e93ee04f3159904ccec9d0780f4a9ed5181a59859b47d1b1e7afeb",
+          "license_expression": null,
+          "license_header_present": true
+        }
+      ]
+    },
+    "build": {
+      "source_environment": ".buildenv",
+      "metadata_count": 44,
+      "seeds": [
+        "pyinstaller",
+        "fastapi",
+        "uvicorn[standard]",
+        "pywebview",
+        "python-vlc",
+        "mutagen",
+        "Pillow",
+        "numpy",
+        "av",
+        "pystray",
+        "httpx[socks]"
+      ],
+      "packages": [
+        {
+          "name": "altgraph",
+          "version": "0.17.5",
+          "metadata_sha256": "dc60641dba229a3aef09f764f562c38d908b930c92615af2e626af31d6ff19b5",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "annotated-doc",
+          "version": "0.0.5",
+          "metadata_sha256": "8c24d70c5d9153d22123353a906042fd7603df2d15c2196290b0f8a962558c46",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "metadata_sha256": "614985b278f601b8ef863f82783b991cc3ada4b89f592eb71c7c48c5f2ef2298",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "metadata_sha256": "043aecb571af7189e8a6c528f5d8e32545f1b2cdfaaf761d51e6d5b67ea3ca81",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "av",
+          "version": "18.1.0",
+          "metadata_sha256": "120ce4f0236916079ffdf92e01ae9e02cd5b8c7617cbee93b224d90e2f6435e3",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "bottle",
+          "version": "0.13.4",
+          "metadata_sha256": "441619180223f6ae8a92d1e88e4bbd48159c452bedae1e7c9c27f0673fa720d1",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "metadata_sha256": "ef5af1638fbb23676ac3c5777dfcfc2cd9c348fe4172ed5ba3d277655b248090",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "metadata_sha256": "67b6a7595df7ede2195016a05d285faa7d362a8f57c238984edb8bb674b5770d",
+          "license_expression": "MIT-0",
+          "license_header_present": false
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "metadata_sha256": "e87bce0bd194de70dfb8e708e0a6b0483009f25611804eaf87bfeb63e6c20501",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "clr-loader",
+          "version": "0.3.1",
+          "metadata_sha256": "5ef5654ad82dc3ab9cc752f6c72f6ea88a3e401aa3d80243596724566a1ca7c8",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "fastapi",
+          "version": "0.143.3",
+          "metadata_sha256": "364f68b16f489abe36d621da2fa727f774bec90916cd3325b78e422af3b59a5f",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "metadata_sha256": "28f326098ac09fcba79b8f180f96087c841fe2456215cb7b872a9c7d5cd19d64",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "metadata_sha256": "fe2d4fda6199128978779e0cf27f3c045c531863fcdd987eacc74f3a18d41c21",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "httptools",
+          "version": "0.9.0",
+          "metadata_sha256": "623cd71bd31f5a87a9aa677a49ae85785c60ee456ee76d5493ac867ad1a3f97e",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "metadata_sha256": "febb9b0f8f3e80d57c8199c304f35c4336e8581d1d18d7983c92766b82793b25",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "mutagen",
+          "version": "1.48.1",
+          "metadata_sha256": "cd882f5f900d6d0ef2951b0c9898d14b6ab881fda89b924dbebbe12441f94118",
+          "license_expression": "GPL-2.0-or-later",
+          "license_header_present": false
+        },
+        {
+          "name": "numpy",
+          "version": "2.5.4",
+          "metadata_sha256": "e2b909d6a37d76c2bc130f528d7fed0c517322bce16dc7846b6a6df30e200403",
+          "license_expression": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+          "license_header_present": false
+        },
+        {
+          "name": "opentelemetry-api",
+          "version": "1.45.1",
+          "metadata_sha256": "5bc71e90cb421be92a43bf5ad5b0f25dccfa2a24ddceaa2877779879962a4c9e",
+          "license_expression": "Apache-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "metadata_sha256": "70fdb89fc4d4a9a043bf7372b8972bcc883fddff34ab55e9cf80d73875384763",
+          "license_expression": "Apache-2.0 OR BSD-2-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "pefile",
+          "version": "2023.2.7",
+          "metadata_sha256": "363f5c2c30558bf0245a1676e86a86af94186e4821e1fe9ace3eff1d7ef91204",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pillow",
+          "version": "12.3.0",
+          "metadata_sha256": "2c4378001803cfac65809a50722d46e0da4ce8061e717f103e5d52734bab30f5",
+          "license_expression": "MIT-CMU",
+          "license_header_present": false
+        },
+        {
+          "name": "proxy-tools",
+          "version": "0.1.0",
+          "metadata_sha256": "34f8db57e46ca03c6185c649a15cc52a0c9120f4f781e9b64701044b22a7fc86",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "metadata_sha256": "e3a74c846648bb55f4f907284b745e2003b87b96d9c9d17a8a50cf37804541c9",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1",
+          "metadata_sha256": "4d4c8e8d5e6a27d5208f0d7949f25628e6747133034969d4d1399b1ad5394036",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.1",
+          "metadata_sha256": "790c40c25f95db9b18e1d4b5ae75979ce6027b15d6f924c042553252ff43328f",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pyinstaller",
+          "version": "6.16.0",
+          "metadata_sha256": "41f952b63083c2ff04ad4001d12816f7ca915e2ae0b23b6b9ff7ec6596cf871d",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pyinstaller-hooks-contrib",
+          "version": "2026.8",
+          "metadata_sha256": "686e63d76cb494d44c4533ed64a7d797970a1253493a4f875d39defc190396c4",
+          "license_expression": null,
+          "license_header_present": false
+        },
+        {
+          "name": "pystray",
+          "version": "0.19.5",
+          "metadata_sha256": "073b0620fe49a47061d336d7110779e6ca808e8294b0aa5cd9d437b1979d8fb1",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "metadata_sha256": "87cfee6042412d48df1100ea7822684988c3f2b79de7a250f4717f4df3026d6f",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "python-vlc",
+          "version": "3.0.21203",
+          "metadata_sha256": "65c880343e46da459b2a134a2b7b2638e53f7e638c00c836c5ec79abcb3f3c06",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pythonnet",
+          "version": "3.2.1",
+          "metadata_sha256": "2bf043c02e68e1fa3b8d55469ef42ab0c4cc180e374fe4322ace1848da3e0f62",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "pywebview",
+          "version": "6.2.1",
+          "metadata_sha256": "8e7f87b5e50b992bc44d9f1dc03fb5218f0b6da5d6c4b9f21f93916bf44569c7",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pywin32-ctypes",
+          "version": "0.2.3",
+          "metadata_sha256": "1e3767d3faff4d5b9c347160883831098d1f25acf4306b02c9acdcc6bfb5883b",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "pyyaml",
+          "version": "6.0.3",
+          "metadata_sha256": "847a701020334386852b6e07bad1053cb0ce3da9ee1846e7e9d02b24e8bb3f8d",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "setuptools",
+          "version": "84.0.0",
+          "metadata_sha256": "3ef2975718dd31cabdd5829455e9b868ca14dbf79ed8fed2de0af4e87347006e",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "six",
+          "version": "1.17.0",
+          "metadata_sha256": "562042078c2752549f6d8a7c86dbc5dd708088a7be6d80672ec7b07100b72468",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "socksio",
+          "version": "1.0.0",
+          "metadata_sha256": "bbfa5fe1625dadce138e24ff9c161b6499c4f33cd6b0adde62ef3531a6870286",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "starlette",
+          "version": "1.8.0",
+          "metadata_sha256": "551e8d74d290002521c655b816b27654e49922b88cb474c8d710a893099036f8",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "metadata_sha256": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+          "license_expression": "PSF-2.0",
+          "license_header_present": false
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4",
+          "metadata_sha256": "bad3d9e6342ef6750cf5128ec942327b8bebdce0b6e4d6f67cb15b27ae5118da",
+          "license_expression": "MIT",
+          "license_header_present": false
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "metadata_sha256": "9399e5ddda3d26e842d6fb5420c38b0857aac568d53badbdc224b3a21339efa8",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        },
+        {
+          "name": "watchfiles",
+          "version": "1.3.0",
+          "metadata_sha256": "3b30e7c9377f43cb59b408185ae7707ec55d5b746395bdaa32a45819ea49d78b",
+          "license_expression": null,
+          "license_header_present": true
+        },
+        {
+          "name": "websockets",
+          "version": "17.2",
+          "metadata_sha256": "120a5bb2d761950170e22fc77a43536d157f85b1cf2bf9c413324bfdb35e46e7",
+          "license_expression": "BSD-3-Clause",
+          "license_header_present": false
+        }
+      ]
+    }
+  }
+}

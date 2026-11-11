@@ -1,0 +1,23 @@
+{
+  "tests/test_online_music.py": [
+    "c029ce24e62386010dda0229a9d88732aff2ab7c88c06ae516f3468ff2c3a9b0"
+  ],
+  "tests/test_stage13.py": [
+    "66d9be0d20d81fa4faecc9b84dadaf77ef446665afb4705d8ca95fea47d8ec86"
+  ],
+  "tests/test_stage18.py": [
+    "797b1c77cd1e26ffd0b6f8dc2f4ae15755a12f0f3c681b576c59b1c5ddd97118",
+    "35bc0e065fdfd6877d432d644f47d7591c73654598c5199b020ebb0ec24baefb",
+    "1b304e2e175abfb377a062c360ab6d614be3478bdc81b947eee12ff5ae5eed39",
+    "68184e59519a9c608841546453944136a3a1c97f1b5caecdb92202001259e4fe"
+  ],
+  "tests/test_stage14.py": [
+    "af4ebf676dd49aba724c01be30cddb95eb2a180d616c2249a4fb63f6a3006290"
+  ],
+  "tests/test_catalogue_http.py": [
+    "e8ce9eb3b5e2d5cc19e3e3f722910063c3abf665465275deb7ca0ce44bcabbe7"
+  ],
+  "tests/test_source_experiment.py": [
+    "d47779f890e598797d34958b7373d6d46ceceaf8096d62c7193d90a0242471de"
+  ]
+}

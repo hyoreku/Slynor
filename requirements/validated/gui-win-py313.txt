@@ -1,0 +1,81 @@
+# Slynor GUI runtime — hash-locked set for Windows x64 / CPython 3.13.15.
+# pip 26.2.1; generated 2026-10-27T19:48:38+00:00.
+# Install offline:
+#   python -m pip install --require-hashes --no-index --find-links <wheels> \
+#       -r requirements/validated/gui-win-py313.txt
+# Every requirement is both pinned and hashed; do not edit by hand.
+
+annotated-doc==0.0.5 \
+    --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101
+annotated-types==0.8.0 \
+    --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
+anyio==4.15.1 \
+    --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101
+av==18.1.0 \
+    --hash=sha256:ea1480b7a8d5405cb5f382b344731bf125fd2c1c6fae3964f6c48595628387ff
+bottle==0.13.4 \
+    --hash=sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e
+certifi==2026.7.22 \
+    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+cffi==2.1.1 \
+    --hash=sha256:1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d
+click==8.5.0 \
+    --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
+clr_loader==0.3.1 \
+    --hash=sha256:cbad189de20d202a7d621956b0fc38049e13c9bf7ca2923441eff725cd121aa1
+fastapi==0.143.3 \
+    --hash=sha256:75e8bd68e2f52f77d29b2879749c257d64de2d85282d25270caf2bfccce5efe5
+h11==0.16.0 \
+    --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+httpcore==1.0.9 \
+    --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55
+httptools==0.9.0 \
+    --hash=sha256:805b0f2618e5d4c3e28f45b731eb1a0539691ae4a2f97b4ce014de0bf96a1ff5
+httpx==0.28.1 \
+    --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+idna==3.20 \
+    --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+mutagen==1.48.1 \
+    --hash=sha256:4f077fe87d3fc7fba259aa63d8c026b18382ca6a42ef37c61e16f1b1b5b82fe7
+numpy==2.5.4 \
+    --hash=sha256:8b4d2fd2d34e5f8c9235ee787de5631a37a28402b15cb80814df973d2be54129
+opentelemetry-api==1.45.1 \
+    --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
+pillow==12.3.0 \
+    --hash=sha256:1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8
+proxy_tools==0.1.0 \
+    --hash=sha256:ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010
+pycparser==3.11 \
+    --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+pydantic==2.14.1 \
+    --hash=sha256:9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454
+pydantic_core==2.50.1 \
+    --hash=sha256:7816e98acc08119dc0f340ab167048ecc54126316330c1f0caf7c6756c88e28f
+pystray==0.19.5 \
+    --hash=sha256:a0c2229d02cf87207297c22d86ffc57c86c227517b038c0d3c59df79295ac617
+python-dotenv==1.2.4 \
+    --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc
+python-vlc==3.0.21203 \
+    --hash=sha256:1613451a31b692ec276296ceeae0c0ba82bfc2d094dabf9aceb70f58944a6320
+pythonnet==3.2.1 \
+    --hash=sha256:dd5668b74b0c903d9a24e1ba86f728fc490f8e919d56b3c24bf06739b9ee2b7f
+pywebview==6.2.1 \
+    --hash=sha256:9d07275f53894ab4d5e2e0e996227193e7187dec276d9b624dccbce029216b46
+PyYAML==6.0.3 \
+    --hash=sha256:79005a0d97d5ddabfeeea4cf676af11e647e41d81c9a7722a193022accdb6b7c
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+socksio==1.0.0 \
+    --hash=sha256:95dc1f15f9b34e8d7b16f06d74b8ccf48f609af32ab33c608d08761c5dcbb1f3
+starlette==1.8.0 \
+    --hash=sha256:dfdd6b29c26483288088d990eee59631dedadd66ce20d203402a7ca8e3c4656f
+typing-inspection==0.4.4 \
+    --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
+typing_extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+uvicorn==0.54.0 \
+    --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf
+watchfiles==1.3.0 \
+    --hash=sha256:1acabde19b67e673274e89a04d613b7fb1f122e2c4b8ec9a581e59c149264b61
+websockets==17.2 \
+    --hash=sha256:27c7a59b5352a8f741b422820adfe89dfe47c8f2d84fb32111e76111edaa0e83

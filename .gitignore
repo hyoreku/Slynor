@@ -1,0 +1,47 @@
+# Environments and generated build outputs
+.venv/
+.buildenv/
+.providers/
+.search/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+build-logs/
+*.log
+# Generated local code graph (graphify); rebuild locally, not tracked
+graphify-out/
+
+# Machine config and secrets
+.env
+.env.*
+!.env.example
+runtime_paths.json
+*.pfx
+*.p12
+*.pem
+*.key
+cookies*.txt
+# Generated metadata accompanying downloaded audio; source JSON remains tracked.
+*.slynor.json
+
+# Research experiment materials (runs, query sets, measurements, reports) stay local
+# and are intentionally not published in the repository.
+docs/experiment/
+
+# Explicit local storage folders; don't ignore every JSON/SQLite file globally
+.local-data/
+.local-cache/
+.local-backups/
+.local-artifacts/
+OwnPlayerMusic.zip
+# The actual supplied outer archive is also kept outside the repository.
+OwnPlayerMusic_2.zip
+
+# Patch delivery manifests describe a package and are kept beside the tree.
+PATCH_MANIFEST_*.json

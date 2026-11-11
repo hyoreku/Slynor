@@ -1,0 +1,14 @@
+Основа: Slynor_stage19.zip
+CHECK.cmd
+README.md
+README_STAGE20.md
+backend/diagnostics.py
+docs/TEST_REPORT_STAGE20.md
+docs/WINDOWS_ACCEPTANCE_STAGE20.md
+frontend/css/styles.css
+frontend/js/mini-appearance.js
+frontend/js/visuals.js
+packaging/Slynor.iss
+tests/test_stage20.py
+tools/check_runtime.py
+tools/test_stage20_ui.cjs

@@ -1,0 +1,603 @@
+// Deterministic API/native fixtures. Real animations use Chromium, not WebView2.
+const {chromium}=require('playwright');const fs=require('node:fs/promises');const path=require('node:path');const assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..');const check=(value,label)=>{assert.ok(value,label);checks++;};let checks=0;
+const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAADwAAAA8CAIAAAC1nk4lAAAAbklEQVR4nO3OsRFAQAAAQUTKkIoVoRBFKFcp9PDBSm7zm7n5Pbdp1H48w+163cPtMlz+qGmlaaVppWmlaaVppWmlaaVppWmlaaVppWmlaaVppWmlaaVppWmlaaVppWmlaaVppWmlaaVppWmlaeUDYzID+w+E0fUAAAAASUVORK5CYII=','base64');
+const local=['C:/Music/one.wav','C:/Music/two.wav','C:/Music/three.wav'];
+const cover='/api/assets/track-covers/'+'a'.repeat(64)+'.jpg';
+const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+id,artist:'Artist',source:'soundcloud',access:['playable','preview','blocked'][i],duration_ms:180000,cover_url:'https://i1.sndcdn.com/art.jpg',permalink_url:'https://soundcloud.com/artist/song'}));
+(async()=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath(),headless:true,args:['--no-sandbox']});
+ const context=await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'no-preference'});
+ let state={state:'playing',filename:'one.wav',file_path:local[0],volume:50,time_ms:2000,duration_ms:180000,can_seek:true,queue_size:3,queue_index:0,rate:1,speed_mode:'standard'};
+ let eq={enabled:false,preamp:0,bands:Array(10).fill(0),speed_mode:'standard'};const calls=[];const errors=[];
+ let holdState=false,releaseState=null,holdMetadata=false,releaseMetadata=null;
+ let network18={mode:'system',url:'',search_first:'auto',proxy_detected:false,credentials_present:false};
+ let fixtureTracks=remote,fastCalls=0,coverAttempts=0;const fastCover='/api/assets/online-covers/'+'d'.repeat(64)+'.jpg';const fastTrack={path:'online:catalog:'+'d'.repeat(32),title:'Fast YouTube track',artist:'Artist',source:'youtube',access:'prepare',cover_url:fastCover};
+ const settings={version:1,accent:'#8655eb',language:'ru',theme:'dark',spectrum_enabled:false,cover_background:false,close_to_tray:true,sidebar_auto_collapse:true};
+ await context.addInitScript(({local,settings})=>{
+  window.desktopWrites=[];addEventListener('load',()=>{window.pywebview={api:{load_library:async()=>local,load_playlists:async()=>[],load_settings:async()=>settings,save_theme:async value=>({...settings,theme:value}),save_playing_screen:async value=>{window.savedPlayingScreen=value;return{...settings,playing_screen_enabled:value};},save_app_icon:async value=>{window.savedIcon=value;return{...settings,app_icon:value};},save_mini_background:async value=>({...settings,mini_background:value}),save_audio_output:async value=>({...settings,audio_output:value}),save_desktop_preferences:async value=>{desktopWrites.push(value);return{...settings,close_to_tray:value};}}};dispatchEvent(new Event('pywebviewready'));});
+ },{local,settings});
+ await context.route('**/*',async route=>{
+  const req=route.request(),url=new URL(req.url());if(url.pathname===fastCover){coverAttempts++;return route.fulfill({status:coverAttempts===1?503:200,contentType:'image/png',body:coverAttempts===1?Buffer.alloc(0):png});}if(url.hostname==='i1.sndcdn.com'||url.pathname.startsWith('/api/assets/'))return route.fulfill({contentType:'image/png',body:png});
+  if(url.pathname.startsWith('/api/')){
+   const body=req.postDataJSON();calls.push({path:url.pathname,body});let data={message:'Готово'},status=200;
+   if(url.pathname==='/api/network/settings'){
+    if(req.method()==='POST')network18={mode:body.mode,url:body.url,search_first:body.search_first,proxy_detected:body.mode==='manual',effective:body.mode==='manual'?body.url:null,credentials_present:!!body.password};
+    data=network18;
+   }else if(url.pathname==='/api/network/check')data={network:{mode:network18.mode,proxy_detected:true},checks:[{service:'youtube',code:'http_200',elapsed_ms:12}]};
+   else if(url.pathname==='/api/player/state'){data=structuredClone(state);if(holdState){holdState=false;await new Promise(resolve=>releaseState=resolve);}}
+   else if(url.pathname==='/api/appearance'){state.appearance={...body};data=body;}
+   else if(url.pathname==='/api/player/output-devices')data={devices:[{id:'',name:'По умолчанию в Windows'},{id:'usb',name:'Наушники USB'}],selected:'',available:true};
+   else if(url.pathname==='/api/player/output-device')data={selected:body.device,message:'Команда выбора передана VLC.'};
+   else if(url.pathname==='/api/library/metadata'){if(holdMetadata&&body.paths.includes('C:/Music/delayed.wav')){holdMetadata=false;await new Promise(resolve=>releaseMetadata=resolve);}data={tracks:body.paths.map(p=>p===fastTrack.path?fastTrack:p.startsWith('online:')?remote.find(t=>t.path===p):{path:p,title:path.basename(p),artist:'Artist',duration_ms:180000,cover_url:cover})};}
+   else if(url.pathname==='/api/player/equalizer')data={available:true,writable:true,current:eq,saved:eq,frequencies:[31,62,125,250,500,1000,2000,4000,8000,16000],presets:[]};
+   else if(url.pathname==='/api/player/queue')data={paths:local,index:2,shuffle_enabled:false};
+   else if(url.pathname==='/api/player/pause')state={...state,state:'paused'};
+   else if(url.pathname==='/api/player/resume')state={...state,state:'playing'};
+   else if(url.pathname==='/api/player/volume')state={...state,volume:body.volume};
+   else if(url.pathname==='/api/desktop/status')data={tray_available:true,close_to_tray:true};
+   else if(url.pathname==='/api/online/status')data={sources:[{id:'soundcloud',configured:true,message:'SoundCloud: тестовое подключение'},{id:'vk',configured:false,message:'ВК: официальный доступ не подтверждён'}]};
+   else if(url.pathname==='/api/online/playlists')data={playlists:[]};
+   else if(url.pathname==='/api/online/search-jobs'){
+    data={id:body.source==='vk'?'vk':'search',status:'queued'};
+   }else if(url.pathname==='/api/online/jobs/search')data={status:'done',tracks:fixtureTracks,warnings:[]};
+   else if(url.pathname==='/api/online/jobs/vk')data={status:'failed',tracks:[],error:'ВК Музыка не подключена: официальный доступ не подтверждён.'};
+   else if(url.pathname==='/api/online/search'){
+    if(body.source==='vk'){status=503;data={detail:'ВК Музыка не подключена: официальный доступ не подтверждён.'};}
+    else data={tracks:remote};
+   }else if(url.pathname==='/api/online/stream-jobs')data={id:'fast16',status:'queued'};
+   else if(url.pathname==='/api/online/jobs/fast16'){fastCalls++;data=fastCalls<3?{status:'running',stage:'Test stream resolution'}:{status:'done',ref:fastTrack.path};}
+   else if(url.pathname==='/api/online/diagnostics')data={events:[{provider:'youtube',operation:'stream',code:'auth_required',elapsed_ms:1200}]};
+   else if(url.pathname==='/api/online/import')data={playlist:{id:'imported',source:'soundcloud',name:'Imported playlist',tracks:remote}};
+   else if(url.pathname==='/api/player/queue/play'){state={...state,file_path:body.paths[body.index],filename:'Online track',state:body.paths[0]===fastTrack.path?'opening':'playing'};if(body.paths[0]===fastTrack.path)setTimeout(()=>{state={...state,state:'playing',current_metadata:fastTrack};},650);}
+   return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
+  }
+  const file=url.pathname==='/'?path.join(root,'frontend/index.html'):url.pathname==='/mini'?path.join(root,'frontend/mini.html'):path.join(root,'frontend',url.pathname.replace(/^\/static\//,''));
+  try{return route.fulfill({contentType:file.endsWith('.svg')?'image/svg+xml':file.endsWith('.webp')?'image/webp':file.endsWith('.png')?'image/png':file.endsWith('.ico')?'image/x-icon':file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:await fs.readFile(file)});}catch{return route.fulfill({status:404,body:'not found'});}
+ });
+ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8765/');
+ await page.waitForFunction(()=>document.querySelectorAll('#library-list li').length===3);
+ await page.locator('#player-cover').click();await page.waitForTimeout(260);
+ const position=await page.locator('#back-to-tracks').boundingBox();const header=await page.locator('.topbar').boundingBox();
+ check(position.x+position.width>=header.x+header.width-2,'return at right edge');
+ check(Math.abs(Number(await page.locator('#back-to-tracks').evaluate(el=>getComputedStyle(el).opacity))-.6)<.01,'return opacity .6');
+ check(await page.locator('#sidebar').isHidden(),'sidebar hidden on playing screen');
+ check(await page.locator('.workspace').evaluate(e=>e.getBoundingClientRect().left)===0,'playing content starts at window edge');
+ await page.locator('#back-to-tracks').click();
+ const expanded=(await page.locator('#sidebar').boundingBox()).width;
+ await page.locator('#sidebar-toggle').evaluate(el=>el.click());await page.waitForTimeout(90);
+ const mid=(await page.locator('#sidebar').boundingBox()).width;check(mid>80&&mid<expanded,'sidebar animated intermediate width');
+ await page.waitForTimeout(260);check(Math.round((await page.locator('#sidebar').boundingBox()).width)===80,'sidebar animation final80');
+ await page.locator('#sidebar-toggle').evaluate(el=>el.click());await page.waitForTimeout(60);await page.locator('#sidebar-toggle').evaluate(el=>el.click());await page.waitForTimeout(280);
+ check(Math.round((await page.locator('#sidebar').boundingBox()).width)===80,'interrupted animation final state');
+ check(await page.evaluate(()=>!document.documentElement.style.getPropertyValue('--sidebar-width')),'temporary inline width removed');
+ await page.locator('#player-cover').click();
+ check(await page.locator('#sidebar').isHidden(),'collapsed sidebar also hidden on playing');
+ await page.locator('#queue-button').click();await page.waitForFunction(()=>document.querySelectorAll('#queue-list .queue-cover img').length===3);await page.waitForTimeout(260);
+ check(await page.locator('#queue-list .queue-cover').count()===3,'cover per queue row');
+ check(await page.locator('#queue-list .queue-cover img').evaluateAll(imgs=>imgs.every(i=>i.complete&&i.naturalWidth>0)),'queue covers loaded');
+ await page.locator('#close-queue-button').click();await page.waitForTimeout(50);
+ check(!await page.locator('#queue-panel').evaluate(el=>el.hidden),'queue does not hide instantly');
+ check(await page.locator('#queue-panel').evaluate(el=>el.classList.contains('is-closing')),'queue exit state');
+ await page.waitForTimeout(260);check(await page.locator('#queue-panel').evaluate(el=>el.hidden),'queue hidden after animation');
+ await page.locator('#queue-button').click();await page.waitForTimeout(250);await page.locator('#close-queue-button').click();await page.locator('#queue-button').click();await page.waitForTimeout(280);
+ check(!await page.locator('#queue-panel').evaluate(el=>el.hidden),'reopening cancels old close');
+ await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#close-queue-button').click();
+ check(await page.locator('#queue-panel').evaluate(el=>el.hidden),'reduced-motion closes immediately');
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ check(await page.locator('.topbar #open-mini-player').count()===0,'mini removed from header');
+ check(await page.locator('.player-actions #shuffle-button + #open-mini-player').count()===1,'mini beside shuffle');
+ await page.locator('#back-to-tracks').click();await page.waitForTimeout(250);
+ const row=page.locator('#library-list .library-item').nth(1);
+ await page.mouse.move(1200,40);await page.waitForTimeout(220);
+ check(await row.locator('.track-play-symbol').evaluate(e=>getComputedStyle(e).opacity)==='0','noncurrent play icon initially hidden');
+ await row.hover();await page.waitForTimeout(70);
+ const opacity=await row.locator('.track-play-symbol').evaluate(e=>Number(getComputedStyle(e).opacity));check(opacity>0&&opacity<1,'play icon animates');
+ await page.waitForTimeout(220);check(await row.locator('.track-play-symbol').evaluate(e=>getComputedStyle(e).opacity)==='1','play icon fades in');
+ await page.mouse.move(1200,40);await page.waitForTimeout(350);check(await row.locator('.track-play-symbol').evaluate(e=>getComputedStyle(e).opacity)==='0','play icon fades out');
+ const actions=row.locator('.track-actions-button');
+ await row.locator('button[aria-haspopup="menu"]').click();await page.waitForTimeout(60);
+ check(!await page.locator('#track-menu').evaluate(e=>e.hidden),'track menu opened');
+ await page.waitForTimeout(150);await page.keyboard.press('Escape');await page.waitForTimeout(45);
+ check(!await page.locator('#track-menu').evaluate(e=>e.hidden),'track menu exit is animated');await page.waitForTimeout(170);
+ check(await page.locator('#track-menu').evaluate(e=>e.hidden),'track menu closes after animation');
+ await row.locator('button[aria-haspopup="menu"]').click();await page.getByRole('menuitem',{name:'Сведения о файле'}).click();await page.waitForTimeout(210);
+ check(await page.locator('#track-details-dialog').evaluate(e=>e.open),'file details opened');
+ await page.locator('#close-track-details').click();await page.waitForTimeout(45);check(await page.locator('#track-details-dialog').evaluate(e=>e.open),'details remain during exit');
+ await page.waitForTimeout(170);check(!await page.locator('#track-details-dialog').evaluate(e=>e.open),'details close after animation');
+ await page.waitForFunction(()=>document.getElementById('player-cover').classList.contains('has-palette'));
+ const colors=await page.locator('#player-cover').evaluate(e=>[1,2,3].map(n=>e.style.getPropertyValue('--glow-'+n)));
+ check(new Set(colors).size===3,'three distinct artwork colours extracted');
+ const coverWidth=(await page.locator('#player-cover').boundingBox()).width;
+ await page.locator('#player-cover').hover();await page.waitForTimeout(280);
+ check((await page.locator('#player-cover').boundingBox()).width>coverWidth,'footer artwork enlarges on hover');
+ check(await page.locator('#player-cover').evaluate(e=>getComputedStyle(e).boxShadow!=='none'),'footer artwork glows on hover');
+ await page.mouse.move(1200,40);await page.waitForTimeout(280);
+ check(Math.abs((await page.locator('#player-cover').boundingBox()).width-coverWidth)<.1,'footer artwork returns after hover');
+ const callsBefore=calls.filter(x=>x.path==='/api/player/queue/play').length;
+ await row.locator('.library-name').click();await page.waitForTimeout(250);check(calls.filter(x=>x.path==='/api/player/queue/play').length===callsBefore+1,'clicking song name starts song once');
+ await page.locator('#back-to-tracks').click();
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="online"]').click();await page.locator('#online-query').fill('Artist');
+ await page.waitForFunction(()=>document.querySelectorAll('#online-results li').length===3);
+ check(await page.locator('#online-results li').count()===3,'instant search without submit');
+ check(await page.locator('#online-search-form button').count()===0,'no find button');
+ check(await page.locator('#online-artists').count()===0,'redundant artist buttons removed');
+ check(await page.locator('#online-results button:disabled').count()===2,'preview and blocked disabled');
+ check(await page.locator('#online-results a').count()===3,'SoundCloud attribution per track');
+ await page.locator('#online-results button').first().click();await page.waitForFunction(()=>!document.getElementById('screen-playing').hidden);
+ const play=calls.filter(x=>x.path==='/api/player/queue/play').at(-1);check(play.body.paths.length===1&&play.body.paths[0]===remote[0].path,'only full playable records in queue');
+ await page.locator('#back-to-tracks').click();check(await page.locator('#screen-online').isVisible(),'return restores online source');
+ await page.locator('#online-playlist-url').fill('https://soundcloud.com/artist/sets/list');await page.locator('#online-import-form button').click();
+ await page.waitForFunction(()=>document.querySelectorAll('#online-playlists button').length===1);
+ check(await page.locator('#online-results li').count()===3,'import keeps unavailable rows');
+ check((await page.locator('#online-message').textContent()).includes('аудио не скачивалось'),'import is metadata not audio');
+ check(await page.locator('#online-source').count()===0,'source selector removed from search');
+ check(await page.locator('#online-source-status').count()===0,'source warning block removed');
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.waitForFunction(()=>!document.getElementById('close-to-tray').disabled);
+ await page.locator('#close-to-tray').uncheck();check(await page.evaluate(()=>desktopWrites.includes(false)),'tray preference persisted through bridge');
+ await page.locator('#open-mini-player').click();check(calls.some(x=>x.path==='/api/desktop/mini'),'mini open delegates to native');
+ const mini=await context.newPage();await mini.setViewportSize({width:360,height:112});mini.on('pageerror',e=>errors.push(e.message));await mini.goto('http://127.0.0.1:8765/mini');
+ await mini.waitForFunction(()=>!document.getElementById('mini-toggle').disabled);
+ check((await mini.locator('#mini-title').textContent()).includes('Online'),'mini reads same current track');
+ await mini.locator('#mini-toggle').click();await mini.waitForFunction(()=>document.getElementById('mini-toggle').textContent==='▶');
+ check(calls.some(x=>x.path==='/api/player/pause'),'mini pause controls shared engine');
+ await mini.locator('#mini-volume').evaluate(el=>{el.value='35';el.dispatchEvent(new Event('input'));});await mini.waitForTimeout(80);
+ check(state.volume===35,'mini volume controls same engine');
+ await mini.locator('#mini-expand').click();check(calls.some(x=>x.path==='/api/desktop/show'),'mini expand delegates native');
+ await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));
+ const beforeHidden=calls.filter(x=>x.path==='/api/player/state').length;
+ // Full window still polls. Count mini specifically via its own fetch instrumentation.
+ await mini.evaluate(()=>{window.miniPolls=0;const nativeFetch=window.fetch;window.fetch=(...args)=>{if(String(args[0]).includes('/api/player/state'))miniPolls++;return nativeFetch(...args);};});
+ await mini.waitForTimeout(1000);check(await mini.evaluate(()=>miniPolls===0),'hidden mini stops state polling');
+ await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await mini.waitForTimeout(100);check(await mini.evaluate(()=>miniPolls>0),'restored mini resumes polling');
+ await page.bringToFront();
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="home"]').click();
+ await page.evaluate(()=>{window.fixturePlaylists=[{id:'fixture',name:'Обложка',cover:'b'.repeat(32)+'.jpg',tracks:[]}];window.pywebview.api.create_playlist=async()=>window.fixturePlaylists;});
+ await page.locator('#show-playlist-form').click();await page.locator('#playlist-name').fill('Обложка');await page.locator('#create-playlist-button').click();
+ await page.waitForFunction(()=>document.querySelectorAll('#playlists-list .playlist-tile').length===1);
+ await page.locator('#show-playlist-form').click();
+ await page.waitForTimeout(250);
+ const gap=await page.evaluate(()=>document.getElementById('playlists-list').getBoundingClientRect().top-document.getElementById('playlist-create-form').getBoundingClientRect().bottom);
+ check(gap>=20,'playlist form separated from cards');
+ await page.locator('#playlists-list .playlist-open').click();await page.waitForFunction(()=>document.getElementById('playlist-summary-cover').classList.contains('has-palette'));
+ check(await page.locator('#playlist-summary-cover').evaluate(e=>getComputedStyle(e).boxShadow!=='none'),'playlist artwork has soft glow');
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.getByRole('tab',{name:'Оформление',exact:true}).click();await page.locator('#cover-background-toggle').check();
+ await page.locator('#player-cover').click();await page.waitForTimeout(260);
+ await page.evaluate(cover=>window.playerVisuals.trackChanged({cover_url:cover},'playing'),cover);
+ await page.waitForFunction(()=>[...document.querySelectorAll('.atmosphere-blob')].every(e=>e.getAnimations().length===1));
+ check(await page.locator('.atmosphere-blob').count()===3,'three moving colour blobs');
+ await page.evaluate(()=>window.playerVisuals.playbackChanged('paused'));
+ check(await page.locator('.atmosphere-blob').evaluateAll(es=>es.every(e=>e.getAnimations()[0]?.playState==='running')),'colour motion continues on audio pause');
+ await page.evaluate(()=>window.playerVisuals.playbackChanged('playing'));
+ check(await page.locator('.atmosphere-blob').evaluateAll(es=>es.every(e=>e.getAnimations().length===1)),'colour motion resumes on playback');
+ await page.emulateMedia({reducedMotion:'reduce'});await page.waitForFunction(()=>[...document.querySelectorAll('.atmosphere-blob')].every(e=>e.getAnimations().every(a=>a.playState==='paused')));
+ check(await page.locator('.atmosphere-blob').evaluateAll(es=>es.every(e=>e.getAnimations().every(a=>a.playState==='paused'))),'reduced-motion disables colour drift');
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await page.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));
+ check(await page.locator('.atmosphere-blob').evaluateAll(es=>es.every(e=>e.getAnimations().every(a=>a.playState==='paused'))),'native hidden stops colour animations');
+ await page.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await page.route('**/api/online/downloads',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({id:'fixture-download'})}));
+ await page.route('**/api/online/jobs/fixture-download',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({status:'done',bytes:1024,path:'C:/Downloads/fixture.mp3'})}));
+ await page.route('**/api/online/pin',r=>r.fulfill({contentType:'application/json',body:'{"ok":true}'}));
+ await page.evaluate(()=>{window.librarySaved=[];window.pywebview.api.save_library=async files=>{window.librarySaved=[...files];};window.onlineMusic.restore({playlistId:'',query:'fixture',tracks:[{path:'online:web:'+'d'.repeat(32),source:'archive',title:'Публичная запись',artist:'Исполнитель',access:'playable',download_available:true}]});});
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="online"]').click();
+ check(await page.locator('#online-download-consent').count()===0,'no repeated rights checkbox');
+ await page.locator('#online-results button').filter({hasText:'Скачать'}).click();
+ await page.waitForFunction(()=>window.librarySaved?.includes('C:/Downloads/fixture.mp3'));
+ check((await page.locator('#online-results .online-row-status').textContent()).includes('Скачано и добавлено'),'download status belongs to song');
+ await page.locator('#online-results button').filter({hasText:'В список'}).click();await page.waitForFunction(()=>window.librarySaved?.some(p=>p.startsWith('online:web:')));
+ check((await page.locator('#online-results .online-row-status').textContent()).includes('Добавлено в список'),'add status belongs to song');
+ check(await page.locator('#online-download-status').count()===0,'global download banner removed');
+ await page.route('**/api/online/downloads',r=>r.fulfill({contentType:'application/json',body:'{"id":"spotdl-fixture"}'}));
+ await page.route('**/api/online/jobs/spotdl-fixture',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({status:'done',bytes:1000,path:'C:/Downloads/spotify.mp3'})}));
+ await page.evaluate(()=>window.onlineMusic.restore({playlistId:'',query:'spotify',tracks:[{path:'online:catalog:'+'e'.repeat(32),source:'spotify',title:'Spotify metadata',artist:'Artist',access:'prepare',download_available:true,cover_url:'https://i.scdn.co/image/a'}]}));
+ await page.locator('#online-results button[aria-label^="Воспроизвести"]').click();
+ await page.waitForFunction(()=>document.getElementById('screen-playing').hidden===false);
+ check(calls.filter(c=>c.path==='/api/player/queue/play').at(-1).body.paths[0]==='C:/Downloads/spotify.mp3','catalogue prepares audio before VLC play');
+ check(!await page.evaluate(()=>window.librarySaved.includes('C:/Downloads/spotify.mp3')),'playing prepared audio does not silently add to library');
+ await page.locator('#back-to-tracks').click();await page.locator('#online-results button').filter({hasText:'В список'}).click();
+ await page.waitForFunction(()=>window.librarySaved.includes('C:/Downloads/spotify.mp3'));
+ check((await page.locator('#online-results .online-row-status').textContent()).includes('Скачано и добавлено'),'catalogue file explicitly saved with per-song status');
+ // Real custom popup styling and keyboard selection, native select remains data model.
+ await page.locator('#online-target').locator('..').locator('button[role="combobox"]').click();
+ await page.waitForTimeout(180);check(await page.locator('.select-popup:visible').count()===1,'custom popup remains open after deferred scroll');
+ check(await page.locator('.select-popup').evaluate(e=>getComputedStyle(e).borderRadius)==='12px','popup styled to application');
+ await page.keyboard.press('End');await page.keyboard.press('Enter');
+ check(await page.locator('#online-target').inputValue()==='fixture','keyboard selects playlist');
+ await page.locator('#online-target').locator('..').locator('button[role="combobox"]').click();await page.keyboard.press('Escape');
+ check(await page.locator('.select-popup:visible').count()===0,'escape dismisses popup');
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="home"]').click();
+ if(!await page.locator('#playlist-create-form').isVisible()){await page.locator('#show-playlist-form').click();await page.waitForTimeout(250);}
+ await page.locator('#show-playlist-form').click();await page.waitForTimeout(60);
+ check(await page.locator('#playlist-create-form').isVisible(),'playlist close keeps form visible during animation');
+ await page.waitForTimeout(190);check(!await page.locator('#playlist-create-form').isVisible(),'form closes after animation');
+ await page.locator('#show-playlist-form').click();await page.waitForTimeout(65);
+ const formOpacity=await page.locator('#playlist-create-form').evaluate(e=>Number(getComputedStyle(e).opacity));check(formOpacity>0&&formOpacity<1,'playlist form animates opening');
+ await page.waitForTimeout(180);check(await page.locator('#playlist-name').evaluate(e=>e===document.activeElement),'animated form focuses input');
+ // Snapshot metadata must render without a second metadata request, including same-path updates.
+ state={...state,file_path:local[0],filename:'one.wav',current_metadata:{path:local[0],title:'Мгновенный заголовок',artist:'Новый артист',cover_url:cover}};
+ await mini.bringToFront();await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await mini.waitForFunction(()=>document.getElementById('mini-title').textContent==='Мгновенный заголовок');
+ check(await mini.locator('#mini-artist').textContent()==='Новый артист','mini renders embedded snapshot');
+ check(await mini.evaluate(()=>document.documentElement.scrollHeight<=112),'compact mini fits height112');
+ state={...state,current_metadata:{...state.current_metadata,title:'Обновлённый заголовок'}};
+ await mini.waitForFunction(()=>document.getElementById('mini-title').textContent==='Обновлённый заголовок');
+ check(true,'mini refreshes metadata for same file path');
+
+ // Stage15: real layout/animations with mocked native calls and controlled appearance snapshots.
+ await page.bringToFront();await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();
+ check(await page.getByRole('tab').count()===3,'three settings sections');
+ await page.getByRole('tab',{name:'Общие',exact:true}).click();
+ check(await page.locator('#close-to-tray').isVisible(),'tray in General');
+ check(!await page.locator('#theme-choice').isVisible(),'Appearance hidden in General');
+ check(!await page.locator('#capture-diagnostics').isVisible(),'diagnostics moved out of General');
+ await page.getByRole('tab',{name:'Технические',exact:true}).click();
+ check(await page.locator('#capture-diagnostics').isVisible(),'diagnostics in Technical');
+ await page.locator('#audio-output').selectOption('usb');await page.waitForTimeout(150);
+ check(calls.some(c=>c.path==='/api/player/output-device'&&c.body.device==='usb'),'audio output change sent to engine');
+ await page.getByRole('tab',{name:'Оформление',exact:true}).click();
+ await page.locator('#mini-background-mode').selectOption('colors');await page.waitForTimeout(300);
+ check(calls.some(c=>c.path==='/api/appearance'&&c.body.mini_background==='colors'),'mini mode published');
+ check(await page.locator('text=Следующие этапы').count()===0,'obsolete roadmap removed');
+ // One source of theme/accent and three mini backgrounds.
+ state.appearance={theme:'light',accent:'#dc7820',wallpaper:null,dim:20,blur:0,mini_background:'classic'};
+ await mini.bringToFront();await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await mini.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+ check(await mini.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())==='#dc7820','mini follows accent');
+ check(await mini.locator('.mini-colors').isHidden(),'classic mode hides cover colors');
+ check(await mini.locator('#mini-toggle').evaluate(e=>getComputedStyle(e,'::after').maskImage.includes('/assets/icons/pause.svg')),'playback icon external SVG mask');
+ state.appearance={...state.appearance,mini_background:'colors'};
+ await mini.waitForFunction(()=>!document.querySelector('.mini-colors').hidden);
+ check(await mini.locator('.mini-colors').evaluate(e=>e.style.animationPlayState)==='running','cover colors move while playing');
+ await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));
+ check(await mini.locator('.mini-colors').evaluate(e=>e.style.animationPlayState)==='paused','native hidden mini stops color motion');
+ state.appearance={...state.appearance,mini_background:'wallpaper',wallpaper:'c'.repeat(32)+'.jpg'};
+ await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await mini.waitForFunction(()=>document.querySelector('#mini-background>img').getAttribute('src')?.endsWith('.jpg'));
+ check(await mini.locator('#mini-background>img').isVisible(),'mini wallpaper mode loads main wallpaper');
+ state.appearance={...state.appearance,wallpaper:'c'.repeat(32)+'.mp4'};
+ await mini.waitForFunction(()=>document.querySelector('#mini-background>video').getAttribute('src')?.endsWith('.mp4'));
+ check(await mini.locator('#mini-background>video').evaluate(e=>e.muted&&e.loop&&e.playsInline),'mini video muted loop inline');
+ await mini.emulateMedia({reducedMotion:'reduce'});await mini.waitForTimeout(30);
+ check(await mini.locator('#mini-background>video').evaluate(e=>e.paused),'reduced motion pauses video');
+ state.appearance={...state.appearance,mini_background:'classic',wallpaper:null};
+ await mini.waitForFunction(()=>document.getElementById('mini-background').dataset.mode==='classic');
+ check(await mini.evaluate(()=>document.documentElement.scrollHeight<=112),'all compact controls fit height112');
+ // Main video does not enter VLC. A valid file name is supplied by the native import bridge.
+ await page.evaluate(()=>{applyStoredWallpaper({wallpaper:'d'.repeat(32)+'.mp4'});});
+ check(await page.locator('#wallpaper-layer video').evaluate(e=>e.muted&&e.loop&&e.getAttribute('src').endsWith('.mp4')),'main video applies in dedicated muted layer');
+ await page.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));
+ check(await page.locator('#wallpaper-layer video').evaluate(e=>e.paused),'main video pauses on native hide');
+ await page.evaluate(()=>{applyStoredWallpaper({wallpaper:null});dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}}));});
+ // Navigation icon positions/glyph files stay identical after collapse.
+ await page.bringToFront();await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="home"]').click();
+ if(await page.evaluate(()=>document.documentElement.classList.contains('sidebar-collapsed')))await page.locator('#sidebar-toggle').click();
+ await page.waitForTimeout(320);
+ const before=await page.locator('.nav-icon').evaluateAll(es=>es.map(e=>({x:e.getBoundingClientRect().x,y:e.getBoundingClientRect().y,icon:e.dataset.uiIcon})));
+ await page.locator('#sidebar-toggle').click();await page.waitForTimeout(320);
+ const after=await page.locator('.nav-icon').evaluateAll(es=>es.map(e=>({x:e.getBoundingClientRect().x,y:e.getBoundingClientRect().y,icon:e.dataset.uiIcon})));
+ check(before.every((v,i)=>Math.abs(v.x-after[i].x)<1&&Math.abs(v.y-after[i].y)<1&&v.icon===after[i].icon),'sidebar icon boxes do not shift or change');
+
+ // Stage16 additions: search cover before adding, fast playback, opening guard, translucent theme.
+ await page.bringToFront();await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.getByRole('tab',{name:'Оформление',exact:true}).click();
+ check(await page.locator('#app-icon-options button').count()===8,'eight app icons available');
+ await page.getByRole('button',{name:'Значок 8 — Космос',exact:true}).click();await page.waitForFunction(()=>window.savedIcon==='8');
+ check(await page.locator('.brand-mark .app-mark').getAttribute('data-variant')==='8','brand changes without reload');
+ await page.locator('#theme-choice').selectOption('transparent');await page.waitForFunction(()=>document.documentElement.dataset.theme==='transparent');
+ const alpha=await page.locator('#accent-heading').evaluate(e=>getComputedStyle(e.closest('section')).backgroundColor);
+ check(alpha.startsWith('rgba(')&&Number(alpha.split(',').at(-1).replace(')',''))<1,'translucent theme reduces panel opacity');
+ check(await page.locator('.settings-tabs button').first().evaluate(e=>parseFloat(getComputedStyle(e).borderRadius)>=10),'rounded settings tab buttons');
+ await page.locator('.sidebar-playlist-button').first().click();
+ check(await page.locator('.track-columns').first().evaluate(e=>parseFloat(getComputedStyle(e).borderRadius)>=12),'rounded library header');
+ check(Math.round((await page.locator('.player-bar').boundingBox()).height)===88,'footer reduced to88px');
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.getByRole('tab',{name:'Технические',exact:true}).click();
+ await page.getByRole('button',{name:'Проверить загрузчики и последние ошибки',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.provider-report').textContent.includes('auth_required'));
+ check(await page.locator('.provider-report').isVisible(),'safe provider diagnostics visible');
+ fixtureTracks=[fastTrack];await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="online"]').click();await page.locator('#online-query').fill('fast16');
+ await page.waitForFunction(()=>document.querySelector('#online-results strong')?.textContent==='Fast YouTube track');
+ await page.waitForFunction(()=>document.querySelector('#online-results .song-art')?.classList.contains('has-image'));
+ check(coverAttempts===2,'search cover retries once before adding to library');
+ check(await page.locator('#online-results img').getAttribute('loading')==='eager','search thumbnails eager');
+ const beforeDownloadCount=calls.filter(c=>c.path==='/api/online/downloads').length;
+ await page.locator('#online-results button[aria-label^="Воспроизвести:"]').click();await page.waitForTimeout(120);
+ check(await page.locator('#play-toggle-button').isDisabled(),'pause disabled during stream preparation');
+ await page.waitForFunction(()=>document.getElementById('online-query').value==='fast16'&&currentPlaybackState==='opening');
+ check(await page.locator('#play-toggle-button').isDisabled(),'pause disabled during native opening');
+ const pauseCalls=calls.filter(c=>c.path==='/api/player/pause').length;await page.locator('#play-toggle-button').evaluate(e=>e.click());
+ check(calls.filter(c=>c.path==='/api/player/pause').length===pauseCalls,'disabled toggle sends no stale pause');
+ await page.waitForFunction(()=>currentPlaybackState==='playing'&&!document.getElementById('play-toggle-button').disabled);
+ check(calls.some(c=>c.path==='/api/online/stream-jobs'),'fast path resolves stream');
+ check(calls.filter(c=>c.path==='/api/online/downloads').length===beforeDownloadCount,'fast playback does not download full file');
+ await page.locator('#player-cover').click();await page.waitForTimeout(300);
+ await page.evaluate(cover=>window.playerVisuals.trackChanged({cover_url:cover},'playing'),cover);
+ await page.waitForFunction(()=>document.querySelector('.atmosphere-blob').getAnimations().length>0);
+ check(await page.locator('.atmosphere-blob').evaluateAll(es=>es.every(e=>{const segment=e.getAnimations()[0].effect.getTiming().duration/48;return segment>=350&&segment<=600;})),'organic colour trajectory changes in subsecond segments');
+ await page.locator('#back-to-tracks').click();
+ await page.evaluate(()=>{window.sidebarFrames=0;addEventListener('sidebar-layout-changed',()=>sidebarFrames++);});
+ await page.locator('#sidebar-toggle').click();await page.waitForTimeout(320);
+ check(await page.evaluate(()=>sidebarFrames===1),'sidebar emits layout once, not on each frame');
+ check(!await page.evaluate(()=>document.documentElement.classList.contains('sidebar-resizing')),'sidebar resize guard removed after animation');
+ // Stage17: an accepted queue command must not be labeled as successful playback.
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="online"]').click();
+ let mode17='late-error',download17=0,play17=0;
+ const ref17='online:catalog:'+'9'.repeat(32);
+ const track17={path:ref17,source:'youtube',title:'Late native failure',artist:'Artist',access:'prepare'};
+ await page.route('**/api/online/stream-jobs',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({status:'done',ref:ref17})}));
+ await page.route('**/api/online/downloads',r=>{download17++;return r.fulfill({contentType:'application/json',body:JSON.stringify({status:'done',path:'C:/Downloads/fallback17.mp3'})});});
+ await page.route('**/api/player/queue/play',r=>{
+  const body=r.request().postDataJSON();play17++;state={...state,file_path:body.paths[0],state:'opening',playback_error:null};
+  if(body.paths[0]===ref17)setTimeout(()=>{state={...state,state:mode17==='late-error'?'error':'stopped',file_path:mode17==='late-error'?ref17:null,playback_error:'VLC late failure'};},650);
+  else setTimeout(()=>{state={...state,state:'playing',playback_error:null};},300);
+  return r.fulfill({contentType:'application/json',body:'{"message":"Queue accepted"}'});
+ });
+ await page.evaluate(t=>window.onlineMusic.restore({playlistId:'',query:'late17',tracks:[t]}),track17);
+ await page.locator('#online-results button[aria-label^="Воспроизвести"]').click();await page.waitForTimeout(250);
+ check(!(await page.locator('.online-row-status').textContent()).includes('Играет'),'queue acceptance is not success');
+ await page.waitForFunction(()=>document.querySelector('.online-row-status').textContent.includes('подготовленный файл')&&!window.onlinePreparing);
+ check(download17===1&&play17===2,'late VLC error retries exactly once through local file');
+ check(state.state==='playing'&&state.file_path==='C:/Downloads/fallback17.mp3','local fallback waits for actual VLC playing');
+ // A stopped/replaced track is a user cancellation, never a reason to start a download.
+ mode17='stopped';await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="online"]').click();
+ await page.evaluate(t=>window.onlineMusic.restore({playlistId:'',query:'cancel17',tracks:[t]}),track17);
+ await page.locator('#online-results button[aria-label^="Воспроизвести"]').click();
+ await page.waitForFunction(()=>document.querySelector('.online-row-status').textContent.includes('отменён')&&!window.onlinePreparing);
+ check(download17===1,'stop during opening never starts fallback download');
+ check(play17===3,'cancelled stream does not restart music');
+ // A second native failure (the downloaded file itself) must terminate, not loop.
+ const refFail='online:catalog:'+'8'.repeat(32);mode17='late-error';
+ await page.route('**/api/online/stream-jobs',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({status:'done',ref:refFail})}));
+ await page.route('**/api/player/queue/play',r=>{const body=r.request().postDataJSON();play17++;state={...state,file_path:body.paths[0],state:'opening',playback_error:null};setTimeout(()=>{state={...state,state:'error',playback_error:'Both sources failed'};},250);return r.fulfill({contentType:'application/json',body:'{"message":"accepted"}'});});
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="online"]').click();await page.evaluate(t=>window.onlineMusic.restore({playlistId:'',query:'fail17',tracks:[t]}),{...track17,path:refFail});
+ await page.locator('#online-results button[aria-label^="Воспроизвести"]').click();
+ await page.waitForFunction(()=>document.querySelector('.online-row-status').textContent==='Both sources failed'&&!window.onlinePreparing);
+ check(download17===2&&play17===5,'double failure terminates after one fallback, without infinite retries');
+ check(await page.locator('.online-row-status').evaluate(e=>e.classList.contains('is-error')),'actual native failure displayed on the track');
+ // Stage18: network form is in Technical, credentials are transient, report exports explicitly.
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.getByRole('tab',{name:'Технические',exact:true}).click();
+ await page.waitForFunction(()=>!document.getElementById('network-save').disabled);
+ check(await page.locator('#network-form').isVisible(),'network settings in Technical');
+ check(await page.locator('#network-auth').isHidden(),'system mode hides manual credentials');
+ await page.locator('#network-mode').selectOption('manual');
+ check(await page.locator('#network-auth').isVisible(),'manual proxy exposes optional credentials');
+ await page.locator('#network-url').fill('socks5://127.0.0.1:8123');
+ await page.locator('#network-first').selectOption('youtube');
+ await page.locator('#network-user').fill('private-user');await page.locator('#network-password').fill('private-password');
+ check(await page.locator('#network-password').getAttribute('type')==='password','proxy password masked');
+ await page.locator('#network-save').click();await page.waitForFunction(()=>document.getElementById('network-status').textContent.includes('Настройки сохранены'));
+ const networkCall=calls.filter(c=>c.path==='/api/network/settings'&&c.body).at(-1);
+ check(networkCall.body.mode==='manual'&&networkCall.body.search_first==='youtube','selected proxy mode and search priority submitted');
+ check(networkCall.body.password==='private-password','credentials supplied to local API only');
+ check(await page.locator('#network-password').inputValue()===''&&await page.locator('#network-user').inputValue()==='','credential fields cleared after save');
+ check(!(await page.locator('#network-status').textContent()).includes('private-password'),'password absent from status');
+ check(await page.evaluate(()=>![...Object.values(localStorage),...Object.values(sessionStorage)].some(v=>v.includes('private-password'))),'password not in browser storage');
+ await page.locator('#network-check').click();await page.waitForFunction(()=>document.getElementById('network-report').textContent.includes('http_200'));
+ check(await page.locator('#network-report').isVisible(),'saved-route check report visible');
+ check(!(await page.locator('#network-report').textContent()).includes('private-password'),'check report excludes password');
+ await page.getByRole('button',{name:'Проверить загрузчики и последние ошибки',exact:true}).click();
+ await page.waitForFunction(()=>!document.getElementById('copy-diagnostics').disabled);
+ check(await page.locator('.provider-report').evaluate(e=>getComputedStyle(e).userSelect)==='text','report text selectable');
+ await context.grantPermissions(['clipboard-read','clipboard-write']);
+ await page.locator('#copy-diagnostics').click();await page.waitForTimeout(100);
+ check((await page.evaluate(()=>navigator.clipboard.readText())).includes('auth_required'),'copy button copies actual JSON report');
+ await page.evaluate(()=>{window.pywebview.api.save_diagnostics_report=async text=>{window.savedDiagnosticReport=JSON.parse(text);return{saved:true};};});
+ await page.locator('#save-diagnostics').click();await page.waitForFunction(()=>window.savedDiagnosticReport?.events?.length>0);
+ check(await page.evaluate(()=>savedDiagnosticReport.events[0].code)==='auth_required','save sends report to native save dialog bridge');
+ await page.evaluate(()=>{document.getElementById('result').textContent='';});
+ await page.locator('#network-form').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(root,'tests/stage18-network.png')});
+ await page.getByRole('tab',{name:'Общие',exact:true}).click();check(!await page.locator('#network-form').isVisible(),'network form hidden outside Technical');
+ check(errors.length===0,'no browser JS errors: '+errors.join(';'));
+
+ await fs.mkdir(path.join(root,'tests'),{recursive:true});await mini.screenshot({path:path.join(root,'tests/stage18-mini.png')});await page.screenshot({path:path.join(root,'tests/stage18-playing.png')});
+
+ // Stage19: branding, interrupted layout, fresh metadata, stale mini polling.
+ check(await page.title()==='Slynor','main title renamed');
+ check(await mini.title()==='Slynor · Миниплеер','mini title renamed');
+ check(await page.locator('.brand-name').textContent()==='Slynor','sidebar brand renamed');
+ check(await page.locator('.topbar .eyebrow').textContent()==='SLYNOR','header brand renamed');
+ await page.locator('#player-cover').click();
+ state={...state,state:'playing',file_path:fastTrack.path,filename:'fresh.mp3',current_metadata:{...fastTrack,title:'Fresh server title',artist:'Fresh artist',cover_url:fastCover}};
+ delete state.playback_error;
+ await page.evaluate(()=>window.refreshPlayerState());
+ await page.waitForFunction(()=>document.getElementById('track-name').textContent==='Fresh server title');
+ check(await page.locator('#player-artist').textContent()==='Fresh artist','server metadata replaces stale search data');
+ check(await page.locator('#large-track-cover img').getAttribute('src')===fastCover,'fresh artwork reaches playing screen');
+ state={...state,current_metadata:{...fastTrack,path:local[1],title:'Wrong path title'}};
+ await page.evaluate(()=>window.refreshPlayerState());await page.waitForTimeout(150);
+ check(await page.locator('#track-name').textContent()==='Fresh server title','wrong-song metadata ignored');
+ state={...state,current_metadata:{...fastTrack,title:'Fresh server title'}};
+ await page.evaluate(()=>{window.playerVisuals.trackChanged({cover_url:document.getElementById('large-track-cover').querySelector('img').getAttribute('src')},'playing');});
+ await page.waitForFunction(()=>[...document.querySelectorAll('.atmosphere-blob')].every(b=>b.getAnimations().length===1));
+ check(await page.locator('#sidebar').isHidden(),'playing sidebar absent during cover animation');
+ check(await page.locator('#sidebar').evaluate(e=>e.inert),'hidden navigation removed from focus traversal');
+ await page.setViewportSize({width:1180,height:800});await page.waitForTimeout(50);
+ check(!await page.evaluate(()=>document.documentElement.classList.contains('sidebar-resizing')),'resize leaves no stale layout lock');
+ check(await page.locator('.atmosphere-blob').evaluateAll(es=>es.every(e=>e.getAnimations()[0]?.playState==='running')),'drift runs after resize');
+ // A failed state request must not leave a clickable pause/resume control.
+ await page.route('**/api/player/state',route=>route.fulfill({status:503,body:'unavailable'}));
+ await page.evaluate(()=>window.refreshPlayerState());await page.waitForFunction(()=>document.getElementById('player-state').textContent==='Нет связи с сервером');
+ check(await page.locator('#play-toggle-button').isDisabled(),'toggle disabled on state connection loss');
+ await page.unroute('**/api/player/state');await page.evaluate(()=>window.refreshPlayerState());
+ await page.waitForFunction(()=>!document.getElementById('play-toggle-button').disabled);
+ check(!await page.locator('#play-toggle-button').isDisabled(),'toggle recovers after successful state poll');
+
+ // Full-window scene is a single surface, independent of wallpaper choice.
+ check(await page.locator('.app-shell > #cover-atmosphere').count()===1,'one scene belongs to the shell');
+ check(await page.locator('.app-shell').evaluate(e=>e.classList.contains('cover-scene')),'scene mode enabled');
+ const bounds=await page.locator('#cover-atmosphere').boundingBox();
+ check(bounds.x===0&&bounds.y===0&&bounds.width===1180&&bounds.height===800,'scene covers sidebar and footer too');
+ for(const selector of ['.workspace','.player-bar']){
+  check(await page.locator(selector).evaluate(e=>getComputedStyle(e).backgroundColor)==='rgba(0, 0, 0, 0)','scene surface transparent '+selector);
+ }
+ await page.evaluate(()=>{window.phaseAnimations=[...document.querySelectorAll('.atmosphere-blob')].map(e=>e.getAnimations()[0]);window.phaseTime=phaseAnimations[0].currentTime;window.playerVisuals.playbackChanged('paused');});
+ await page.waitForTimeout(180);
+ check(await page.evaluate(()=>phaseAnimations.every((a,i)=>a===document.querySelectorAll('.atmosphere-blob')[i].getAnimations()[0])),'audio pause preserves animation instances');
+ check(await page.evaluate(()=>phaseAnimations[0].currentTime>phaseTime),'background continues while audio paused');
+ await page.evaluate(()=>window.playerVisuals.playbackChanged('playing'));
+ await page.screenshot({path:path.join(root,'tests/stage22-playing.png')});
+ await page.locator('#back-to-tracks').click();
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.getByRole('tab',{name:'Оформление',exact:true}).click();
+ check(!await page.locator('.app-shell').evaluate(e=>e.classList.contains('cover-scene')),'scene removed outside playing screen');
+ for(let i=0;i<8;i++){
+  await page.locator('#app-icon-options button').nth(i).click();
+  check(await page.locator('.brand-mark').evaluate(e=>getComputedStyle(e).borderTopWidth)==='0px','no decorative outline for icon '+(i+1));
+ }
+ await page.locator('.workspace').evaluate(e=>e.scrollTop=500);await page.waitForTimeout(120);
+ check(await page.locator('.settings-tabs').evaluate(e=>getComputedStyle(e).position)==='static','tabs never overlap scrolled content');
+ check(await page.locator('.settings-tabs').evaluate(e=>getComputedStyle(e).backgroundColor)==='rgba(0, 0, 0, 0)','no black settings stripe');
+ check(await page.locator('.settings-tabs').evaluate(e=>getComputedStyle(e,'::before').content)==='none','no oversized masking pseudo element');
+ await page.locator('.workspace').evaluate(e=>e.scrollTop=0);await page.waitForTimeout(120);
+ await page.screenshot({path:path.join(root,'tests/stage22-settings.png')});
+ await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="music"]').click();
+ const insetRow=page.locator('#library-list .library-item').first();
+ await insetRow.hover();
+ const inset=await insetRow.evaluate(e=>{const r=e.getBoundingClientRect(),b=e.querySelector('.track-play').getBoundingClientRect();return b.left-r.left;});
+ check(inset>=12,'hovered play control retains left inset');
+ check(await page.locator('.sidebar').evaluate(e=>getComputedStyle(e).borderRightColor)==='rgba(0, 0, 0, 0)','sidebar seam removed');
+ check(await page.locator('.player-bar').evaluate(e=>getComputedStyle(e).borderTopColor)==='rgba(0, 0, 0, 0)','footer seam removed');
+
+ // Stage21: consistent geometry, restored manual state, one shared wallpaper tint.
+ await page.evaluate(()=>{
+  activePlaylistId=null;librarySearch.value='';librarySort.value='original';
+  const tracks=Array.from({length:8},(_,i)=>'C:/Music/layout-'+i+'.wav');
+  if(currentTrackPath)tracks[0]=currentTrackPath;
+  libraryFiles.splice(0,libraryFiles.length,...tracks);
+  tracks.forEach((path,i)=>metadataMap.set(fileKey(path),{path,title:i%2?'Очень длинное название песни для проверки фиксированного расстояния и многоточия':'Трек '+(i+1),artist:i%3?'Исполнитель':'',album:i%2?'Альбом с длинным названием':'',cover_url:i%2?null:'/api/assets/track-covers/'+ 'a'.repeat(64)+'.jpg',duration_ms:i%3?180000:null}));
+  renderLibrary();showScreen('music');
+ });
+ for(const width of [1620,1180,900,540]){
+  await page.setViewportSize({width,height:900});await page.waitForTimeout(100);
+  await page.evaluate(()=>showScreen('music'));
+  const rows=await page.locator('#library-list .library-item').evaluateAll(es=>es.map(e=>{const r=e.getBoundingClientRect();return{y:r.y,h:r.height};}));
+  check(await page.locator('#library-list .library-item.is-current .library-info').evaluate(e=>e.scrollHeight<=e.clientHeight),'current title, artist and status fit row '+width);
+  check(rows.length===8&&rows.every(r=>r.h===(width<=560?120:88)),'eight visible fixed-height rows at '+width);
+  check(rows.slice(1).every((r,i)=>Math.abs(r.y-rows[i].y-rows[i].h-8)<1),'fixed 8px song gap at '+width);
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow at '+width);
+  for(const collapsed of [true,false]){
+   await page.evaluate(value=>{if(document.documentElement.classList.contains('sidebar-collapsed')!==value)document.getElementById('sidebar-toggle').click();},collapsed);
+   await page.waitForTimeout(270);
+   await page.evaluate(()=>showScreen('playing'));await page.waitForTimeout(40);
+   check(await page.locator('#sidebar').isHidden(),'playing sidebar hidden '+width+' '+collapsed);
+   check(await page.locator('.workspace').evaluate(e=>e.getBoundingClientRect().x)===0,'playing full width '+width);
+   await page.locator('#back-to-tracks').click();
+   check(await page.evaluate(()=>document.documentElement.classList.contains('sidebar-collapsed'))===collapsed,'manual sidebar state restored '+width);
+  }
+ }
+ await page.setViewportSize({width:1620,height:900});
+ await page.evaluate(()=>showScreen('music'));
+ await page.waitForTimeout(250);
+ await page.evaluate(()=>{document.documentElement.dataset.theme='transparent';applyStoredWallpaper({wallpaper:'c'.repeat(32)+'.jpg',wallpaper_dim:15});});
+ await page.waitForFunction(()=>document.documentElement.classList.contains('has-wallpaper'));
+ for(const sel of ['.sidebar','.workspace','.player-bar']) check(await page.locator(sel).evaluate(e=>getComputedStyle(e).backgroundColor)==='rgba(0, 0, 0, 0)','shared tint no local overlay '+sel);
+ await page.screenshot({path:path.join(root,'tests/stage22-library.png')});
+ await page.evaluate(()=>{showScreen('playing');window.equalizerPanel.open();});await page.waitForTimeout(300);
+ check(await page.locator('#eq-panel').evaluate(e=>getComputedStyle(e).backgroundColor)==='rgb(33, 31, 43)','EQ fully opaque in transparent theme');
+ check((await page.locator('#eq-panel').boundingBox()).x===0,'EQ spans full playing width');
+ await page.screenshot({path:path.join(root,'tests/stage22-equalizer.png')});
+ await page.evaluate(()=>{window.equalizerPanel.close(true);showScreen('settings');});
+ await page.getByRole('tab',{name:'Общие',exact:true}).click();
+ await page.screenshot({path:path.join(root,'tests/stage22-settings-wallpaper.png')});
+ // Applying the same wallpaper/effects must not reassign src/load (video or GIF).
+ await page.evaluate(()=>{applyStoredWallpaper({wallpaper:'e'.repeat(32)+'.mp4'});window.mediaMutations=[];new MutationObserver(es=>mediaMutations.push(...es.map(e=>e.attributeName))).observe(document.querySelector('#wallpaper-layer video'),{attributes:true,attributeFilter:['src']});});
+ await page.evaluate(()=>applyStoredWallpaper({wallpaper:'e'.repeat(32)+'.mp4',wallpaper_dim:25}));
+ check(await page.evaluate(()=>mediaMutations.length===0),'same video does not reassign src after visual preference change');
+ check(await page.locator('#wallpaper-layer video').evaluate(e=>e.preload)==='auto','video preloads entire loop');
+ await page.evaluate(()=>{applyStoredWallpaper({wallpaper:'f'.repeat(32)+'.gif'});});
+ await page.waitForFunction(()=>document.getElementById('wallpaper-layer').style.backgroundImage.includes('.gif'));
+ await page.evaluate(()=>{window.bgMutations=[];new MutationObserver(es=>bgMutations.push(...es)).observe(document.getElementById('wallpaper-layer'),{attributes:true,attributeFilter:['style','hidden']});applyStoredWallpaper({wallpaper:'f'.repeat(32)+'.gif',wallpaper_dim:20});});
+ check(await page.evaluate(()=>bgMutations.length===0),'same GIF stays attached when changing dim');
+ // Stage22: eight distinct supplied-silhouette styles, preferences and compact icons.
+ await page.evaluate(()=>{applyStoredWallpaper({wallpaper:null});showScreen('settings');});
+ await page.getByRole('tab',{name:'Оформление',exact:true}).click();
+ await page.locator('#app-icon-options').scrollIntoViewIfNeeded();await page.waitForTimeout(200);
+ check(await page.locator('#app-icon-options .app-mark').count()===8,'eight masked styles, no missing SVG letter fallbacks');
+ check(await page.locator('#app-icon-options .app-mark').evaluateAll(es=>new Set(es.map(e=>e.dataset.variant)).size===8),'all styles unique');
+ for(const filename of ['mask.png','pixel-mask.png',...Array.from({length:8},(_,i)=>(i+1)+'.webp')]){
+  const result=await page.evaluate(async filename=>{const i=new Image();i.src='/static/assets/app-icons/'+filename;try{await i.decode();return i.naturalWidth>0;}catch{return false;}},filename);
+  check(result,'image decodes '+filename);
+ }
+ await page.locator('#app-icon-options button[data-value="3"]').click();
+ await page.waitForFunction(()=>document.querySelector('#app-icon-options button[data-value="3"] .app-mark').classList.contains('is-motion'));
+ check(await page.locator('#app-icon-options button[data-value="3"] i').first().evaluate(e=>e.getAnimations().length===1),'lava preview uses real moving colour blobs');
+ await page.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));await page.waitForTimeout(50);
+ check(await page.locator('#app-icon-options button[data-value="3"] i').evaluateAll(es=>es.every(e=>e.getAnimations()[0].playState==='paused')),'native hide pauses logo lava');
+ await page.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await page.waitForTimeout(50);
+ check(await page.evaluate(()=>document.documentElement.style.getPropertyValue('--mark-song-1').length>0),'track style receives artwork palette');
+ await page.screenshot({path:path.join(root,'tests/stage22-icons.png')});
+ await page.getByRole('tab',{name:'Общие',exact:true}).click();
+ await page.locator('#playing-screen-enabled').uncheck();
+ check(await page.evaluate(()=>window.savedPlayingScreen)===false,'screen preference persisted');
+ await page.evaluate(()=>showScreen('playing'));
+ check(await page.evaluate(()=>activeScreen)==='settings','disabled now-playing cannot open');
+ check(await page.locator('#player-cover').isDisabled(),'cover shortcut disabled while screen off');
+ check(!await page.locator('#player-bar').isHidden(),'disabling screen keeps transport visible');
+ await page.locator('#playing-screen-enabled').check();
+ await page.evaluate(()=>showScreen('playing'));await page.waitForTimeout(50);
+ check(await page.evaluate(()=>screenRevealAnimation?.playState)==='running','circular reveal runs on entry');
+ await page.waitForFunction(()=>getComputedStyle(document.querySelector('.app-shell')).clipPath==='none');
+ check(await page.locator('.app-shell').evaluate(e=>getComputedStyle(e).clipPath)==='none','reveal leaves no clipping after finish');
+ await page.emulateMedia({reducedMotion:'reduce'});await page.evaluate(()=>{showScreen('music');showScreen('playing');});
+ check(await page.evaluate(()=>screenRevealAnimation===null),'reduced motion skips circular reveal');
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await mini.bringToFront();
+ for(const sel of ['#mini-toggle','#mini-hide','#mini-expand','[data-action="previous"]','[data-action="stop"]']){
+  check(await mini.locator(sel).evaluate(e=>parseFloat(getComputedStyle(e,'::after').width)<=16),'compact glyph '+sel);
+  check(await mini.locator(sel).evaluate(e=>e.getBoundingClientRect().width>=28),'preserved compact hit target '+sel);
+ }
+ await mini.emulateMedia({reducedMotion:'no-preference'});
+ await mini.evaluate(()=>{const button=document.getElementById('mini-toggle');window.expectedGlyph=button.dataset.uiIcon==='pause'?'play':'pause';button.textContent=expectedGlyph==='play'?'▶':'Ⅱ';});
+ await mini.waitForFunction(()=>document.getElementById('mini-toggle').dataset.uiIcon===expectedGlyph);
+ check(await mini.locator('#mini-toggle').evaluate(e=>e.getAnimations().length>0),'play/pause glyph animates on real glyph change');
+ await mini.waitForTimeout(220);
+ await mini.emulateMedia({reducedMotion:'reduce'});await mini.evaluate(()=>{const button=document.getElementById('mini-toggle');window.expectedGlyph=button.dataset.uiIcon==='pause'?'play':'pause';button.textContent=expectedGlyph==='play'?'▶':'Ⅱ';});
+ await mini.waitForFunction(()=>document.getElementById('mini-toggle').dataset.uiIcon===expectedGlyph);
+ check(await mini.locator('#mini-toggle').evaluate(e=>e.getAnimations().length===0),'reduced motion removes glyph animation');
+ await mini.emulateMedia({reducedMotion:'no-preference'});
+ await mini.screenshot({path:path.join(root,'tests/stage22-mini-controls.png')});
+ await page.close(); // isolate mini polling from the main page for deterministic races.
+ state={...state,state:'error',playback_error:'Recovery fixture'};
+ await mini.waitForFunction(()=>document.getElementById('mini-error').textContent==='Recovery fixture');
+ check(!await mini.locator('#mini-error').isHidden(),'playback error visible before recovery');
+ delete state.playback_error;
+ state={...state,state:'opening',file_path:local[0],filename:'one.wav'};delete state.current_metadata;
+ await mini.waitForFunction(()=>document.getElementById('mini-toggle').disabled);
+ check(!await mini.locator('button[data-action="stop"]').isDisabled(),'mini stop available while opening');
+ check(await mini.locator('#mini-toggle').isDisabled(),'mini pause unavailable while opening');
+ state={...state,state:'playing'};
+ await mini.waitForFunction(()=>!document.getElementById('mini-toggle').disabled);
+ await mini.waitForFunction(()=>document.getElementById('mini-error').hidden);
+ check(await mini.locator('#mini-error').isHidden(),'old playback error cleared after recovery');
+ // Hold a response with the old playing state while pause is acknowledged.
+ holdState=true;for(let i=0;i<100&&!releaseState;i++)await mini.waitForTimeout(10);
+ check(!!releaseState,'stale mini state response held');
+ await mini.locator('#mini-toggle').click();
+ for(let i=0;i<100&&state.state!=='paused';i++)await mini.waitForTimeout(10);
+ check(state.state==='paused','pause request completed while old poll remains in flight');
+ releaseState();releaseState=null;await mini.waitForTimeout(70);
+ check(await mini.locator('#mini-toggle').textContent()==='▶','old poll cannot undo optimistic paused state');
+ await mini.waitForFunction(()=>!document.getElementById('mini-toggle').disabled);
+ check(await mini.locator('#mini-toggle').textContent()==='▶','confirmed pause retained');
+ await mini.emulateMedia({reducedMotion:'no-preference'});
+ state.appearance={...state.appearance,mini_background:'colors'};
+ await mini.waitForFunction(()=>!document.querySelector('.mini-colors').hidden&&document.querySelector('.mini-colors').style.animationPlayState==='running');
+ const miniTime=await mini.locator('.mini-colors>span').first().evaluate(e=>e.getAnimations()[0].currentTime);
+ await mini.waitForTimeout(150);
+ check(await mini.locator('.mini-colors>span').first().evaluate((e,t)=>e.getAnimations()[0].currentTime>t,miniTime),'mini colour animation continues during audio pause');
+
+ // New filename must not appear beside the previous song artwork.
+ await mini.waitForFunction(()=>document.querySelector('#mini-cover img')?.complete);
+ holdMetadata=true;state={...state,file_path:'C:/Music/delayed.wav',filename:'delayed.wav'};
+ for(let i=0;i<100&&!releaseMetadata;i++)await mini.waitForTimeout(10);
+ check(!!releaseMetadata,'slow mini metadata request held');
+ check(await mini.locator('#mini-title').textContent()==='delayed.wav','new filename displayed without waiting for metadata');
+ check(await mini.locator('#mini-cover img').count()===0,'previous song artwork cleared immediately');
+ releaseMetadata();releaseMetadata=null;
+ await mini.waitForFunction(()=>document.querySelector('#mini-cover img')?.complete);
+ check(await mini.locator('#mini-cover img').count()===1,'new artwork rendered after metadata resolves');
+ check(errors.length===0,'stage19 has no browser JS errors: '+errors.join(';'));
+ await mini.screenshot({path:path.join(root,'tests/stage22-mini.png')});
+ await mini.close();await context.close();await browser.close();
+console.log(`PASS ${checks} stage22 assertions (includes updated earlier scenarios); API and desktop are mocked. Animations use real Chromium timing.`);
+})().catch(e=>{console.error(e);process.exit(1);});

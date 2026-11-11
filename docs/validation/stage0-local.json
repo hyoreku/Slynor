@@ -1,0 +1,33 @@
+{
+  "python_syntax_files": 55,
+  "python_errors": [],
+  "js_syntax_files": 37,
+  "js_errors": [],
+  "changed_docs_checked": 17,
+  "missing_local_links": [],
+  "queries": 60,
+  "download_allowed": 0,
+  "csv_shapes_valid": true,
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "node": "v24.19.0",
+  "stage0_safety_tests": {
+    "run": 6,
+    "passed": 6
+  },
+  "inherited_preflight_tests": {
+    "run": 4,
+    "passed": 4
+  },
+  "application_full_unittest": "not run: required fastapi/httpx/av/mutagen/uvicorn and native GUI dependencies unavailable in host",
+  "ignore_probes_passed": 16,
+  "unchanged_product_files": 101,
+  "unchanged_product_folders": [
+    "backend",
+    "frontend",
+    "player"
+  ],
+  "windows": "not checked",
+  "source_live_experiment": "not run",
+  "manual_secret_review_complete": false
+}

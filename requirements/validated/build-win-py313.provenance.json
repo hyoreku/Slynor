@@ -1,0 +1,236 @@
+{
+  "title": "Slynor build toolchain",
+  "generated": "2026-10-27T20:25:10+00:00",
+  "python": "3.13.15",
+  "pip": "26.2.1",
+  "platform": "Windows-11-10.0.22631-SP0",
+  "machine": "AMD64",
+  "packages": 44,
+  "fields": {
+    "check": "install, pip check, import PyInstaller 6.16.0",
+    "limits": "Inno Setup is not installed; installer build not validated",
+    "artifact": "one sdist (proxy_tools) needs setuptools from a separate find-links directory"
+  },
+  "requirements": {
+    "altgraph": {
+      "version": "0.17.5",
+      "artifact": "altgraph-0.17.5-py2.py3-none-any.whl",
+      "sha256": "f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597"
+    },
+    "annotated-doc": {
+      "version": "0.0.5",
+      "artifact": "annotated_doc-0.0.5-py3-none-any.whl",
+      "sha256": "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101"
+    },
+    "annotated-types": {
+      "version": "0.8.0",
+      "artifact": "annotated_types-0.8.0-py3-none-any.whl",
+      "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0"
+    },
+    "anyio": {
+      "version": "4.15.1",
+      "artifact": "anyio-4.15.1-py3-none-any.whl",
+      "sha256": "6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101"
+    },
+    "av": {
+      "version": "18.1.0",
+      "artifact": "av-18.1.0-cp311-abi3-win_amd64.whl",
+      "sha256": "ea1480b7a8d5405cb5f382b344731bf125fd2c1c6fae3964f6c48595628387ff"
+    },
+    "bottle": {
+      "version": "0.13.4",
+      "artifact": "bottle-0.13.4-py2.py3-none-any.whl",
+      "sha256": "045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e"
+    },
+    "certifi": {
+      "version": "2026.7.22",
+      "artifact": "certifi-2026.7.22-py3-none-any.whl",
+      "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+    },
+    "cffi": {
+      "version": "2.1.1",
+      "artifact": "cffi-2.1.1-cp313-cp313-win_amd64.whl",
+      "sha256": "1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d"
+    },
+    "click": {
+      "version": "8.5.0",
+      "artifact": "click-8.5.0-py3-none-any.whl",
+      "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360"
+    },
+    "clr_loader": {
+      "version": "0.3.1",
+      "artifact": "clr_loader-0.3.1-py3-none-any.whl",
+      "sha256": "cbad189de20d202a7d621956b0fc38049e13c9bf7ca2923441eff725cd121aa1"
+    },
+    "fastapi": {
+      "version": "0.143.3",
+      "artifact": "fastapi-0.143.3-py3-none-any.whl",
+      "sha256": "75e8bd68e2f52f77d29b2879749c257d64de2d85282d25270caf2bfccce5efe5"
+    },
+    "h11": {
+      "version": "0.16.0",
+      "artifact": "h11-0.16.0-py3-none-any.whl",
+      "sha256": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86"
+    },
+    "httpcore": {
+      "version": "1.0.9",
+      "artifact": "httpcore-1.0.9-py3-none-any.whl",
+      "sha256": "2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55"
+    },
+    "httptools": {
+      "version": "0.9.0",
+      "artifact": "httptools-0.9.0-cp313-cp313-win_amd64.whl",
+      "sha256": "805b0f2618e5d4c3e28f45b731eb1a0539691ae4a2f97b4ce014de0bf96a1ff5"
+    },
+    "httpx": {
+      "version": "0.28.1",
+      "artifact": "httpx-0.28.1-py3-none-any.whl",
+      "sha256": "d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad"
+    },
+    "idna": {
+      "version": "3.20",
+      "artifact": "idna-3.20-py3-none-any.whl",
+      "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c"
+    },
+    "mutagen": {
+      "version": "1.48.1",
+      "artifact": "mutagen-1.48.1-py3-none-any.whl",
+      "sha256": "4f077fe87d3fc7fba259aa63d8c026b18382ca6a42ef37c61e16f1b1b5b82fe7"
+    },
+    "numpy": {
+      "version": "2.5.4",
+      "artifact": "numpy-2.5.4-cp313-cp313-win_amd64.whl",
+      "sha256": "8b4d2fd2d34e5f8c9235ee787de5631a37a28402b15cb80814df973d2be54129"
+    },
+    "opentelemetry-api": {
+      "version": "1.45.1",
+      "artifact": "opentelemetry_api-1.45.1-py3-none-any.whl",
+      "sha256": "b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb"
+    },
+    "packaging": {
+      "version": "26.3",
+      "artifact": "packaging-26.3-py3-none-any.whl",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+    },
+    "pefile": {
+      "version": "2023.2.7",
+      "artifact": "pefile-2023.2.7-py3-none-any.whl",
+      "sha256": "da185cd2af68c08a6cd4481f7325ed600a88f6a813bad9dea07ab3ef73d8d8d6"
+    },
+    "pillow": {
+      "version": "12.3.0",
+      "artifact": "pillow-12.3.0-cp313-cp313-win_amd64.whl",
+      "sha256": "1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8"
+    },
+    "proxy_tools": {
+      "version": "0.1.0",
+      "artifact": "proxy_tools-0.1.0.tar.gz",
+      "sha256": "ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010"
+    },
+    "pycparser": {
+      "version": "3.11",
+      "artifact": "pycparser-3.11-py3-none-any.whl",
+      "sha256": "51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80"
+    },
+    "pydantic": {
+      "version": "2.14.1",
+      "artifact": "pydantic-2.14.1-py3-none-any.whl",
+      "sha256": "9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454"
+    },
+    "pydantic_core": {
+      "version": "2.50.1",
+      "artifact": "pydantic_core-2.50.1-cp313-cp313-win_amd64.whl",
+      "sha256": "7816e98acc08119dc0f340ab167048ecc54126316330c1f0caf7c6756c88e28f"
+    },
+    "pyinstaller": {
+      "version": "6.16.0",
+      "artifact": "pyinstaller-6.16.0-py3-none-win_amd64.whl",
+      "sha256": "bc10eb1a787f99fea613509f55b902fbd2d8b73ff5f51ff245ea29a481d97d41"
+    },
+    "pyinstaller-hooks-contrib": {
+      "version": "2026.8",
+      "artifact": "pyinstaller_hooks_contrib-2026.8-py3-none-any.whl",
+      "sha256": "6d21d65323ea4467753afc21f52d7d0e69416ae8101dd88269bf273ad48db084"
+    },
+    "pystray": {
+      "version": "0.19.5",
+      "artifact": "pystray-0.19.5-py2.py3-none-any.whl",
+      "sha256": "a0c2229d02cf87207297c22d86ffc57c86c227517b038c0d3c59df79295ac617"
+    },
+    "python-dotenv": {
+      "version": "1.2.4",
+      "artifact": "python_dotenv-1.2.4-py3-none-any.whl",
+      "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc"
+    },
+    "python-vlc": {
+      "version": "3.0.21203",
+      "artifact": "python_vlc-3.0.21203-py3-none-any.whl",
+      "sha256": "1613451a31b692ec276296ceeae0c0ba82bfc2d094dabf9aceb70f58944a6320"
+    },
+    "pythonnet": {
+      "version": "3.2.1",
+      "artifact": "pythonnet-3.2.1-cp311.cp312.cp313.cp314.cp315-none-any.whl",
+      "sha256": "dd5668b74b0c903d9a24e1ba86f728fc490f8e919d56b3c24bf06739b9ee2b7f"
+    },
+    "pywebview": {
+      "version": "6.2.1",
+      "artifact": "pywebview-6.2.1-py3-none-any.whl",
+      "sha256": "9d07275f53894ab4d5e2e0e996227193e7187dec276d9b624dccbce029216b46"
+    },
+    "pywin32-ctypes": {
+      "version": "0.2.3",
+      "artifact": "pywin32_ctypes-0.2.3-py3-none-any.whl",
+      "sha256": "8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8"
+    },
+    "PyYAML": {
+      "version": "6.0.3",
+      "artifact": "pyyaml-6.0.3-cp313-cp313-win_amd64.whl",
+      "sha256": "79005a0d97d5ddabfeeea4cf676af11e647e41d81c9a7722a193022accdb6b7c"
+    },
+    "setuptools": {
+      "version": "84.0.0",
+      "artifact": "setuptools-84.0.0-py3-none-any.whl",
+      "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670"
+    },
+    "six": {
+      "version": "1.17.0",
+      "artifact": "six-1.17.0-py2.py3-none-any.whl",
+      "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+    },
+    "socksio": {
+      "version": "1.0.0",
+      "artifact": "socksio-1.0.0-py3-none-any.whl",
+      "sha256": "95dc1f15f9b34e8d7b16f06d74b8ccf48f609af32ab33c608d08761c5dcbb1f3"
+    },
+    "starlette": {
+      "version": "1.8.0",
+      "artifact": "starlette-1.8.0-py3-none-any.whl",
+      "sha256": "dfdd6b29c26483288088d990eee59631dedadd66ce20d203402a7ca8e3c4656f"
+    },
+    "typing-inspection": {
+      "version": "0.4.4",
+      "artifact": "typing_inspection-0.4.4-py3-none-any.whl",
+      "sha256": "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147"
+    },
+    "typing_extensions": {
+      "version": "4.16.0",
+      "artifact": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+    },
+    "uvicorn": {
+      "version": "0.54.0",
+      "artifact": "uvicorn-0.54.0-py3-none-any.whl",
+      "sha256": "505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf"
+    },
+    "watchfiles": {
+      "version": "1.3.0",
+      "artifact": "watchfiles-1.3.0-cp310-abi3-win_amd64.whl",
+      "sha256": "1acabde19b67e673274e89a04d613b7fb1f122e2c4b8ec9a581e59c149264b61"
+    },
+    "websockets": {
+      "version": "17.2",
+      "artifact": "websockets-17.2-cp313-cp313-win_amd64.whl",
+      "sha256": "27c7a59b5352a8f741b422820adfe89dfe47c8f2d84fb32111e76111edaa0e83"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+spotdl==4.5.2
+scdl==3.0.8
+
+# SOCKS routing for spotDL/requests.
+PySocks>=1.7.1,<2
+
+# Explicit EJS dependency group for private YouTube workers.
+yt-dlp[default]>=2026.7.4,<2027

@@ -1,0 +1,4 @@
+# Optional personal research worker; msoc origin/license still require review before MVP.
+-c ../../requirements/observed/search-win-py313.constraints.txt
+msoc==0.3.1
+httpx[socks]==0.28.1

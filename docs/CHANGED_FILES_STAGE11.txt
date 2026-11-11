@@ -1,0 +1,21 @@
+Изменённые исходники/документы:
+README.md
+desktop.py
+docs/CODE_MAP.md
+docs/playerMusic.md
+frontend/css/styles.css
+frontend/index.html
+frontend/js/app.js
+frontend/js/equalizer.js
+frontend/js/i18n.js
+frontend/js/visuals.js
+player/audio_engine.py
+
+Новые файлы:
+docs/STAGE11_STABILITY_AND_NAVIGATION.md
+docs/TEST_REPORT_STAGE11.md
+frontend/js/sidebar.js
+tests/test_regressions.py
+tools/test_ui.cjs
+
+Не включены: __pycache__, pyc, тестовые скриншоты, .venv, музыка, пользовательские данные.

@@ -1,0 +1,2 @@
+# Research controller only. Verified public release; Windows installation not tested here.
+psutil==7.2.2

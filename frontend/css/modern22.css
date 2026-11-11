@@ -1,0 +1,72 @@
+/* Slynor 22: one scale, quiet surfaces, visible focus; original artwork stays unchanged. */
+:root { --radius:14px; --ease-out:cubic-bezier(.2,.8,.2,1); }
+body { font-family: 'Segoe UI',Inter,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
+h1 { font-size:26px; font-weight:700; letter-spacing:-.7px; }
+h2 { font-weight:650; }
+button { transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease; }
+button:focus-visible,a:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.secondary-button,.primary-button,input:not([type=range]):not([type=checkbox]),.styled-select>button { border-radius:12px; }
+.secondary-button { border:1px solid var(--border-subtle); }
+.primary-button { box-shadow:0 3px 12px #0002; }
+.accent-settings { border-radius:16px; padding:24px; }
+#screen-settings>.accent-settings { max-width:1120px; }
+.accent-settings>h3 { margin-bottom:16px; }
+.settings-note { line-height:1.65; }
+:root[data-theme=transparent] .accent-settings,:root[data-theme=transparent] .playlist-summary { background:#211f2bbf; }
+:root[data-theme=transparent] .library-item { background-color:#211f2b80; }
+:root[data-theme=transparent] .library-item:hover { background-color:#45404cb3; }
+.settings-tabs { gap:8px; }
+.settings-tabs button { border-radius:12px; min-height:44px; padding:10px 20px; }
+.settings-tabs [aria-selected=true] { box-shadow:inset 0 0 0 1px var(--accent-border); }
+.track-columns { font-size:13px; border:0; }
+.library-item { border-radius:12px; }
+.library-item .library-name { font-weight:600; }
+.nav-button,.sidebar-playlist-button { border-radius:12px; }
+.nav-button.is-active { box-shadow:inset 3px 0 var(--accent); }
+.player-bar .play-toggle { width:44px; min-width:44px; height:44px; min-height:44px; }
+.player-bar .transport-controls .icon-button { width:44px; min-width:44px; height:44px; min-height:44px; }
+.player-bar .play-toggle::before { inset:2px; }
+.track-art { border-radius:10px; }
+.select-popup { background:var(--menu-background); padding:6px; }
+.select-popup [role=option] { min-height:40px; }
+.styled-select>button::after { content:''; width:7px; height:7px; border-right:1.8px solid currentColor; border-bottom:1.8px solid currentColor; transform:rotate(45deg) translateY(-2px); margin-left:6px; }
+/* Branding: the user's silhouette, not a font letter. */
+.brand-mark { flex:0 0 38px; width:38px; height:38px; border-radius:10px; transition:transform .24s var(--ease-out),filter .24s ease; }
+.brand:hover .brand-mark,.brand:focus-visible .brand-mark { transform:scale(1.1); filter:drop-shadow(0 2px 8px #0003); }
+.app-mark { position:relative; display:block; width:100%; height:100%; overflow:hidden; background:#fff; mask:url('/static/assets/app-icons/mask.png') center/contain no-repeat; -webkit-mask:url('/static/assets/app-icons/mask.png') center/contain no-repeat; }
+.app-mark i { display:none; }
+.app-mark[data-variant='2'] { background:var(--accent); }
+.app-mark[data-variant='3'],.app-mark[data-variant='5'] { background:#6c57bf; }
+.app-mark[data-variant='3'] i,.app-mark[data-variant='5'] i { display:block; position:absolute; width:120%; height:130%; border-radius:45%; filter:blur(6px); opacity:.92; animation:mark-lava 4.6s ease-in-out infinite alternate; animation-play-state:paused; }
+.app-mark[data-variant='3'] i:nth-child(1) { left:-50%; top:-40%; background:#ff4f8e; }
+.app-mark[data-variant='3'] i:nth-child(2) { right:-40%; top:-10%; background:#27d4ef; animation-delay:-2s; animation-duration:5.3s; }
+.app-mark[data-variant='3'] i:nth-child(3) { left:10%; bottom:-70%; background:#ffce67; animation-delay:-3s; animation-duration:3.7s; }
+.app-mark[data-variant='5'] i:nth-child(1) { left:-50%; top:-40%; background:rgb(var(--mark-song-1,134,85,235)); }
+.app-mark[data-variant='5'] i:nth-child(2) { right:-40%; top:-10%; background:rgb(var(--mark-song-2,241,131,175)); animation-delay:-2s; }
+.app-mark[data-variant='5'] i:nth-child(3) { left:10%; bottom:-70%; background:rgb(var(--mark-song-3,79,202,187)); animation-delay:-3s; }
+.app-mark[data-variant='4'] { background:var(--accent); mask-image:url('/static/assets/app-icons/pixel-mask.png'); -webkit-mask-image:url('/static/assets/app-icons/pixel-mask.png'); image-rendering:pixelated; }
+.app-mark[data-variant='6'] { background:linear-gradient(135deg,#a3b6d1 4%,#f8fcff 28%,#677d99 42%,#e4efff 58%,#7489a7 75%,#ecf5ff); }
+.app-mark[data-variant='7'] { background:linear-gradient(135deg,#75ffee,#ac86ff); mask-image:url('/static/assets/app-icons/7.webp'); -webkit-mask-image:url('/static/assets/app-icons/7.webp'); }
+.app-mark[data-variant='8'] { background:radial-gradient(circle at 22% 30%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 75% 66%,#fff 0 1px,transparent 1.5px),linear-gradient(145deg,#1b296d,#8c5bbd 50%,#3edcc1); background-size:14px 17px,23px 21px,100% 100%; }
+.app-mark.is-motion i { animation-play-state:running; }
+.app-icon-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; max-width:760px; }
+.app-icon-options button { width:auto; height:112px; padding:16px 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+.app-icon-options button:hover { background:var(--surface-hover); }
+.app-icon-options button[aria-pressed=true] { border:1px solid var(--accent); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); }
+.app-icon-options .app-mark { width:38px; height:38px; flex:0 0 38px; transition:transform .22s var(--ease-out); }
+.app-icon-options button:hover .app-mark,.app-icon-options button:focus-visible .app-mark { transform:scale(1.12); }
+.app-mark-label { font-size:14px; font-weight:500; }
+:root[data-theme=light] .app-icon-options button[data-value='1'],:root[data-theme=light] .brand-mark[data-variant='1'] { background:#5a5564; }
+:root[data-theme=light] .app-icon-options button[data-value='1'] { color:white; }
+@keyframes mark-lava { 0% { transform:translate(-12%,-8%) rotate(-18deg) scale(1); } 50% { transform:translate(30%,20%) rotate(22deg) scale(1.1,.85); } 100% { transform:translate(10%,-18%) rotate(65deg) scale(.9,1.15); } }
+/* Three real artwork colours, moving in continuous subsecond increments. */
+.atmosphere-blob { width:72%; height:85%; opacity:.55; filter:blur(clamp(30px,5vw,64px)); }
+.atmosphere-colors { opacity:1; }
+.playing-mode .large-track-cover { border-radius:22px; }
+.playing-presentation h2 { font-weight:650; }
+@media(max-width:560px) { .app-icon-options { grid-template-columns:repeat(2,minmax(0,1fr)); } .accent-settings { padding:20px 16px; } h1 { font-size:24px; } }
+@media(prefers-reduced-motion:reduce) { button,.brand-mark,.app-icon-options .app-mark { transition:none!important; } .app-mark i { animation:none!important; } }
+.startup-diagnostics { margin-top:24px; padding-top:20px; border-top:1px solid var(--border); display:grid; justify-items:start; gap:12px; }
+/* Space between inline labels, custom selects and their save action. */
+.accent-settings>.styled-select { margin:8px 8px 8px 12px; max-width:calc(100% - 24px); }
+.accent-settings>button { margin:4px 8px 4px 0; }

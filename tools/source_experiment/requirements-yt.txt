@@ -1,0 +1,4 @@
+# Fixed observed candidate; not a Windows-validated release lock.
+-c ../../requirements/observed/provider-win-py313.constraints.txt
+yt-dlp[default]==2026.8.19
+yt-dlp-ejs==0.8.0

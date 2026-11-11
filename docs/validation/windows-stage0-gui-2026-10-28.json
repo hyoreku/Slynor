@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-28",
+  "platform": "Windows-11-10.0.22631-SP0",
+  "display": "1920x1080 @ 125%",
+  "python": "3.13.15 x64",
+  "vlc": "3.0.24",
+  "webview2": "156.0.4314.50",
+  "window": {"width": 1125, "height": 925},
+  "startup_seconds": 1.9,
+  "playback": {
+    "queue": 8,
+    "state": "playing",
+    "advanced": true,
+    "last_position_ms": 7920,
+    "error": null,
+    "seek_target_ms": 5000,
+    "seek_result_ms": 5535,
+    "transitions": ["paused", "playing", "idle"]
+  },
+  "spectrum": {
+    "bands": 48,
+    "ready_samples_normal": 16,
+    "ready_samples_proxy": 15,
+    "max_normal": 0.5378,
+    "max_proxy": 0.4906
+  },
+  "equalizer": {"bands": 10, "enabled_after_apply": true, "preamp_db": 3.0},
+  "audio_devices": 8,
+  "tray": {"available": true, "close_to_tray": true, "hide_to_tray": true, "restore": true},
+  "mini_player": {"width": 432, "height": 135},
+  "offline_proxy_simulation": {"started": true, "startup_seconds": 1.9, "played": true, "spectrum_ready": 15},
+  "quit_exit_code": 0,
+  "limits": [
+    "audible sound not confirmed by ear",
+    "installer not rebuilt: Inno Setup absent",
+    "offline simulated by a dead proxy, network was not physically disabled",
+    "screenshots contain user content and are kept outside the repository"
+  ]
+}

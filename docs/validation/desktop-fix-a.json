@@ -1,0 +1,32 @@
+{
+  "kind": "desktop fix A, source candidate; not Windows acceptance",
+  "date": "2026-10-27",
+  "input_zip_sha256": "0466f8f6fda43f9e4b4886f21247bb8bcff45ab65e0c5796decbce0958a7bf77",
+  "unittest_passed": 397,
+  "new_python_tests": 31,
+  "node_source_dom_checks": 15,
+  "python_syntax_files": 70,
+  "javascript_syntax_files": 22,
+  "generated_audio_packet_hash_checks": [
+    "mp3",
+    "m4a",
+    "opus",
+    "ogg",
+    "flac",
+    "webm",
+    "aac"
+  ],
+  "wav_pcm_unchanged": true,
+  "asset_png_verified": true,
+  "source_patch_applier": "8 tests and source-tree apply/check/reapply smoke passed",
+  "live_provider_queries": 0,
+  "user_music_downloads": 0,
+  "user_files_renamed_or_retagged": 0,
+  "old_cache_behavior": "display companion on explicit reuse; audio name/bytes/mtime unchanged",
+  "playwright": "not run; browser absent, CDN blocked by network allowlist",
+  "windows": "not checked",
+  "exe": "not built",
+  "home_vps_performance": "not measured",
+  "gui_provider_dependencies_changed": false,
+  "test_environment": "docs/validation/desktop-fix-a-linux-env.txt"
+}

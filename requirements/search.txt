@@ -1,0 +1,3 @@
+# Candidate restoration only; requires fresh Windows validation.
+-c observed/search-win-py313.constraints.txt
+-r ../requirements-search.txt
