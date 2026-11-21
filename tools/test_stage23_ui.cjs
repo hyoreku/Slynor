@@ -188,7 +188,13 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  await mini.mouse.move(26,23);
  await mini.locator('html[data-mini-compact="false"]').waitFor();
  check(miniSizes.at(-1)===false && mini.viewportSize().width===360, 'hover restores the native viewport');
+ const volume = await mini.locator('#mini-volume').boundingBox();
+ await mini.mouse.move(volume.x + volume.width / 2, volume.y + volume.height / 2);
+ await mini.mouse.down();
  await mini.mouse.move(400,150);
+ await mini.waitForTimeout(3100);
+ check(mini.viewportSize().width===360, 'volume dragging keeps the mini player open');
+ await mini.mouse.up();
  await mini.locator('html[data-mini-compact="true"]').waitFor();
  await mini.locator('#mini-unfold').press('Enter');
  await mini.locator('html[data-mini-compact="false"]').waitFor();
