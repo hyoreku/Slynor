@@ -1,5 +1,6 @@
 """Native/provider test doubles. Does not certify Windows or live downloads."""
 import json
+import os
 from pathlib import Path
 import tempfile
 import time
@@ -22,7 +23,7 @@ class NativeModeTests(unittest.TestCase):
   with patch('desktop_shell.webview.create_window',return_value=mini,create=True) as create:self.shell.show_mini()
   return create.call_args.kwargs
  def test_compact_size(self):
-  args=self.mini();self.assertEqual((args['width'],args['height']),(376,128));self.assertEqual(args['min_size'],(336,124));self.assertTrue(args['transparent'])
+  args=self.mini();self.assertEqual((args['width'],args['height']),(360,112));self.assertEqual(args['min_size'],(320,108));self.assertFalse(args['shadow'])
  def test_maximized_restored_not_normalized(self):
   self.window.maximize=lambda:self.window.calls.append('maximize');self.shell.main_mode='maximized';self.mini();self.shell.show_main()
   self.assertIn('maximize',self.window.calls);self.assertNotIn('restore',self.window.calls)
@@ -30,6 +31,43 @@ class NativeModeTests(unittest.TestCase):
  def test_fullscreen_preserved(self):
   self.window.fullscreen=True;self.window.toggle_fullscreen=lambda:self.fail('Already fullscreen; do not toggle off');self.mini();self.shell.show_main();self.assertEqual(self.shell.return_mode,'fullscreen')
  def test_minimized_can_restore(self):self.shell.main_minimized=True;self.shell.show_main();self.assertIn('restore',self.window.calls)
+
+
+@unittest.skipUnless(os.name == 'nt', 'requires Win32 and WinForms')
+class MiniWindowRegionTests(unittest.TestCase):
+    def test_native_window_clips_corners_and_updates_bounds_after_resize(self):
+        import ctypes
+        from ctypes import wintypes
+        import clr
+        clr.AddReference('System.Windows.Forms')
+        from System.Windows.Forms import Form, FormBorderStyle
+        from window_geometry import round_mini_window
+
+        form = Form()
+        self.addCleanup(form.Dispose)
+        form.FormBorderStyle = getattr(FormBorderStyle, 'None')
+        form.Width, form.Height = 360, 112
+        handle = form.Handle.ToInt64()
+        gdi = ctypes.windll.gdi32
+        user = ctypes.windll.user32
+        gdi.CreateRectRgn.argtypes = [ctypes.c_int] * 4
+        gdi.CreateRectRgn.restype = wintypes.HANDLE
+        gdi.DeleteObject.argtypes = [wintypes.HANDLE]
+        gdi.PtInRegion.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_int]
+        user.GetWindowRgn.argtypes = [wintypes.HWND, wintypes.HANDLE]
+        region = gdi.CreateRectRgn(0, 0, 1, 1)
+        self.assertTrue(region)
+        self.addCleanup(gdi.DeleteObject, region)
+
+        round_mini_window(types.SimpleNamespace(native=form))
+        self.assertNotEqual(user.GetWindowRgn(handle, region), 0)
+        self.assertFalse(gdi.PtInRegion(region, 0, 0))
+        self.assertTrue(gdi.PtInRegion(region, 1, 55))
+        self.assertFalse(gdi.PtInRegion(region, 395, 55))
+        form.Width = 400
+        self.assertNotEqual(user.GetWindowRgn(handle, region), 0)
+        self.assertTrue(gdi.PtInRegion(region, 395, 55))
+
 
 class CatalogueTests(unittest.TestCase):
  def setUp(self):

@@ -1,11 +1,12 @@
 """Native tray + mini window. No audio engine lives here; all controls use the same API."""
 import json
+import os
 from pathlib import Path
 from threading import RLock, Thread, Event
 from queue import Queue, Empty, Full
 from time import monotonic
 import logging
-from window_geometry import position
+from window_geometry import position, round_mini_window
 from backend.diagnostics import dump_stacks
 from urllib.request import Request, build_opener, ProxyHandler
 # Loopback controls must not inherit a Windows/HTTP_PROXY route.
@@ -134,11 +135,11 @@ class DesktopShell:
             self.return_mode='fullscreen' if getattr(self.window,'fullscreen',False) else self.main_mode
         if mini is None:
             try:
+                x, y = position(360, 112, self.api.load_settings().get('mini_position'), top=True)
                 mini=webview.create_window('Slynor · Миниплеер',
-                    url='http://127.0.0.1:8765/mini',width=376,height=128,
-                    min_size=(336,124),on_top=True,frameless=True,transparent=True,easy_drag=False,
-                    x=position(376,128,self.api.load_settings().get('mini_position'),top=True)[0],
-                    y=position(376,128,self.api.load_settings().get('mini_position'),top=True)[1])
+                    url='http://127.0.0.1:8765/mini',width=360,height=112,
+                    min_size=(320,108),on_top=True,frameless=True,shadow=False,easy_drag=False,
+                    hidden=os.name=='nt',background_color='#15151a',x=x,y=y)
                 def closed(*args):
                     with self.lock:
                         if self.mini is mini: self.mini=None
@@ -158,6 +159,12 @@ class DesktopShell:
                     exiting=self.exiting
                     if not exiting:self.mini=mini
                 if exiting:mini.destroy();return
+                if os.name == 'nt':
+                    try:
+                        round_mini_window(mini)
+                    except Exception:
+                        logging.getLogger('ownplayer').exception('Could not set the mini-player window shape')
+                    mini.show()
             finally:
                 with self.lock:self.creating_mini=False
         else:

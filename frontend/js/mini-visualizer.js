@@ -72,9 +72,11 @@
             height = nextHeight;
             const canvasBox = canvas.getBoundingClientRect();
             const box = panel.getBoundingClientRect();
-            contour = { x: box.left - canvasBox.left, y: box.top - canvasBox.top,
-                width: box.width, height: box.height,
-                radius: parseFloat(getComputedStyle(panel).borderTopLeftRadius) };
+            const style = getComputedStyle(panel);
+            const inset = parseFloat(style.getPropertyValue('--mini-frame-edge'));
+            contour = { x: box.left - canvasBox.left + inset, y: box.top - canvasBox.top + inset,
+                width: box.width - 2 * inset, height: box.height - 2 * inset,
+                radius: Math.max(1, parseFloat(style.borderTopLeftRadius) - inset) };
             edge = perimeter(contour);
         }
         const scale = Math.min(2, devicePixelRatio || 1);
@@ -121,7 +123,7 @@
         ctx.lineWidth = 1.3;
         if (mode === 'wave') {
             ctx.translate(x + panelWidth / 2, y + panelHeight / 2);
-            wave.draw({ width: panelWidth, height: panelHeight, radius, reach: 6.3,
+            wave.draw({ width: panelWidth, height: panelHeight, radius, reach: 5.2,
                 bands, time: reduced.matches ? 0 : performance.now(), style: waveStyle,
                 palette: albumPalette, fallback: [color, highlight], compact: true });
         } else {
@@ -131,7 +133,7 @@
                 ctx.beginPath();
                 for (let i = 0; i < edge.length; i += spacing) {
                     const [px, py, nx, ny] = edge[i];
-                    const length = Math.min(6.5, amplitude(i) * 5.3 + bass * 1.4) * scale;
+                    const length = Math.min(5, amplitude(i) * 4.5 + bass * 1.2) * scale;
                     if (length < .35) continue;
                     ctx.moveTo(px, py);
                     ctx.lineTo(px + nx * length, py + ny * length);

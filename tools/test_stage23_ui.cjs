@@ -145,7 +145,7 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  check(queueCommits.length===3&&queueCommits[2].index===24999,'Play handler uploads complete queue from filtered view');
  const mini = await context.newPage();
  mini.on('pageerror', error => errors.push(error.message));
- await mini.setViewportSize({width:376,height:128});
+ await mini.setViewportSize({width:360,height:112});
  state = {...state,file_path:local[0],state:'playing',appearance:{...settings,
      mini_background:'classic',visualizer_mode:'bars',wave_style:'surf',dim:50,blur:0}};
  await mini.goto('http://127.0.0.1:8765/mini');
@@ -159,11 +159,12 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
      const scale = canvas.width / canvas.clientWidth;
      const alpha = (x,y,w,h) => ctx.getImageData(x*scale,y*scale,w*scale,h*scale).data.filter((_,i)=>i%4===3);
      const middle = alpha(panel.left+30,panel.top+15,panel.width-60,panel.height-30);
-     return alpha(panel.left+20,0,panel.width-40,panel.top).some(a=>a>40)
-         && alpha(0,panel.top+20,panel.left,panel.height-40).some(a=>a>40)
+     return panel.left===0 && panel.top===0 && panel.width===canvas.clientWidth
+         && alpha(20,0,panel.width-40,6).some(a=>a>40)
+         && alpha(0,20,6,panel.height-40).some(a=>a>40)
          && !middle.some(a=>a);
    }, mode);
-   check(true, mode + ' renders outside the mini-player panel');
+   check(true, mode + ' stays on the window edge without a background gutter');
  }
  state.state = 'paused';
  await mini.locator('#mini-spectrum').waitFor({state:'hidden'});

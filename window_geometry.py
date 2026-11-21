@@ -1,5 +1,58 @@
 """Work-area geometry; no Tk roots or hidden GUI event loops."""
+import logging
 import os
+
+
+def round_mini_window(window):
+    """Clip the Windows host itself so corners cannot expose its background."""
+    form = getattr(window, "native", None)
+    if os.name != "nt" or form is None:
+        return
+
+    import ctypes
+    from ctypes import wintypes
+    from System import Action
+
+    create_region = ctypes.windll.gdi32.CreateRoundRectRgn
+    create_region.argtypes = [ctypes.c_int] * 6
+    create_region.restype = wintypes.HANDLE
+    delete_region = ctypes.windll.gdi32.DeleteObject
+    delete_region.argtypes = [wintypes.HANDLE]
+    set_region = ctypes.windll.user32.SetWindowRgn
+    set_region.argtypes = [wintypes.HWND, wintypes.HANDLE, wintypes.BOOL]
+
+    previous = None
+
+    def resize(*_):
+        nonlocal previous
+        width, height = form.Width, form.Height
+        if width <= 0 or height <= 0 or not form.IsHandleCreated:
+            return
+        handle = form.Handle.ToInt64()
+        diameter = max(1, round(24 * getattr(form, "DeviceDpi", 96) / 96))
+        size = (handle, width, height, diameter)
+        if previous == size:
+            return
+        previous = size
+        region = create_region(0, 0, width + 1, height + 1, diameter, diameter)
+        if not region or not set_region(handle, region, True):
+            previous = None
+            if region:
+                delete_region(region)
+            logging.getLogger("ownplayer").warning("Could not round the mini-player window")
+        # Windows owns the region after SetWindowRgn succeeds.
+
+    def install():
+        form.Resize += resize
+        form.HandleCreated += resize
+        if hasattr(form, "DpiChanged"):
+            form.DpiChanged += resize
+        resize()
+
+    if form.InvokeRequired:
+        form.Invoke(Action(install))
+    else:
+        install()
 
 def work_area():
     if os.name=='nt':
