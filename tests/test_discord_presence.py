@@ -179,25 +179,32 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(self.rpc.set_activity.call_count, 2)
         self.snapshot["rate"] = 1.5
         self.tick(6.5)
+        self.assertEqual(self.rpc.set_activity.call_count, 2)
+        self.tick(6.7)
         self.assertEqual(self.rpc.set_activity.call_count, 3)
         self.snapshot["state"] = "paused"
-        self.tick(7)
+        self.tick(7.2)
         paused = self.rpc.set_activity.call_args.args[0]
         self.assertIn("На паузе", paused["state"])
         self.assertNotIn("timestamps", paused)
         self.tick(7.4)
         self.assertEqual(self.rpc.set_activity.call_count, 4)
-        self.snapshot.update(time_ms=53000, seek_revision=2)
-        self.tick(7.8)
-        self.assertIn("На паузе · 00:53", self.rpc.set_activity.call_args.args[0]["state"])
-        self.assertEqual(self.rpc.set_activity.call_count, 5)
-        self.snapshot["state"] = "playing"
-        self.tick(8)
-        self.assertIn("timestamps", self.rpc.set_activity.call_args.args[0])
         self.snapshot["state"] = "idle"
-        self.tick(16)
+        self.tick(7.8)
         self.rpc.set_activity.assert_called_with(None)
+        self.assertEqual(self.rpc.set_activity.call_count, 5)
         self.connect.assert_called_once_with(DISCORD_APPLICATION_ID)
+
+    def test_paused_seek_and_resume_publish_latest_position(self):
+        self.enable()
+        self.snapshot.update(state="paused")
+        self.tick()
+        self.snapshot.update(time_ms=53000, seek_revision=1)
+        self.tick(.5)
+        self.assertIn("На паузе · 00:53", self.rpc.set_activity.call_args.args[0]["state"])
+        self.snapshot.update(state="playing")
+        self.tick(1)
+        self.assertEqual(self.rpc.set_activity.call_args.args[0]["timestamps"]["start"], 948)
 
     def test_seek_updates_timestamps_during_the_normal_update_interval(self):
         self.enable()
@@ -257,16 +264,33 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(sent["assets"]["large_image"], cover)
         self.assertEqual(sent["timestamps"]["start"], 921)
 
-    def test_new_opening_track_replaces_previous_playing_activity(self):
+    def test_rapid_track_changes_spend_a_single_update_on_the_last_playing_track(self):
         self.enable()
         self.tick()
         self.metadata.return_value = None
-        self.snapshot.update(file_path=r"C:\Music\latest.flac", filename="Latest", state="opening",
-                             playback_generation=4, time_ms=0)
+        self.snapshot.update(file_path=r"C:\Music\intermediate.flac", filename="Intermediate", state="opening",
+                             playback_generation=3, time_ms=0)
         self.tick(.1)
+        self.snapshot.update(state="playing")
+        self.tick(.2)
+        self.snapshot.update(file_path=r"C:\Music\latest.flac", filename="Latest", playback_generation=4)
+        self.tick(.3)
+        self.rpc.set_activity.assert_called_once()
+        self.tick(.5)
         sent = self.rpc.set_activity.call_args.args[0]
         self.assertEqual(sent["details"], "Latest")
-        self.assertNotIn("timestamps", sent)
+        self.assertIn("timestamps", sent)
+
+    def test_burst_retries_latest_seek_after_the_activity_window(self):
+        self.enable()
+        self.tick()
+        for index in range(1, 9):
+            self.snapshot.update(time_ms=index * 10000, seek_revision=index)
+            self.tick(index * .6)
+        self.assertEqual(self.rpc.set_activity.call_count, 4)
+        self.tick(20.1)
+        self.assertEqual(self.rpc.set_activity.call_count, 5)
+        self.assertEqual(self.rpc.set_activity.call_args.args[0]["timestamps"]["start"], 940)
 
     def test_rejected_picture_does_not_retry_after_switch(self):
         self.enable()
@@ -318,7 +342,7 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], LOGO_ID)
         url = "https://archive.org/download/mbid-11111111-1111-1111-1111-111111111111/front.jpg"
         self.artwork.lookup.return_value = url
-        self.tick(.4)
+        self.tick(1)
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], url)
 
     def test_rejected_provider_picture_uses_alternative_artwork(self):

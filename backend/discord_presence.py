@@ -1,5 +1,6 @@
 """Publish the player snapshot on a worker independent of the WebView."""
 
+from collections import deque
 import logging
 import math
 import re
@@ -18,6 +19,10 @@ _POLL_INTERVAL = .12
 _UPDATE_INTERVAL = 5.0
 _RECONNECT_INTERVAL = 2.0
 _METADATA_RETRY_INTERVAL = 2.0
+_ACTIVITY_WINDOW = 20.0
+_ACTIVITY_LIMIT = 5
+_COMMAND_GAP = .4
+_ARTWORK_GAP = .9
 _PRIVATE_TEXT = re.compile(r"://|\b(?:file|online):|[a-z]:[\\/]|\\\\|(?:^|\s)/\S", re.IGNORECASE)
 
 
@@ -146,6 +151,9 @@ class DiscordPresence:
         self._session_id = None
         self._rpc = None
         self._published = None
+        self._published_at = 0.0
+        self._activity_attempts = deque()
+        self._budget_notice_at = 0.0
         self._track = None
         self._track_metadata = {}
         self._metadata_retry = 0.0
@@ -188,11 +196,40 @@ class DiscordPresence:
             return
         try:
             if clear and published is not None:
-                rpc.set_activity(None)
+                self._send_activity(rpc, None, time.monotonic())
         except (OSError, ValueError):
             pass
         finally:
             rpc.close()
+
+    def _send_activity(self, rpc, activity, now, *, cosmetic=False):
+        attempts = self._activity_attempts
+        while attempts and now - attempts[0] >= _ACTIVITY_WINDOW:
+            attempts.popleft()
+        # Keep capacity for a playback change and for clearing the card on stop.
+        limit = _ACTIVITY_LIMIT if activity is None else _ACTIVITY_LIMIT - (2 if cosmetic else 1)
+        if now < self._retry_update:
+            return False
+        if len(attempts) >= limit:
+            next_slot = attempts[len(attempts) - limit] + _ACTIVITY_WINDOW
+            if not cosmetic and self._budget_notice_at != next_slot:
+                self._budget_notice_at = next_slot
+                logger.info("Discord activity queued by local budget (wait=%.1fs)", next_slot - now)
+            return False
+        attempts.append(now)
+        try:
+            rpc.set_activity(activity)
+        except DiscordRpcRejected as error:
+            if not error.rate_limited:
+                raise
+            delay = error.retry_after or self._rate_backoff
+            self._retry_update = time.monotonic() + delay
+            self._rate_backoff = min(5.0, self._rate_backoff * 2)
+            logger.info("Discord rate limited activity updates (code=%s, retry=%.1fs)", error.code, delay)
+            return False
+        self._rate_backoff = 1.0
+        logger.info("Discord IPC acknowledged %s", "activity update" if activity is not None else "activity clear")
+        return True
 
     def _cover(self, metadata, duration):
         known = public_cover_url(metadata.get("public_cover_url"))
@@ -218,27 +255,24 @@ class DiscordPresence:
         if application_id != self._session_id:
             self._disconnect(clear=True)
             self._session_id = application_id
-            self._next_connect = self._next_update = self._retry_update = 0.0
-            self._rate_backoff = 1.0
+            self._next_connect = self._next_update = 0.0
         if application_id is None:
             self._track, self._track_metadata = None, {}
             return
 
         snapshot = self._playback()
         session = (snapshot["file_path"], snapshot.get("playback_generation"))
-        states = _ACTIVE_STATES
-        if self._published:
-            if (snapshot["state"] in {"opening", "buffering"} and self._published[0][:2] == session
-                    and self._published[0][2] in _ACTIVE_STATES):
-                # Keep the clock for the same track when VLC buffers during a seek.
+        if snapshot["file_path"] and snapshot["state"] in {"opening", "buffering"}:
+            # Intermediate decoder states would consume activity slots before playback settles.
+            if self._rpc is not None:
                 self._rpc.poll()
-                return
-            states = _ACTIVE_STATES | {"opening", "buffering"}
-        path = snapshot["file_path"] if snapshot["state"] in states else None
+            return
+        path = snapshot["file_path"] if snapshot["state"] in _ACTIVE_STATES else None
         if not path:
             if self._published is not None:
                 try:
-                    self._rpc.set_activity(None)
+                    if not self._send_activity(self._rpc, None, now):
+                        return
                 except (OSError, ValueError):
                     self._disconnect(clear=False)
                 self._published = None
@@ -269,7 +303,7 @@ class DiscordPresence:
         # Refresh position after opening the pipe or reading tags. A quick stop
         # and replay has a new generation even if both snapshots say playing.
         snapshot = self._playback()
-        if (self._configured_id() != application_id or snapshot["state"] not in states
+        if (self._configured_id() != application_id or snapshot["state"] not in _ACTIVE_STATES
                 or (snapshot["file_path"], snapshot.get("playback_generation")) != session):
             self.refresh()
             return
@@ -279,32 +313,36 @@ class DiscordPresence:
         if logo == self._rejected_logo:
             logo = None
         removed_logo = None
+        retrying = False
         while True:
             snapshot = self._playback()
-            if (self._configured_id() != application_id or snapshot["state"] not in states
+            if (self._configured_id() != application_id or snapshot["state"] not in _ACTIVE_STATES
                     or (snapshot["file_path"], snapshot.get("playback_generation")) != session):
                 self.refresh()
                 return
             identity = (*session, snapshot["state"], snapshot["rate"], snapshot.get("seek_revision", 0))
             activity = listening_activity(snapshot, {**metadata, "public_cover_url": cover}, time.time(), logo)
-            if self._published and self._published[0] == identity:
+            cosmetic = self._published is not None and self._published[0] == identity
+            if cosmetic:
                 previous = self._published[1]
                 same_display = all(previous.get(key) == activity.get(key) for key in ("details", "state", "assets"))
                 if same_display and (now < self._next_update or _same_activity(previous, activity)):
                     if removed_logo:
                         self._rejected_logo = removed_logo
                     return
+                if not retrying and now < self._published_at + _ARTWORK_GAP:
+                    return
+            elif self._published and not retrying and now < self._published_at + _COMMAND_GAP:
+                return
             try:
-                self._rpc.set_activity(activity)
-                self._rate_backoff = 1.0
+                if not self._send_activity(self._rpc, activity, now, cosmetic=cosmetic):
+                    return
                 if removed_logo:
                     self._rejected_logo = removed_logo
                 break
             except DiscordRpcRejected as error:
-                if error.rate_limited:
-                    self._retry_update = time.monotonic() + (error.retry_after or self._rate_backoff)
-                    self._rate_backoff = min(5.0, self._rate_backoff * 2)
-                    return
+                logger.debug("Discord activity rejected (code=%s)", error.code)
+                retrying = True
                 if cover and logo:
                     removed_logo, logo = logo, None
                 elif cover:
@@ -316,7 +354,8 @@ class DiscordPresence:
                 else:
                     raise
         self._published = (identity, activity)
-        self._next_update = time.monotonic() + _UPDATE_INTERVAL
+        self._published_at = now
+        self._next_update = now + _UPDATE_INTERVAL
 
     def _run(self):
         try:
@@ -325,6 +364,10 @@ class DiscordPresence:
                 application_id = self._configured_id()
                 try:
                     self._sync(application_id, time.monotonic())
+                except TimeoutError:
+                    logger.info("Discord IPC acknowledgement timed out. Reconnecting")
+                    self._disconnect(clear=False)
+                    self._next_connect = time.monotonic() + _RECONNECT_INTERVAL
                 except (OSError, ValueError):
                     self._disconnect(clear=False)
                     self._next_connect = time.monotonic() + _RECONNECT_INTERVAL
