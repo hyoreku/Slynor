@@ -79,6 +79,6 @@ HTTP-сервисы по умолчанию слушают только `127.0.0
 .\.venv\Scripts\python.exe start.py --smoke-test
 ```
 
-[Карта кода](docs/CODE_MAP.md) · [Music Service](docs/SERVICE_STAGE1.md) · [Правила работы с репозиторием](CONTRIBUTING.md) · [План Windows, Android и VPS](docs/ROADMAP_RU.md)
+[Карта кода](docs/CODE_MAP.md) · [Music Service](docs/SERVICE_STAGE1.md) · [Сборка Windows](docs/BUILD_PORTABLE_STAGE23.md) · [Сборка APK](android/README.md) · [Правила работы с репозиторием](CONTRIBUTING.md) · [План проекта](docs/ROADMAP_RU.md)
 
 GPL-2.0-or-later. [Текст лицензии](LICENSE) · [Лицензии зависимостей](THIRD_PARTY_NOTICES.md)

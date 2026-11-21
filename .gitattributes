@@ -2,3 +2,4 @@
 docs/experiment/evidence/catalogue-b-sandbox/*.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 # Keep the raw run bytes verifiable against the hashes recorded in its summary.
 docs/experiment/evidence/home-owner-proxy-2026-10-28/* -text
+android/gradlew.bat text eol=crlf
