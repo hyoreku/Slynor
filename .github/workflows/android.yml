@@ -39,3 +39,41 @@ jobs:
             android/SHA256.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Launch APK and check the home screen
+        timeout-minutes: 9
+        working-directory: android
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager" ]]; then
+            sdkmanager=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -print -quit)
+          fi
+          image='system-images;android-35;google_apis;x86_64'
+          "$sdkmanager" emulator platform-tools "$image"
+          echo no | "$(dirname "$sdkmanager")/avdmanager" create avd --name slynor-ui --package "$image" --force
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/emulator/emulator" -avd slynor-ui -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/slynor-emulator.log" 2>&1 &
+          trap 'adb emu kill || true' EXIT
+          if ! timeout 210 bash -c 'adb wait-for-device && until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'; then
+            tail -60 "$RUNNER_TEMP/slynor-emulator.log"
+            exit 1
+          fi
+          adb shell wm dismiss-keyguard
+          adb install app/build/outputs/apk/debug/app-debug.apk
+          adb shell am start -W -n io.github.hyoreku.slynor.debug/io.github.hyoreku.slynor.MainActivity
+          for attempt in {1..12}; do
+            if adb shell uiautomator dump /sdcard/slynor-home.xml >/dev/null 2>&1 &&
+               adb shell cat /sdcard/slynor-home.xml > "$RUNNER_TEMP/slynor-home.xml" &&
+               grep -q 'Включите первую песню' "$RUNNER_TEMP/slynor-home.xml" &&
+               grep -q 'Моя музыка' "$RUNNER_TEMP/slynor-home.xml" &&
+               grep -q 'Очередь' "$RUNNER_TEMP/slynor-home.xml"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          adb logcat -d -s AndroidRuntime | tail -60
+          echo 'Slynor home screen did not appear.'
+          exit 1

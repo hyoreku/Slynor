@@ -2,6 +2,7 @@ package io.github.hyoreku.slynor
 
 import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.media3.common.MediaItem
@@ -9,15 +10,15 @@ import androidx.media3.common.MediaMetadata
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class LocalTrack(val uri: Uri, val title: String) {
+data class LocalTrack(val uri: Uri, val title: String, val artist: String = "") {
     fun mediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(uri.toString())
         .setUri(uri)
-        .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+        .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist.ifBlank { null }).build())
         .build()
 }
 
-class LocalLibrary(context: Context) {
+class LocalLibrary(private val context: Context) {
     private val storage = context.getSharedPreferences("library", Context.MODE_PRIVATE)
     private val resolver = context.contentResolver
 
@@ -25,7 +26,7 @@ class LocalLibrary(context: Context) {
         val saved = JSONArray(storage.getString("tracks", "[]"))
         return List(saved.length()) { index ->
             val track = saved.getJSONObject(index)
-            LocalTrack(Uri.parse(track.getString("uri")), track.getString("title"))
+            LocalTrack(Uri.parse(track.getString("uri")), track.getString("title"), track.optString("artist"))
         }
     }
 
@@ -54,10 +55,24 @@ class LocalLibrary(context: Context) {
             } catch (_: IllegalArgumentException) {
                 null
             }
-            tracks[uri] = LocalTrack(uri, title ?: "Аудиофайл")
+            tracks[uri] = readTags(uri, title ?: "Аудиофайл")
         }
         save(tracks.values)
         return ImportResult(tracks.values.toList(), unavailable)
+    }
+
+    private fun readTags(uri: Uri, filename: String): LocalTrack {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty()
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty()
+            LocalTrack(uri, title.ifBlank { filename }, artist)
+        } catch (_: RuntimeException) {
+            LocalTrack(uri, filename)
+        } finally {
+            retriever.release()
+        }
     }
 
     fun remove(track: LocalTrack): List<LocalTrack> {
@@ -73,7 +88,7 @@ class LocalLibrary(context: Context) {
 
     private fun save(tracks: Collection<LocalTrack>) {
         val encoded = JSONArray()
-        tracks.forEach { encoded.put(JSONObject().put("uri", it.uri.toString()).put("title", it.title)) }
+        tracks.forEach { encoded.put(JSONObject().put("uri", it.uri.toString()).put("title", it.title).put("artist", it.artist)) }
         storage.edit().putString("tracks", encoded.toString()).apply()
     }
 }
