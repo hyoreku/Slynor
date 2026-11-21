@@ -64,19 +64,108 @@
  }
  async function play(track,context=null){if(track.path.startsWith('online:service:'))return download(track,{play:true,context});if(track.source==='youtube'&&track.path.startsWith('online:catalog:'))return fastPlay(track,context);if(track.path.startsWith('online:catalog:'))return download(track,{play:true,context});if(loading||commandBusy)return;loading=true;render();setPlaybackControlsBusy(true);try{const paths=tracks.filter(t=>t.access==='playable').map(t=>t.path);const index=paths.indexOf(track.path);if(index<0)throw new Error('Аудио недоступно.');const r=await fetch('/api/player/queue/play',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,index}),signal:AbortSignal.timeout(10000)});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Не удалось запустить поток.');playbackLibraryContext=context||{kind:'online',playlistId:selectedPlaylist,tracks:[...tracks],query:query.value};rowState(track,'Запуск потока…');revealPlayingOnPoll=true;window.refreshPlayerState?.();}catch(e){rowState(track,e.message,true);}finally{loading=false;setPlaybackControlsBusy(false);render();}}
  function safeLink(url){try{const u=new URL(url);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
- function render(){list.replaceChildren();for(const t of tracks){setTrackMetadata(fileKey(t.path),t);const row=document.createElement('li');row.className='online-track';row.dataset.path=t.path;const cover=document.createElement('span');cover.className='song-art';setSongCover(cover,t.cover_url);const artwork=cover.querySelector('img');if(artwork){artwork.loading='eager';artwork.decoding='async';artwork.addEventListener('error',()=>{if(cover.isConnected)setTimeout(()=>{if(cover.isConnected){delete cover.dataset.coverUrl;setSongCover(cover,t.cover_url);const retry=cover.querySelector('img');if(retry)retry.loading='eager';}},650);},{once:true});}const info=document.createElement('div');info.className='online-track-info';const name=document.createElement('strong');name.dataset.userText='true';name.textContent=t.title;const artist=document.createElement('span');artist.dataset.userText='true';artist.textContent=t.artist||'';const badge=document.createElement('span');badge.className='subtle-label';const sources={spotify:'Spotify',youtube:'YouTube',soundcloud:'SoundCloud',muzbomb:'muzbomb.net',hitmo:'hitmotop.com',archive:'Internet Archive',file:'встроена в файл'};const audioLabel=t.source==='spotify'?'подготовка spotDL':sources[t.source]||'публичный источник';badge.textContent='Аудио: '+(t.via==='service'?'Music Service · '+audioLabel:audioLabel)+(t.cover_url?' · Обложка: '+(sources[t.cover_source||t.source]||'метаданные'):' · Обложка не найдена');info.append(name,artist,badge);
+ let waitingForResults = false;
+ function render(){
+  const showSkeleton = waitingForResults && tracks.length === 0;
+  setLoadingRows(list, showSkeleton);
+  if (showSkeleton) return;
+  list.replaceChildren();for(const t of tracks){setTrackMetadata(fileKey(t.path),t);const row=document.createElement('li');row.className='online-track';row.dataset.path=t.path;const cover=document.createElement('span');cover.className='song-art';setSongCover(cover,t.cover_url);const artwork=cover.querySelector('img');if(artwork){artwork.loading='eager';artwork.decoding='async';artwork.addEventListener('error',()=>{if(cover.isConnected)setTimeout(()=>{if(cover.isConnected){delete cover.dataset.coverUrl;setSongCover(cover,t.cover_url);const retry=cover.querySelector('img');if(retry)retry.loading='eager';}},650);},{once:true});}const info=document.createElement('div');info.className='online-track-info';const name=document.createElement('strong');name.dataset.userText='true';name.textContent=t.title;const artist=document.createElement('span');artist.dataset.userText='true';artist.textContent=t.artist||'';const badge=document.createElement('span');badge.className='subtle-label';const sources={spotify:'Spotify',youtube:'YouTube',soundcloud:'SoundCloud',muzbomb:'muzbomb.net',hitmo:'hitmotop.com',archive:'Internet Archive',file:'встроена в файл'};const audioLabel=t.source==='spotify'?'подготовка spotDL':sources[t.source]||'публичный источник';badge.textContent='Аудио: '+(t.via==='service'?'Music Service · '+audioLabel:audioLabel)+(t.cover_url?' · Обложка: '+(sources[t.cover_source||t.source]||'метаданные'):' · Обложка не найдена');info.append(name,artist,badge);
   const url=safeLink(t.permalink_url);if(url){const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Источник';info.append(a);}
   const status=document.createElement('span');status.className='online-row-status';status.role='status';const s=states.get(t.path);status.textContent=s?.text||(['preview','blocked','unknown'].includes(t.access)?'Полное аудио недоступно':'');status.classList.toggle('is-error',!!s?.error);info.append(status);
   const actions=document.createElement('div');actions.className='online-track-actions';const p=document.createElement('button');p.type='button';p.className='icon-button';p.textContent='▶';p.setAttribute('aria-label','Воспроизвести: '+t.title);p.disabled=!['playable','prepare'].includes(t.access)||loading||downloads.has(t.path);p.addEventListener('click',()=>void play(t));actions.append(p);
   if(t.path.startsWith('online:web:')||t.path.startsWith('online:catalog:')||t.path.startsWith('online:service:')){const a=document.createElement('button');a.type='button';a.className='secondary-button';a.textContent='+ В список';a.disabled=downloads.has(t.path);a.addEventListener('click',()=>void add(t));const d=document.createElement('button');d.type='button';d.className='secondary-button';d.textContent=downloads.has(t.path)?'Загрузка…':'↓ Скачать';d.disabled=downloads.has(t.path);d.addEventListener('click',()=>void download(t));actions.append(a,d);}
   row.addEventListener('click',e=>{if(!e.target.closest('button,a,input,select')&&['playable','prepare'].includes(t.access))void play(t);});row.append(cover,info,actions);list.append(row);
  }}
- async function search(options={}){controller?.abort();controller=new AbortController();const signal=controller.signal,revision=++generation,text=query.value.trim();if(jobId)void request('jobs/'+jobId+'/cancel',{}).catch(()=>{});jobId=null;tracks=[];render();const publish=status=>window.dispatchEvent(new CustomEvent('online-search-state',{detail:{query:text,status,tracks:[...tracks],message:message.textContent}}));if(text.length<2){message.textContent='';publish('idle');return;}selectedPlaylist='';message.textContent='Ищем…';publish('starting');try{const source=(options&&options.local)?'auto':(serviceMode.checked?'service':'auto');const job=await request('search-jobs',{source,query:text},signal);if(revision!==generation)return;jobId=job.id;for(;;){const data=await request('jobs/'+job.id,null,signal);if(revision!==generation)return;const next=data.tracks||[];if(JSON.stringify(next)!==JSON.stringify(tracks)){tracks=next;render();publish('running');}if(data.status==='failed')throw new Error(data.error||'Ошибка поиска');message.textContent=['done','cancelled'].includes(data.status)?(tracks.length?'':'Ничего не найдено.'):'Ищем…';if(['done','cancelled'].includes(data.status)){publish(data.status);break;}await new Promise(r=>setTimeout(r,400));if(signal.aborted)return;}}catch(e){if(revision===generation&&e.name!=='AbortError'){if(serviceMode.checked&&/Music Service/i.test(e.message)){message.textContent='Music Service недоступен — ищем локально.';publish('failed');void refreshServiceStatus(false);void search({local:true});return;}message.textContent=e.message;publish('failed');if(serviceMode.checked)void refreshServiceStatus(false);}}}
- function schedule(){clearTimeout(timer);controller?.abort();generation++;timer=setTimeout(search,350);}query.addEventListener('input',schedule);form.addEventListener('submit',e=>{e.preventDefault();clearTimeout(timer);void search();});
- function renderImports(){imports.replaceChildren();for(const pl of playlists){const b=document.createElement('button');b.type='button';b.className='secondary-button';b.textContent=pl.name+' · '+pl.tracks.length;b.addEventListener('click',()=>{clearTimeout(timer);controller?.abort();generation++;tracks=pl.tracks;selectedPlaylist=pl.id;render();message.textContent='';});imports.append(b);}}
- importForm.addEventListener('submit',async e=>{e.preventDefault();const b=importForm.querySelector('button');b.disabled=true;try{const data=await request('import',{source:document.getElementById('online-import-source').value,url:document.getElementById('online-playlist-url').value.trim()});playlists.push(data.playlist);tracks=data.playlist.tracks;selectedPlaylist=data.playlist.id;renderImports();render();message.textContent='Импортирован список, аудио не скачивалось.';}catch(e){message.textContent=e.message;}finally{b.disabled=false;}});
- function searchArtist(name,options={}){if(typeof name!=='string'||!name.trim())return;clearTimeout(timer);controller?.abort();generation++;query.value=name.trim();selectedPlaylist='';tracks=[];message.textContent='';render();if(options.navigate!==false)window.showScreen?.('online');void search();}
- window.onlineMusic={restore(context){clearTimeout(timer);controller?.abort();generation++;tracks=context.tracks;selectedPlaylist=context.playlistId;query.value=context.query;render();message.textContent='';},searchArtist,
+ function stopSearch() {
+  clearTimeout(timer);
+  controller?.abort();
+  generation++;
+  if (jobId) void request('jobs/' + jobId + '/cancel', {}).catch(() => {});
+  jobId = null;
+  waitingForResults = false;
+ }
+
+ async function search({local = false} = {}) {
+  stopSearch();
+  controller = new AbortController();
+  const signal = controller.signal;
+  const revision = generation;
+  const text = query.value.trim();
+  const publish = status => window.dispatchEvent(new CustomEvent('online-search-state', {
+   detail: {query: text, status, tracks: [...tracks], message: message.textContent}
+  }));
+
+  tracks = [];
+  waitingForResults = text.length >= 2;
+  render();
+  if (!waitingForResults) {
+   message.textContent = '';
+   publish('idle');
+   return;
+  }
+
+  selectedPlaylist = '';
+  message.textContent = 'Ищем…';
+  publish('starting');
+  try {
+   const source = !local && serviceMode.checked ? 'service' : 'auto';
+   const job = await request('search-jobs', {source, query: text}, signal);
+   if (revision !== generation) return;
+   jobId = job.id;
+   while (!signal.aborted) {
+    const data = await request('jobs/' + job.id, null, signal);
+    if (revision !== generation) return;
+    if (data.status === 'failed') throw new Error(data.error || 'Ошибка поиска');
+    const done = data.status === 'done' || data.status === 'cancelled';
+    const next = data.tracks || [];
+    if (done) waitingForResults = false;
+    const changed = JSON.stringify(next) !== JSON.stringify(tracks);
+    if (changed || done) {
+     tracks = next;
+     render();
+    }
+    message.textContent = done ? (tracks.length ? '' : 'Ничего не найдено.') : 'Ищем…';
+    if (done) {
+     jobId = null;
+     publish(data.status);
+     return;
+    }
+    if (changed) publish('running');
+    await new Promise(resolve => setTimeout(resolve, 400));
+   }
+  } catch (error) {
+   if (revision !== generation || error.name === 'AbortError') return;
+   waitingForResults = false;
+   render();
+   if (!local && serviceMode.checked && /Music Service/i.test(error.message)) {
+    void refreshServiceStatus(false);
+    void search({local: true});
+    return;
+   }
+   jobId = null;
+   message.textContent = error.message;
+   publish('failed');
+   if (serviceMode.checked) void refreshServiceStatus(false);
+  }
+ }
+
+ function schedule() {
+  stopSearch();
+  if (query.value.trim().length < 2) {
+   void search();
+   return;
+  }
+  timer = setTimeout(search, 350);
+ }
+ query.addEventListener('input', schedule);
+ form.addEventListener('submit', event => {
+  event.preventDefault();
+  void search();
+ });
+ function renderImports(){imports.replaceChildren();for(const pl of playlists){const b=document.createElement('button');b.type='button';b.className='secondary-button';b.textContent=pl.name+' · '+pl.tracks.length;b.addEventListener('click',()=>{stopSearch();tracks=pl.tracks;selectedPlaylist=pl.id;render();message.textContent='';});imports.append(b);}}
+ importForm.addEventListener('submit',async e=>{e.preventDefault();const b=importForm.querySelector('button');b.disabled=true;try{const data=await request('import',{source:document.getElementById('online-import-source').value,url:document.getElementById('online-playlist-url').value.trim()});stopSearch();playlists.push(data.playlist);tracks=data.playlist.tracks;selectedPlaylist=data.playlist.id;renderImports();render();message.textContent='Импортирован список, аудио не скачивалось.';}catch(e){message.textContent=e.message;}finally{b.disabled=false;}});
+ function searchArtist(name,options={}){if(typeof name!=='string'||!name.trim())return;query.value=name.trim();selectedPlaylist='';tracks=[];message.textContent='';render();if(options.navigate!==false)window.showScreen?.('online');void search();}
+ window.onlineMusic={restore(context){stopSearch();tracks=context.tracks;selectedPlaylist=context.playlistId;query.value=context.query;render();message.textContent='';},searchArtist,
   playTrack(track,context){return play(track,context||null);},addTrack(track){return add(track);},downloadTrack(track){return download(track);}};
  void request('playlists').then(data=>{playlists=data.playlists;renderImports();}).catch(e=>message.textContent=e.message);
 })();

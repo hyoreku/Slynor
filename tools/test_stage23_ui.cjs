@@ -12,11 +12,13 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  let eq={enabled:false,preamp:0,bands:Array(10).fill(0),speed_mode:'standard'};const calls=[];const errors=[];
  let queueUpload=[],queueCommits=[];
  let holdState=false,releaseState=null,holdMetadata=false,releaseMetadata=null;
+ let releaseSearch;
+ const searchGate = new Promise(resolve => { releaseSearch = resolve; });
  let network18={mode:'system',url:'',search_first:'auto',proxy_detected:false,credentials_present:false};
  let fixtureTracks=remote,fastCalls=0,coverAttempts=0;const fastCover='/api/assets/online-covers/'+'d'.repeat(64)+'.jpg';const fastTrack={path:'online:catalog:'+'d'.repeat(32),title:'Fast YouTube track',artist:'Artist',source:'youtube',access:'prepare',cover_url:fastCover};
  const settings={version:1,accent:'#8655eb',language:'ru',theme:'dark',spectrum_enabled:false,cover_background:false,close_to_tray:true,sidebar_auto_collapse:true};
  await context.addInitScript(({local,settings})=>{
-  window.desktopWrites=[];addEventListener('load',()=>{window.pywebview={api:{load_library:async()=>local,load_playlists:async()=>[],load_settings:async()=>settings,save_theme:async value=>({...settings,theme:value}),save_playing_screen:async value=>{window.savedPlayingScreen=value;return{...settings,playing_screen_enabled:value};},save_app_icon:async value=>{window.savedIcon=value;return{...settings,app_icon:value};},save_mini_background:async value=>({...settings,mini_background:value}),save_audio_output:async value=>({...settings,audio_output:value}),save_desktop_preferences:async value=>{desktopWrites.push(value);return{...settings,close_to_tray:value};}}};dispatchEvent(new Event('pywebviewready'));});
+  window.desktopWrites=[];addEventListener('load',()=>{window.pywebview={api:{load_library:()=>new Promise(resolve=>{window.releaseLibrary=()=>resolve(local);}),load_playlists:async()=>[],load_settings:async()=>settings,save_theme:async value=>({...settings,theme:value}),save_playing_screen:async value=>{window.savedPlayingScreen=value;return{...settings,playing_screen_enabled:value};},save_app_icon:async value=>{window.savedIcon=value;return{...settings,app_icon:value};},save_mini_background:async value=>({...settings,mini_background:value}),save_audio_output:async value=>({...settings,audio_output:value}),save_desktop_preferences:async value=>{desktopWrites.push(value);return{...settings,close_to_tray:value};}}};dispatchEvent(new Event('pywebviewready'));});
  },{local,settings});
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.pathname===fastCover){coverAttempts++;return route.fulfill({status:coverAttempts===1?503:200,contentType:'image/png',body:coverAttempts===1?Buffer.alloc(0):png});}if(url.hostname==='i1.sndcdn.com'||url.pathname.startsWith('/api/assets/'))return route.fulfill({contentType:'image/png',body:png});
@@ -44,7 +46,7 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
    else if(url.pathname==='/api/online/playlists')data={playlists:[]};
    else if(url.pathname==='/api/online/search-jobs'){
     data={id:body.source==='vk'?'vk':'search',status:'queued'};
-   }else if(url.pathname==='/api/online/jobs/search')data={status:'done',tracks:fixtureTracks,warnings:[]};
+   }else if(url.pathname==='/api/online/jobs/search'){await searchGate;data={status:'done',tracks:fixtureTracks,warnings:[]};}
    else if(url.pathname==='/api/online/jobs/vk')data={status:'failed',tracks:[],error:'ВК Музыка не подключена: официальный доступ не подтверждён.'};
    else if(url.pathname==='/api/online/search'){
     if(body.source==='vk'){status=503;data={detail:'ВК Музыка не подключена: официальный доступ не подтверждён.'};}
@@ -62,7 +64,23 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
 
  try {
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8765/');
- await page.waitForFunction(()=>document.querySelectorAll('#library-list li').length===3);
+ await page.waitForFunction(()=>window.releaseLibrary);
+ await page.evaluate(()=>showScreen('music'));
+ check(await page.locator('#library-list[aria-busy="true"] .loading-row').count()===3,'library skeleton while native data is pending');
+ await page.evaluate(()=>window.releaseLibrary());
+ await page.waitForFunction(()=>!metadataLoading&&document.querySelectorAll('#library-list .library-item').length===3);
+ check(await page.locator('#library-list').getAttribute('aria-busy')===null,'library clears loading state after data');
+ check(await page.evaluate(()=>{showScreen('online');return document.getElementById('screen-title').getAnimations().length>0;}),'screen heading animates on navigation');
+ await page.locator('#online-query').fill('Delayed search');
+ await page.locator('#online-query').press('Enter');
+ await page.locator('#online-results[aria-busy="true"] .loading-row').first().waitFor();
+ check(await page.locator('#online-results .loading-row').count()===3,'pending search shows skeleton rows');
+ releaseSearch();
+ await page.locator('#online-results li.online-track').first().waitFor();
+ check(await page.locator('#online-results').getAttribute('aria-busy')===null,'search results replace the skeleton');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ check(await page.evaluate(()=>{showScreen('settings');return document.getElementById('screen-title').getAnimations().length===0;}),'reduced motion disables heading animation');
+ await page.emulateMedia({reducedMotion:'no-preference'});
  await page.evaluate(()=>showScreen('online'));
  check(await page.locator('#online-audio-format').inputValue()==='original','original audio default');
  await page.locator('#online-audio-format').selectOption('mp3');
@@ -71,6 +89,17 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  await page.setViewportSize({width:390,height:844});
  check(await page.locator('#online-audio-format').evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;}),'format selector fits narrow window');
  await page.setViewportSize({width:1280,height:800});
+ const metadataRenders = await page.evaluate(async()=>{
+   libraryFiles = Array.from({length: 350}, (_, i) => `C:/Music/metadata-${i}.opus`);
+   showScreen('music');
+   renderLibrary();
+   const original = renderLibrary;
+   let calls = 0;
+   renderLibrary = (...args) => { calls++; return original(...args); };
+   try { await loadLibraryMetadata(); return calls; }
+   finally { renderLibrary = original; }
+ });
+ check(metadataRenders===1,'four metadata batches trigger a single full library update');
  await page.evaluate(()=>{
    libraryFiles = [];
    for(let i=0;i<25000;i++){const p=`C:/Music/song-${i}.opus`;libraryFiles.push(p);setTrackMetadata(fileKey(p),{path:p,title:`Song ${i}`,artist:'Artist',duration_ms:180000});}

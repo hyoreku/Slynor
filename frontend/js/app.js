@@ -67,6 +67,7 @@ let currentPlaybackState = "idle";
 window.autoOpenPlayingScreen = true;
 let screenReveal = null;
 let libraryInitStarted = false;
+let libraryInitializing = false;
 let libraryBusy = false;
 
 // Одинаковый ключ для сравнения путей Windows: слеши и регистр.
@@ -184,21 +185,27 @@ async function loadLibraryMetadata() {
 
     metadataLoading = true;
     refreshMetadataButton.disabled = true;
+    let updated = false;
 
     try {
         do {
             metadataReloadRequested = false;
 
-            const pendingPaths = getAllKnownFiles().filter(
-                (path) => !metadataMap.has(fileKey(path))
-            );
+            const visiblePaths = activeScreen === 'music' ? visibleLibraryPaths() : [];
+            const pendingPaths = new Map();
+            for (const path of [currentTrackPath, ...visiblePaths, ...getAllKnownFiles()]) {
+                if (!path) continue;
+                const key = fileKey(path);
+                if (!metadataMap.has(key) && !pendingPaths.has(key)) pendingPaths.set(key, path);
+            }
+            const pending = [...pendingPaths.values()];
 
             for (
                 let offset = 0;
-                offset < pendingPaths.length;
+                offset < pending.length;
                 offset += 100
             ) {
-                const batch = pendingPaths.slice(
+                const batch = pending.slice(
                     offset,
                     offset + 100
                 );
@@ -227,17 +234,20 @@ async function loadLibraryMetadata() {
                 const data = await response.json();
                 reloadCoverCache = false;
                 const currentKey = currentTrackPath && fileKey(currentTrackPath);
+                const visibleKeys = new Set(visibleLibraryPaths().map(fileKey));
+                let visibleUpdated = false;
 
                 for (const track of data.tracks) {
                     const key = fileKey(track.path);
                     setTrackMetadata(key, track);
+                    updated = true;
+                    visibleUpdated ||= visibleKeys.has(key);
                     if (key === currentKey && track.cover_url) {
                         window.playerVisuals?.trackChanged(track, currentPlaybackState);
                     }
                 }
 
-                renderLibrary();
-                if (activeArtistName && activeScreen === "artist") renderArtistPage();
+                if (visibleUpdated && activeScreen === 'music') renderLibraryWindow(true);
             }
         } while (metadataReloadRequested);
     } catch (error) {
@@ -247,6 +257,10 @@ async function loadLibraryMetadata() {
     } finally {
         metadataLoading = false;
         refreshMetadataButton.disabled = !libraryReady;
+        if (updated) {
+            renderLibrary();
+            if (activeArtistName && activeScreen === 'artist') renderArtistPage();
+        }
     }
 }
 
@@ -363,7 +377,7 @@ function renderLibrary({ refreshOverview = true } = {}) {
         ? `Найдено: ${visibleFiles.length} из ${sourceFiles.length}`
         : `Треков в списке: ${sourceFiles.length}`;
 
-    libraryEmpty.hidden = visibleFiles.length > 0;
+    libraryEmpty.hidden = libraryInitializing || visibleFiles.length > 0;
 
     libraryEmpty.textContent = sourceFiles.length === 0
         ? (activePlaylistId
@@ -382,7 +396,27 @@ function renderLibrary({ refreshOverview = true } = {}) {
 
 let libraryWindowState={files:[],positions:new Map(),first:-1,last:-1};
 let libraryWindowRaf=null;
+
+function visibleLibraryPaths() {
+    const {files, first, last} = libraryWindowState;
+    return first < 0 ? [] : files.slice(first, last);
+}
+
+function setLoadingRows(list, loading) {
+    if (loading) {
+        if (list.getAttribute('aria-busy') === 'true') return;
+        const template = document.getElementById('loading-row-template');
+        list.replaceChildren(...Array.from({length: 3}, () => template.content.cloneNode(true)));
+        list.setAttribute('aria-busy', 'true');
+    } else if (list.getAttribute('aria-busy') === 'true') {
+        list.removeAttribute('aria-busy');
+        list.replaceChildren();
+    }
+}
+
 function renderLibraryWindow(force=false) {
+    setLoadingRows(libraryList, libraryInitializing);
+    if (libraryInitializing) return;
     const workspace=document.querySelector('.workspace');
     const visibleFiles=libraryWindowState.files,positions=libraryWindowState.positions;
     const virtual=visibleFiles.length>150;
@@ -705,6 +739,9 @@ async function enableFilePicker() {
     }
 
     libraryInitStarted = true;
+    libraryInitializing = true;
+    libraryEmpty.hidden = true;
+    setLoadingRows(libraryList, true);
 
     try {
         const savedFiles =
@@ -713,6 +750,7 @@ async function enableFilePicker() {
         libraryFiles = savedFiles;
 
         libraryReady = true;
+        libraryInitializing = false;
         renderLibrary();
 
         chooseFileButton.disabled = false;
@@ -730,6 +768,8 @@ async function enableFilePicker() {
         // не перезаписать повреждённый файл новым списком.
         chooseFileButton.disabled = true;
         addFilesButton.disabled = true;
+        libraryInitializing = false;
+        renderLibrary({refreshOverview: false});
     }
 }
 
@@ -737,7 +777,7 @@ window.addEventListener("pywebviewready", enableFilePicker);
 
 // На случай, если мост уже готов к моменту выполнения скрипта.
 if (window.pywebview && window.pywebview.api) {
-    enableFilePicker();
+    queueMicrotask(enableFilePicker);
 }
 
 chooseFileButton.addEventListener("click", async () => {
@@ -1582,6 +1622,10 @@ function renderScreen(name, title, reveal = null) {
         else button.removeAttribute("aria-current");
     });
     screenTitle.textContent = title;
+    if (screenChanged && !reveal) {
+        animateHeading(screenTitle);
+        if (name === 'home') animateHeading(document.getElementById('home-greeting-title'));
+    }
     if (screenChanged && !queuePanel.hidden) closeQueue(true);
     document.getElementById('back-to-tracks').hidden = name !== 'playing';
     document.querySelector(".workspace").scrollTop = 0;
@@ -1589,6 +1633,18 @@ function renderScreen(name, title, reveal = null) {
     if (screenChanged) window.playerVisuals?.screenChanged(name);
     window.dispatchEvent(new Event('player-screen-changed'));
     window.equalizerPanel?.layout();
+}
+
+const headingAnimations = new WeakMap();
+function animateHeading(heading) {
+    headingAnimations.get(heading)?.cancel();
+    if (document.hidden || window.__mainVisible === false ||
+        matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const animation = heading.animate(
+        [{opacity: 0, transform: 'translateY(6px)'}, {opacity: 1, transform: 'translateY(0)'}],
+        {duration: 230, easing: 'cubic-bezier(0.22, 1, 0.36, 1)'}
+    );
+    headingAnimations.set(heading, animation);
 }
 
 // 4.1. Страница исполнителя: имя из тегов открывает все локальные песни автора.
@@ -1727,11 +1783,15 @@ function startArtistOnlineSearch(name) {
     const status = document.getElementById("artist-online-status");
     const list = document.getElementById("artist-online-tracks");
     if (status) status.textContent = "Ищем в интернете…";
-    if (list) list.replaceChildren();
     if (!window.onlineMusic?.searchArtist) {
+        if (list) {
+            setLoadingRows(list, false);
+            list.replaceChildren();
+        }
         if (status) status.textContent = "Поиск в интернете недоступен.";
         return;
     }
+    if (list) setLoadingRows(list, true);
     window.onlineMusic.searchArtist(name, {navigate: false});
 }
 
@@ -1825,6 +1885,8 @@ function renderArtistOnline(tracks, status, message) {
         items.push(track);
         if (items.length >= 10) break;
     }
+    const loading = (status === 'starting' || status === 'running') && !items.length;
+    setLoadingRows(list, loading);
     if (status === "failed") {
         statusElement.textContent = message || "Не удалось найти песни в интернете.";
         list.replaceChildren();
@@ -1837,6 +1899,7 @@ function renderArtistOnline(tracks, status, message) {
     } else {
         statusElement.textContent = items.length ? `Ищем… найдено ${items.length}` : "Ищем в интернете…";
     }
+    if (loading) return;
     const fragment = document.createDocumentFragment();
     for (const track of items) fragment.append(artistOnlineRow(track));
     list.replaceChildren(fragment);

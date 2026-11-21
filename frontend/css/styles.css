@@ -1181,3 +1181,32 @@ body:not(.skip-screen-enter) .screen:not([hidden], #screen-playing) { animation:
 #queue-list .queue-artist {
     font-size: 12px;
 }
+
+.loading-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 84px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--surface-hover);
+    pointer-events: none;
+}
+.loading-row + .loading-row { margin-top: 8px; }
+.loading-row-cover, .loading-row-lines > span {
+    display: block;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 16%, transparent);
+}
+.loading-row-cover { flex: 0 0 48px; height: 48px; border-radius: 9px; }
+.loading-row-lines { width: min(48%, 270px); }
+.loading-row-lines > span { height: 10px; }
+.loading-row-lines > span + span { width: 58%; margin-top: 9px; }
+@media (prefers-reduced-motion: no-preference) {
+    .screen:not([hidden]) .loading-row-cover,
+    .screen:not([hidden]) .loading-row-lines { animation: loading-row-pulse 1.4s ease-in-out infinite alternate; }
+}
+@keyframes loading-row-pulse {
+    from { opacity: .52; }
+    to { opacity: 1; }
+}

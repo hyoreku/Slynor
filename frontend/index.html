@@ -486,6 +486,12 @@
 </dialog>
 <!-- Подключение логики после разбора HTML (defer). -->
 <script src="/static/js/i18n.js" defer></script>
+<template id="loading-row-template">
+    <li class="loading-row" aria-hidden="true">
+        <span class="loading-row-cover"></span>
+        <span class="loading-row-lines"><span></span><span></span></span>
+    </li>
+</template>
 <script src="/static/js/app.js" defer></script>
 <!-- Эффекты изолированы от библиотечного кода: анимации, цвета, FFT-рисование. -->
 <script src="/static/js/cover-effects.js" defer></script>
