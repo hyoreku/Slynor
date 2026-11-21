@@ -119,7 +119,7 @@ private fun MusicLibrary(library: LocalLibrary, player: MediaController?, connec
         playback = playback,
         status = status,
         importing = importing,
-        onAdd = { picker.launch(arrayOf("audio/*")) },
+        onAdd = { if (!importing) picker.launch(arrayOf("audio/*")) },
         onPlay = { track ->
             val index = tracks.indexOfFirst { it.uri == track.uri }
             if (player != null && index >= 0) {

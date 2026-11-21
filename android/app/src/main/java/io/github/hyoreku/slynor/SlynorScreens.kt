@@ -332,15 +332,20 @@ private fun Glyph(@DrawableRes icon: Int, description: String?) =
 private fun PlaybackIcon(playing: Boolean) =
     Glyph(if (playing) R.drawable.ic_pause else R.drawable.ic_play, if (playing) "Пауза" else "Воспроизвести")
 
-private val artworkCache = object : LruCache<Uri, Bitmap>(16 * 1024) {
-    override fun sizeOf(key: Uri, value: Bitmap): Int = (value.allocationByteCount / 1024).coerceAtLeast(1)
+private data class Artwork(val bitmap: Bitmap?)
+
+private val artworkCache = object : LruCache<Uri, Artwork>(16 * 1024) {
+    override fun sizeOf(key: Uri, value: Artwork): Int = ((value.bitmap?.allocationByteCount ?: 0) / 1024).coerceAtLeast(4)
 }
 
 @Composable
 private fun Cover(uri: Uri, modifier: Modifier) {
     val context = LocalContext.current.applicationContext
     val bitmap by produceState<Bitmap?>(null, uri) {
-        value = withContext(Dispatchers.IO) { artworkCache.get(uri) ?: readCover(context, uri)?.also { artworkCache.put(uri, it) } }
+        value = withContext(Dispatchers.IO) {
+            val artwork = artworkCache.get(uri) ?: Artwork(readCover(context, uri)).also { artworkCache.put(uri, it) }
+            artwork.bitmap
+        }
     }
     Box(modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center) {
