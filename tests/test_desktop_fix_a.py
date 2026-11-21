@@ -112,8 +112,8 @@ class DownloadMetadataTests(unittest.TestCase):
         self.assertEqual((data['title'],data['artist'],data['album']),
                          (TRACK['title'],TRACK['artist'],TRACK['album']))
         # A fresh interpreter cannot use the old in-memory catalogue/cache.
-        code='import json,sys;from backend.metadata import read_track_metadata;print(json.dumps(read_track_metadata(sys.stdin.read())))'
-        result=subprocess.run([sys.executable,'-c',code],input=str(target),text=True,capture_output=True,check=True,
+        code='import json,sys;from backend.metadata import read_track_metadata;print(json.dumps(read_track_metadata(sys.argv[1])))'
+        result=subprocess.run([sys.executable,'-c',code,str(target)],encoding='utf-8',capture_output=True,check=True,
                               cwd=Path(__file__).resolve().parents[1],timeout=10)
         self.assertEqual(json.loads(result.stdout)['artist'],TRACK['artist'])
 

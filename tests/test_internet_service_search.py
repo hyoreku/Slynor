@@ -113,7 +113,7 @@ class ServiceSearchTests(unittest.TestCase):
         self.assertEqual(result['status'], 'done', result.get('error'))
         path = Path(result['path'])
         self.assertTrue(path.is_file())
-        self.assertEqual(path.parent, Path(self.root) / 'Downloads')
+        self.assertTrue(path.parent.samefile(Path(self.root) / 'Downloads'))
         self.assertTrue(path.read_bytes().startswith(b'RIFF'))
         saved = read_download_metadata(path)
         self.assertEqual(saved['title'], 'Группа крови')
