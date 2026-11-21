@@ -431,13 +431,19 @@
         }
     }
 
-    function screenChanged(name, reveal = null) {
-        entryReveal = reveal;
+    function screenChanged(name) {
+        if (name !== 'playing') entryReveal = null;
         workspace.classList.toggle('playing-mode', name === 'playing');
         invalidatePoll();
         updateAtmosphere(); syncSpectrum();
-        if (!reveal) return;
-        // The background is already visible. Start spectrum polling after the reveal.
+    }
+
+    function screenRevealStarted(reveal) {
+        // A native transition can wait a frame before rendering the destination.
+        // Stop the compact spectrum immediately, including any in-flight request.
+        entryReveal = reveal;
+        clearSpectrum();
+        // The destination can show its background while spectrum polling waits.
         const startEffects = () => {
             if (entryReveal !== reveal) return;
             entryReveal = null;
@@ -464,7 +470,7 @@
         window.equalizerPanel?.layout();
     }
     window.playerVisuals = {
-        screenChanged, trackChanged, updateControls, updateRanges,
+        screenChanged, screenRevealStarted, trackChanged, updateControls, updateRanges,
         playbackChanged(state) { visualState = state; syncSpectrum(); syncDrift(); },
         stop() { visualState = 'idle'; trackPath = null; coverUrl = ''; wave.hidden = radialCanvas.hidden = compactCanvas.hidden = status.hidden = true; clearSpectrum(); coverRevision++; coverVisualizer.setPalette(null); hideAtmosphere(); },
         connectionLost() { target.fill(0); animate(); },

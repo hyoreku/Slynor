@@ -1556,6 +1556,7 @@ function watchScreenReveal(name, finished, cancel) {
     screenReveal = reveal;
     const finish = () => finishScreenReveal(reveal);
     finished.then(finish, finish);
+    if (name === 'playing') window.playerVisuals?.screenRevealStarted(reveal);
     return reveal;
 }
 
@@ -1585,7 +1586,7 @@ function renderScreen(name, title, reveal = null) {
     document.getElementById('back-to-tracks').hidden = name !== 'playing';
     document.querySelector(".workspace").scrollTop = 0;
     addFilesButton.hidden = !['home','music'].includes(name);
-    if (screenChanged) window.playerVisuals?.screenChanged(name, name === 'playing' ? reveal : null);
+    if (screenChanged) window.playerVisuals?.screenChanged(name);
     window.dispatchEvent(new Event('player-screen-changed'));
     window.equalizerPanel?.layout();
 }

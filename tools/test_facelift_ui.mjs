@@ -229,9 +229,11 @@ try {
         const mode = document.getElementById('visualizer-mode');
         mode.value = 'bars';
         mode.dispatchEvent(new Event('change'));
+        const readsBeforeReveal = window.__uiFixture.spectrumReads;
         document.getElementById('player-cover').click();
         const reveal = screenReveal;
         const native = document.documentElement.classList.contains('playing-reveal');
+        window.dispatchEvent(new Event('focus'));
         showScreen('playing');
         const sameReveal = Boolean(reveal) && screenReveal === reveal;
         if (native && document.body.dataset.screen !== 'playing') {
@@ -249,7 +251,7 @@ try {
             wrapperClip: getComputedStyle(document.querySelector('.app-shell')).clipPath,
             waveReserved: !document.getElementById('now-wave').hidden,
             atmosphereHidden: document.getElementById('cover-atmosphere').hidden,
-            spectrumReads: window.__uiFixture.spectrumReads,
+            spectrumReads: window.__uiFixture.spectrumReads - readsBeforeReveal,
             queueReads: window.__uiFixture.queueReads,
             queueCount: document.getElementById('now-queue-count').textContent
         };
