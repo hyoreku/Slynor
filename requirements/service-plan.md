@@ -1,7 +1,5 @@
-# Будущая группа bot/service — не установка
+# Окружения Music Service и Telegram
 
-После приёмки этапа 0 и эксперимента источников создать отдельное окружение Python 3.13 x64.
-Кандидаты из ТЗ: aiogram 3.x, FastAPI, Uvicorn, Pydantic, httpx, SQLAlchemy 2.x, Alembic.
-SQLite WAL — локальный persistent volume. Redis/Celery/PostgreSQL на старте не добавляются.
-Точные версии, транзитивные зависимости, лицензии и wheel-хеши не проверены.
-Пустой requirements, выдающий успешный pip install без сервиса, намеренно не создаётся.
+- Music Service использует FastAPI, Pydantic и PyAV из GUI-набора. Провайдеры запускаются в отдельном окружении.
+- Telegram-клиент использует [bot.txt](bot.txt). Прямые зависимости закреплены.
+- Очередь и локальные данные хранятся в SQLite. Для серверной схемы см. [план VPS](../docs/ROADMAP_RU.md#4-vps-в-рф).

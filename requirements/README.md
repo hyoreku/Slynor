@@ -36,5 +36,6 @@ Python/pip и маркерами Windows. `INSTALL.ps1` и `packaging/windows/BU
 smoke-тест приложения прошёл.
 Нативные компоненты (VLC/FFmpeg/Deno/WebView2) по-прежнему не хешированы.
 
-Бот/сервис: [service-plan.md](service-plan.md). Его lock пока отсутствует: продуктовый код не написан,
-совместимый набор не проверен. Нельзя придумывать версии aiogram/SQLAlchemy/Alembic ради заполнения lock.
+Бот использует отдельный набор [bot.txt](bot.txt) с закреплёнными прямыми зависимостями.
+[Установка](../docs/TELEGRAM_BOT_RU.md) использует GUI-набор для запуска Music Service
+и отдельное окружение для клиента Telegram.
