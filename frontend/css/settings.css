@@ -1,0 +1,239 @@
+#screen-settings {
+    max-width: 960px;
+    margin-inline: auto;
+}
+
+#screen-settings [hidden] { display: none !important; }
+
+.settings-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    width: fit-content;
+    margin: 4px 0 24px;
+    padding: 5px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel-background);
+}
+
+.settings-tabs button {
+    min-height: 40px;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    font-size: .875rem;
+    font-weight: 600;
+}
+
+.settings-tabs button:hover,
+#screen-settings .accent-presets button:hover,
+#screen-settings .app-icon-options button:hover {
+    background-color: var(--surface-hover);
+    color: var(--text);
+}
+
+.settings-tabs button[aria-selected="true"],
+#screen-settings :is(.accent-presets, .app-icon-options) button[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--accent-surface);
+    box-shadow: none;
+}
+.settings-tabs button[aria-selected="true"]:hover,
+#screen-settings :is(.accent-presets, .app-icon-options) button[aria-pressed="true"]:hover {
+    background: color-mix(in srgb, var(--accent-strong) 28%, var(--panel-background));
+}
+#screen-settings .accent-presets button[aria-pressed="true"]:not(:focus-visible) { outline: none; }
+
+.settings-panel {
+    display: grid;
+    gap: 16px;
+}
+.settings-group {
+    min-width: 0;
+    padding: clamp(15px, 2.4vw, 24px);
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: var(--panel-background);
+}
+
+.settings-group h2 {
+    margin: 0 0 12px;
+    font-size: 1.125rem;
+    letter-spacing: -.015em;
+}
+.settings-group h3 {
+    margin: 0 0 8px;
+    font-size: .95rem;
+}
+
+.settings-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px 20px;
+    min-height: 58px;
+    padding: 10px 0;
+}
+.settings-row + .settings-row,
+.settings-block {
+    border-top: 1px solid var(--border);
+}
+.settings-block { padding: 16px 0 0; }
+.settings-row-action { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+.settings-row > label { grid-column: 1; }
+.settings-row > :is(.settings-switch, .styled-select, select) {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+}
+.settings-row > .styled-select {
+    width: min(38vw, 255px);
+}
+.settings-row > .styled-select > button {
+    min-height: 40px;
+    background-color: var(--input-background);
+    border-color: var(--border);
+    overflow-wrap: anywhere;
+}
+.settings-row > .styled-select > button:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    border-color: var(--accent-border);
+}
+.settings-row > .styled-select > button[aria-expanded="true"] {
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+}
+.settings-row > .settings-note {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+#screen-settings .settings-note {
+    color: var(--muted);
+    font-size: .8125rem;
+    line-height: 1.55;
+}
+#screen-settings .settings-note:empty { position: absolute; }
+
+.settings-switch {
+    --switch-offset: 0px;
+    --switch-track: #303030;
+    --switch-outline: #646464;
+    --switch-thumb: #cbcbcb;
+    appearance: none;
+    position: relative;
+    width: 52px;
+    height: 28px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--switch-outline);
+    border-radius: 12px;
+    background: var(--switch-track);
+    transition: background-color .18s ease, border-color .18s ease;
+    cursor: pointer;
+}
+:root[data-theme='light'] .settings-switch {
+    --switch-track: #ededed;
+    --switch-outline: #929292;
+    --switch-thumb: #6c6c6c;
+}
+.settings-switch::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 3px;
+    inset-inline-start: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
+    background: var(--switch-thumb);
+    transform: translateX(var(--switch-offset));
+    transition: transform .24s cubic-bezier(.20, 1.32, .44, 1), background-color .18s ease;
+}
+.settings-switch:hover:not(:disabled, :checked) { border-color: #8c8c8c; }
+.settings-switch:checked {
+    --switch-offset: 24px;
+    border-color: var(--accent);
+    background: var(--accent-strong);
+}
+.settings-switch:checked::before { background: var(--accent-on); }
+.settings-switch:dir(rtl):checked { --switch-offset: -24px; }
+.settings-switch:active:not(:disabled)::before {
+    transform: translateX(var(--switch-offset)) scale(.88);
+}
+.settings-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.settings-switch:disabled { opacity: .5; cursor: default; }
+
+#screen-settings .accent-presets { margin: 12px 0; }
+#screen-settings .accent-presets button {
+    min-height: 36px;
+    min-width: 0;
+    border-radius: 9px;
+    background-color: var(--surface);
+    font-size: .8125rem;
+}
+#screen-settings .accent-custom { margin-bottom: 0; }
+#screen-settings .app-icon-options { margin: 12px 0 0; }
+#screen-settings .app-icon-options button { height: 88px; }
+#screen-settings .app-icon-options .app-mark-label { color: inherit; }
+#settings-diagnostics .secondary-button { margin: 8px 6px 0 0; }
+#settings-diagnostics .network-actions { flex-wrap: wrap; }
+
+.select-popup [aria-selected="true"]:is(:hover, .is-active) { background: var(--accent-surface); }
+
+.styled-select[data-select-layout="audio-output"] > button {
+    gap: 10px;
+    padding-inline: 12px;
+}
+
+.styled-select[data-select-layout="audio-output"] .select-value,
+.select-popup[data-select-layout="audio-output"] [role="option"] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.select-popup[data-select-layout="audio-output"] {
+    width: max-content;
+    background: var(--panel-background);
+    border-color: var(--border);
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.select-popup[data-select-layout="audio-output"] [role="option"] {
+    padding: 8px 10px;
+    font-size: .875rem;
+}
+
+
+@media (max-width: 540px) {
+    .settings-tabs button { padding-inline: 10px; }
+    .settings-row:has(> .styled-select) { grid-template-columns: minmax(0, 1fr); }
+    .settings-row > .styled-select {
+        grid-column: 1;
+        grid-row: auto;
+        width: 100%;
+    }
+    .settings-row > .styled-select + .settings-note { margin-top: 3px; }
+}
+
+@media (forced-colors: active) {
+    .settings-switch { forced-color-adjust: none; background: Canvas; border-color: ButtonText; }
+    .settings-switch:hover:not(:disabled, :checked) { border-color: ButtonText; }
+    .settings-switch:checked { background: Highlight; border-color: Highlight; }
+    .settings-switch::before { background: ButtonText; }
+    .settings-switch:checked::before { background: HighlightText; }
+    .settings-switch:focus-visible { outline: 2px solid Highlight; }
+    .settings-tabs button[aria-selected="true"],
+    #screen-settings :is(.accent-presets, .app-icon-options) button[aria-pressed="true"] { border-color: Highlight; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-switch, .settings-switch::before { transition: none; }
+    .settings-switch:active:not(:disabled)::before { transform: translateX(var(--switch-offset)); }
+}

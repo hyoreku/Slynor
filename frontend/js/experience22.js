@@ -1,10 +1,7 @@
-// View preference never stops audio, drops the queue, or changes the mini window.
+// Only automatic navigation depends on this preference.
 (() => {
  const input=document.getElementById('playing-screen-enabled'),message=document.getElementById('playing-screen-message');let ready=false,saving=false,confirmed=true;
- function apply(value){window.playingScreenEnabled=value;input.checked=value;
-  const cover=document.getElementById('player-cover');cover.disabled=!value;cover.setAttribute('aria-disabled',String(!value));cover.title=value?'Открыть экран текущей песни':'Экран текущей песни отключён в настройках';
-  if(!value&&activeScreen==='playing'){const kind=playbackLibraryContext?.kind;restorePlaybackLibraryContext();showScreen(kind==='online'?'online':kind==='artist'?'artist':'music');}
- }
+ function apply(value){window.autoOpenPlayingScreen=value;input.checked=value;}
  function load(data){confirmed=data.playing_screen_enabled??true;apply(confirmed);ready=true;input.disabled=false;}
  window.addEventListener('visual-settings-loaded',e=>load(e.detail));if(window.visualSettingsSnapshot)load(window.visualSettingsSnapshot);
  input.addEventListener('change',async()=>{if(!ready||saving)return;const value=input.checked;apply(value);saving=true;input.disabled=true;
@@ -30,7 +27,7 @@
 // Finish transient view reveals immediately when motion is disabled or the window hides.
 (() => {
  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
- const cancel=()=>{screenRevealAnimation?.cancel();screenRevealAnimation=null;};
+ const cancel=()=>screenReveal?.cancel();
  reduced.addEventListener('change',()=>{if(reduced.matches)cancel();});
  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancel();});
  window.addEventListener('native-window-state',e=>{if(e.detail?.minimized)cancel();});

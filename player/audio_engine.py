@@ -9,6 +9,7 @@ import vlc
 
 from copy import deepcopy
 from player.equalizer import DEFAULT_EQ, SPEED_RATES, validate_equalizer
+from player.playback_snapshot import PlaybackSnapshot, PlaybackStatus
 
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class AudioEngine:
         self._source_paths = []
         self._queue = []
         self._queue_index = None
+        self._queue_revision = 0
 
         self._shuffle_enabled = False
         self._playback_error = None
@@ -170,6 +172,7 @@ class AudioEngine:
         self._source_paths = list(source_paths)
         self._queue = list(ordered_paths)
         self._queue_index = index
+        self._queue_revision += 1
 
         return filename
 
@@ -220,6 +223,7 @@ class AudioEngine:
                 self._queue_index = self._queue.index(current_path)
 
             self._shuffle_enabled = False
+            self._queue_revision += 1
 
             return (
                 "Случайный режим выключен. "
@@ -230,6 +234,7 @@ class AudioEngine:
     def _play_queue_index(self, index: int):
         filename = self._play_file(self._queue[index])
         self._queue_index = index
+        self._queue_revision += 1
         return filename
 
     # Автоматический переход и повтор списка; для shuffle создаём новый цикл.
@@ -369,6 +374,7 @@ class AudioEngine:
             self._source_paths = []
             self._queue = []
             self._queue_index = None
+            self._queue_revision += 1
             # Выбор shuffle и громкость сохраняем для следующего запуска.
 
     def report_stream_error(self, expected_url, message):
@@ -385,11 +391,12 @@ class AudioEngine:
                 "paths": list(self._queue),
                 "index": self._queue_index,
                 "shuffle_enabled": self._shuffle_enabled,
+                "queue_revision": self._queue_revision,
             }
 
-    # Снимок состояния VLC, времени, громкости и позиции очереди.
-    def get_state(self):
-        state_names = {
+    def get_playback_snapshot(self) -> PlaybackSnapshot:
+        """Read current playback under the same lock as playback commands."""
+        state_names: dict[vlc.State, PlaybackStatus] = {
             vlc.State.NothingSpecial: "idle",
             vlc.State.Opening: "opening",
             vlc.State.Buffering: "buffering",
@@ -402,7 +409,6 @@ class AudioEngine:
 
         with self._lock:
             native_state = self._player.get_state()
-            volume = self._player.audio_get_volume()
 
             time_ms = max(0, self._player.get_time())
             duration_ms = max(0, self._player.get_length())
@@ -431,25 +437,36 @@ class AudioEngine:
 
             return {
                 "state": state,
-                "startup": deepcopy(self._startup),
                 "filename": self._current_filename,
                 "file_path": (
                     self._queue[self._queue_index]
                     if self._queue_index is not None
                     else None
                 ),
-                "volume": volume if volume >= 0 else None,
+                "playback_generation": self._generation,
                 "time_ms": time_ms,
                 "duration_ms": duration_ms,
                 "can_seek": can_seek,
-                "queue_index": self._queue_index,
-                "queue_size": len(self._queue),
-                "shuffle_enabled": self._shuffle_enabled,
                 "playback_error": self._playback_error,
                 "rate": (self._player.get_rate() if native_state in
                          (vlc.State.Playing, vlc.State.Paused) else
                          SPEED_RATES[self._equalizer_config["speed_mode"]]),
                 "speed_mode": self._equalizer_config["speed_mode"],
+            }
+
+    # Полное состояние для локального API и визуализатора.
+    def get_state(self):
+        with self._lock:
+            playback = self.get_playback_snapshot()
+            volume = self._player.audio_get_volume()
+            return {
+                **playback,
+                "startup": deepcopy(self._startup),
+                "volume": volume if volume >= 0 else None,
+                "queue_index": self._queue_index,
+                "queue_size": len(self._queue),
+                "queue_revision": self._queue_revision,
+                "shuffle_enabled": self._shuffle_enabled,
             }
 
     # Эквалайзер применяется к аудиовыходу VLC, без второго плеера/перезапуска песни.

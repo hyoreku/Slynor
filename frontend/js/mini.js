@@ -1,5 +1,5 @@
 (() => {
- let state=null,lastPath=null,busy=false,timer=null,metadataGeneration=0,nativeHidden=false,metadataKey='',retryMetadataAt=0,commandRevision=0;
+ let state=null,lastPath=null,busy=false,timer=null,metadataGeneration=0,nativeHidden=false,metadataKey='',retryMetadataAt=0,stateRevision=0;
  const metadataCache=new Map();
  const toggle=document.getElementById('mini-toggle'),volume=document.getElementById('mini-volume'),error=document.getElementById('mini-error');
  const controls=[...document.querySelectorAll('button[data-action]'),toggle];
@@ -9,7 +9,7 @@
   const response=await fetch('/api/'+path,{method,cache:'no-store',signal:AbortSignal.timeout(7000),...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
   const data=await response.json();if(!response.ok)throw new Error(data.detail||'Ошибка '+response.status);return data;
  }
- async function command(action){if(busy)return;busy=true;commandRevision++;clearTimeout(timer);controls.forEach(b=>b.disabled=true);
+ async function command(action){if(busy)return;busy=true;stateRevision++;clearTimeout(timer);window.miniVisualizer?.update(null);controls.forEach(b=>b.disabled=true);
   try{if(action==='pause'||action==='resume'){toggle.textContent=action==='pause'?'▶':'Ⅱ';}await request('player/'+action);showError('');}catch(e){showError(e.message);}finally{busy=false;void poll();}}
  document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>command(b.dataset.action)));
  toggle.addEventListener('click',()=>{if(state?.state==='playing')void command('pause');else if(state?.state==='paused')void command('resume');});
@@ -37,13 +37,28 @@
    if(cover.dataset.url!==(meta?.cover_url||'')){cover.dataset.url=meta?.cover_url||'';cover.replaceChildren(document.createTextNode('♫'));if(safeCover(meta?.cover_url)){const image=new Image();image.alt='';image.onerror=()=>image.remove();image.src=meta.cover_url;cover.append(image);}}
   }catch(e){retryMetadataAt=Date.now()+1500;showError(e.message);}
  }
- let polling=false;
- async function poll(){clearTimeout(timer);if(polling)return;polling=true;
-  try{const revision=commandRevision;const nextState=await request('player/state',null,'GET');
-   if(busy||revision!==commandRevision)return;
-   state=nextState;window.miniAppearance?.update(state);
+ let polling=false, refreshQueued=false;
+ async function poll(){
+  clearTimeout(timer);
+  if(document.hidden){window.miniVisualizer?.update(null);return;}
+  if(polling){refreshQueued=true;return;}
+  polling=true;
+  const revision=stateRevision;
+  try{
+   // In a hidden native window, only check whether it needs to wake up.
+   // Some WebView2 hosts hide the window without a DOM visibility event.
+   if(nativeHidden){
+    const status=await request('desktop/status',null,'GET');
+    if(revision!==stateRevision||document.hidden||status.mini_visible!==true)return;
+    nativeHidden=false;
+   }
+   const nextState=await request('player/state',null,'GET');
+   if(busy||revision!==stateRevision||document.hidden)return;
+   state=nextState;
    if(typeof state.window_visibility?.mini==='boolean')nativeHidden=!state.window_visibility.mini;
-   if(document.hidden||nativeHidden)return;
+   window.miniAppearance?.update(state);
+   window.miniVisualizer?.update(nativeHidden ? null : state);
+   if(nativeHidden)return;
    const fresh=state.current_metadata;const nextKey=fresh?JSON.stringify([fresh.path,fresh.title,fresh.artist,fresh.cover_url]):'';
    if(lastPath!==state.file_path||(fresh&&nextKey!==metadataKey)||retryMetadataAt&&Date.now()>=retryMetadataAt){lastPath=state.file_path;retryMetadataAt=0;void metadata(lastPath,fresh);}
    toggle.textContent=state.state==='playing'?'Ⅱ':'▶';controls.forEach(b=>b.disabled=busy||!state.file_path);
@@ -52,9 +67,25 @@
    document.getElementById('mini-time').textContent=time(state.time_ms)+' / '+time(state.duration_ms);
    if(state.playback_error)showError(state.playback_error,'playback');
    else if(['playback','connection'].includes(errorKind))showError('');
-  }catch(e){showError('Нет соединения с плеером: '+e.message,'connection');}finally{polling=false;timer=setTimeout(poll,document.hidden||nativeHidden?500:250);}
+  }catch(e){
+   if(revision===stateRevision&&!document.hidden&&!nativeHidden){window.miniVisualizer?.update(null);showError('Нет соединения с плеером: '+e.message,'connection');}
+  }finally{
+   polling=false;
+   if(!document.hidden)timer=setTimeout(poll,refreshQueued?0:nativeHidden?1000:250);
+   refreshQueued=false;
+  }
  }
- window.addEventListener('native-window-state',event=>{nativeHidden=Boolean(event.detail?.minimized);clearTimeout(timer);if(!nativeHidden)void poll();});
- document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden)void poll();});
+ window.addEventListener('native-window-state',event=>{
+  stateRevision++;
+  nativeHidden=Boolean(event.detail?.minimized);
+  if(nativeHidden)window.miniVisualizer?.update(null);
+  void poll();
+ });
+ document.addEventListener('visibilitychange',()=>{
+  stateRevision++;
+  if(!document.hidden)nativeHidden=false;
+  void poll();
+ });
+ window.addEventListener('focus',()=>{if(nativeHidden)void poll();});
  void poll();
 })();

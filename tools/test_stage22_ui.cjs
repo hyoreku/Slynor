@@ -15,8 +15,35 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  let fixtureTracks=remote,fastCalls=0,coverAttempts=0;const fastCover='/api/assets/online-covers/'+'d'.repeat(64)+'.jpg';const fastTrack={path:'online:catalog:'+'d'.repeat(32),title:'Fast YouTube track',artist:'Artist',source:'youtube',access:'prepare',cover_url:fastCover};
  const settings={version:1,accent:'#8655eb',language:'ru',theme:'dark',spectrum_enabled:false,cover_background:false,close_to_tray:true,sidebar_auto_collapse:true};
  await context.addInitScript(({local,settings})=>{
-  window.desktopWrites=[];addEventListener('load',()=>{window.pywebview={api:{load_library:async()=>local,load_playlists:async()=>[],load_settings:async()=>settings,save_theme:async value=>({...settings,theme:value}),save_playing_screen:async value=>{window.savedPlayingScreen=value;return{...settings,playing_screen_enabled:value};},save_app_icon:async value=>{window.savedIcon=value;return{...settings,app_icon:value};},save_mini_background:async value=>({...settings,mini_background:value}),save_audio_output:async value=>({...settings,audio_output:value}),save_desktop_preferences:async value=>{desktopWrites.push(value);return{...settings,close_to_tray:value};}}};dispatchEvent(new Event('pywebviewready'));});
+  window.desktopWrites=[];
+  addEventListener('load',()=>{
+   window.pywebview={api:{
+    load_library:async()=>local,
+    load_playlists:async()=>[],
+    load_settings:async()=>settings,
+    save_settings:async value=>{window.savedAccent=value;return {...settings,accent:value};},
+    save_theme:async value=>{window.savedTheme=value;return {...settings,theme:value};},
+    save_visual_effects:async (cover,enabled,mode,style)=>{
+     window.savedVisuals={cover,enabled,mode,style};
+     return {...settings,cover_background:cover,spectrum_enabled:enabled,visualizer_mode:mode,cover_background_style:style};
+    },
+    save_playlist_shape:async value=>{window.savedShape=value;return {...settings,playlist_shape:value};},
+    save_wallpaper_effects:async (dim,blur)=>{
+     window.savedWallpaperEffects=[dim,blur];
+     return {...settings,wallpaper_dim:dim,wallpaper_blur:blur};
+    },
+    save_tester_mode:async value=>{window.savedTester=value;return {...settings,tester_mode:value};},
+    save_mini_liquid:async value=>{window.savedMiniLiquid=value;return {...settings,mini_liquid:value};},
+    save_playing_screen:async value=>{window.savedPlayingScreen=value;return {...settings,playing_screen_enabled:value};},
+    save_app_icon:async value=>{window.savedIcon=value;return {...settings,app_icon:value};},
+    save_mini_background:async value=>({...settings,mini_background:value}),
+    save_audio_output:async value=>({...settings,audio_output:value}),
+    save_desktop_preferences:async value=>{desktopWrites.push(value);return {...settings,close_to_tray:value};},
+   }};
+   dispatchEvent(new Event('pywebviewready'));
+  });
  },{local,settings});
+ let miniStateReads=0;
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.pathname===fastCover){coverAttempts++;return route.fulfill({status:coverAttempts===1?503:200,contentType:'image/png',body:coverAttempts===1?Buffer.alloc(0):png});}if(url.hostname==='i1.sndcdn.com'||url.pathname.startsWith('/api/assets/'))return route.fulfill({contentType:'image/png',body:png});
   if(url.pathname.startsWith('/api/')){
@@ -25,7 +52,10 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
     if(req.method()==='POST')network18={mode:body.mode,url:body.url,search_first:body.search_first,proxy_detected:body.mode==='manual',effective:body.mode==='manual'?body.url:null,credentials_present:!!body.password};
     data=network18;
    }else if(url.pathname==='/api/network/check')data={network:{mode:network18.mode,proxy_detected:true},checks:[{service:'youtube',code:'http_200',elapsed_ms:12}]};
-   else if(url.pathname==='/api/player/state'){data=structuredClone(state);if(holdState){holdState=false;await new Promise(resolve=>releaseState=resolve);}}
+   else if(url.pathname==='/api/player/state'){
+    if(req.frame().url().endsWith('/mini'))miniStateReads++;
+    data=structuredClone(state);if(holdState){holdState=false;await new Promise(resolve=>releaseState=resolve);}
+   }
    else if(url.pathname==='/api/appearance'){state.appearance={...body};data=body;}
    else if(url.pathname==='/api/player/output-devices')data={devices:[{id:'',name:'По умолчанию в Windows'},{id:'usb',name:'Наушники USB'}],selected:'',available:true};
    else if(url.pathname==='/api/player/output-device')data={selected:body.device,message:'Команда выбора передана VLC.'};
@@ -239,8 +269,22 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  await page.getByRole('tab',{name:'Оформление',exact:true}).click();
  await page.locator('#mini-background-mode').selectOption('colors');await page.waitForTimeout(300);
  check(calls.some(c=>c.path==='/api/appearance'&&c.body.mini_background==='colors'),'mini mode published');
+ check(await page.locator('#mini-background-mode option[value="liquid"]').count()===0,'mini experiments are outside the standard menu');
+ await page.getByRole('tab',{name:'Технические',exact:true}).click();
+ await page.locator('#tester-mode').check();
+ await page.waitForFunction(()=>window.savedTester===true);
+ await page.getByRole('tab',{name:'Эксперименты',exact:true}).click();
+ await page.locator('#tester-mini-liquid').check();
+ await page.waitForFunction(()=>window.miniBackgroundMode==='liquid'&&window.savedMiniLiquid===true);
+ await page.waitForTimeout(300);
+ check(calls.some(c=>c.path==='/api/appearance'&&c.body.mini_background==='liquid'),'liquid mini mode published');
+ await page.getByRole('tab',{name:'Технические',exact:true}).click();
+ await page.locator('#tester-mode').uncheck();
+ await page.waitForFunction(()=>window.miniBackgroundMode==='colors'&&window.savedTester===false);
+ check(await page.getByRole('tab',{name:'Эксперименты',exact:true}).count()===0,'disabling tester mode restores the ordinary mini background');
+ await page.waitForTimeout(300);
  check(await page.locator('text=Следующие этапы').count()===0,'obsolete roadmap removed');
- // One source of theme/accent and three mini backgrounds.
+ // One source of theme/accent and independent mini backgrounds.
  state.appearance={theme:'light',accent:'#dc7820',wallpaper:null,dim:20,blur:0,mini_background:'classic'};
  await mini.bringToFront();await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
  await mini.waitForFunction(()=>document.documentElement.dataset.theme==='light');
@@ -252,6 +296,18 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  check(await mini.locator('.mini-colors').evaluate(e=>e.style.animationPlayState)==='running','cover colors move while playing');
  await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));
  check(await mini.locator('.mini-colors').evaluate(e=>e.style.animationPlayState)==='paused','native hidden mini stops color motion');
+ const hiddenBaseline=miniStateReads;
+ await mini.waitForTimeout(650);
+ check(miniStateReads===hiddenBaseline,'native hidden mini stops full player state requests');
+ state.appearance={...state.appearance,mini_background:'liquid'};
+ await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
+ await mini.waitForFunction(()=>document.querySelector('#mini-background .liquid-backdrop').classList.contains('is-moving'));
+ check(await mini.locator('.liquid-backdrop > .liquid-shape').count()===12,'mini shows twelve liquid shapes');
+ check(await mini.locator('.mini-colors').isHidden(),'liquid mini mode replaces the soft colour layer');
+ await mini.emulateMedia({reducedMotion:'reduce'});
+ await mini.waitForFunction(()=>!document.querySelector('#mini-background .liquid-backdrop').classList.contains('is-moving'));
+ check(await mini.locator('.liquid-backdrop').isVisible(),'mini keeps a static liquid background with reduced motion');
+ await mini.emulateMedia({reducedMotion:'no-preference'});
  state.appearance={...state.appearance,mini_background:'wallpaper',wallpaper:'c'.repeat(32)+'.jpg'};
  await mini.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}})));
  await mini.waitForFunction(()=>document.querySelector('#mini-background>img').getAttribute('src')?.endsWith('.jpg'));
@@ -267,6 +323,14 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  // Main video does not enter VLC. A valid file name is supplied by the native import bridge.
  await page.evaluate(()=>{applyStoredWallpaper({wallpaper:'d'.repeat(32)+'.mp4'});});
  check(await page.locator('#wallpaper-layer video').evaluate(e=>e.muted&&e.loop&&e.getAttribute('src').endsWith('.mp4')),'main video applies in dedicated muted layer');
+ await page.evaluate(()=>{
+  const dim=document.getElementById('wallpaper-dim');
+  dim.value='42';
+  dim.dispatchEvent(new Event('input',{bubbles:true}));
+  dim.dispatchEvent(new Event('change',{bubbles:true}));
+ });
+ await page.waitForFunction(()=>window.savedWallpaperEffects?.[0]===42);
+ check(await page.locator('#wallpaper-dim-value').textContent()==='42%','wallpaper slider applies and saves without a separate action');
  await page.evaluate(()=>dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:true}})));
  check(await page.locator('#wallpaper-layer video').evaluate(e=>e.paused),'main video pauses on native hide');
  await page.evaluate(()=>{applyStoredWallpaper({wallpaper:null});dispatchEvent(new CustomEvent('native-window-state',{detail:{minimized:false}}));});
@@ -284,7 +348,20 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  check(await page.locator('#app-icon-options button').count()===8,'eight app icons available');
  await page.getByRole('button',{name:'Значок 8 — Космос',exact:true}).click();await page.waitForFunction(()=>window.savedIcon==='8');
  check(await page.locator('.brand-mark .app-mark').getAttribute('data-variant')==='8','brand changes without reload');
- await page.locator('#theme-choice').selectOption('transparent');await page.waitForFunction(()=>document.documentElement.dataset.theme==='transparent');
+ await page.locator('#theme-choice').selectOption('transparent');await page.waitForFunction(()=>document.documentElement.dataset.theme==='transparent'&&window.savedTheme==='transparent');
+ const purple=page.locator('#accent-presets button[data-accent="#8655eb"]');
+ await purple.click();
+ await page.waitForFunction(()=>window.savedAccent==='#8655eb');
+ await purple.hover();
+ check(await purple.getAttribute('aria-pressed')==='true','accent remains selected on hover');
+ check(await purple.evaluate(e=>getComputedStyle(e).backgroundColor!==getComputedStyle(e.parentElement.querySelector('[aria-pressed="false"]')).backgroundColor),'selected hover retains the accent colour');
+ await page.locator('#playlist-shape').selectOption('landscape');
+ await page.waitForFunction(()=>window.savedShape==='landscape'&&document.documentElement.dataset.playlistShape==='landscape');
+ await page.locator('#playlist-shape').selectOption('square');
+ await page.locator('#visualizer-mode').selectOption('rays');
+ await page.waitForFunction(()=>window.savedVisuals?.mode==='rays');
+ await page.locator('#visualizer-mode').selectOption('off');
+ check(await page.locator('#save-theme, #save-visual-effects, #save-accent-button, #save-shape-button, #save-wallpaper').count()===0,'standard settings have no confirmation buttons');
  const alpha=await page.locator('#accent-heading').evaluate(e=>getComputedStyle(e.closest('section')).backgroundColor);
  check(alpha.startsWith('rgba(')&&Number(alpha.split(',').at(-1).replace(')',''))<1,'translucent theme reduces panel opacity');
  check(await page.locator('.settings-tabs button').first().evaluate(e=>parseFloat(getComputedStyle(e).borderRadius)>=10),'rounded settings tab buttons');
@@ -356,9 +433,12 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  check(await page.locator('.online-row-status').evaluate(e=>e.classList.contains('is-error')),'actual native failure displayed on the track');
  // Stage18: network form is in Technical, credentials are transient, report exports explicitly.
  await page.evaluate(()=>{if(activeScreen==='playing')showScreen('music');});await page.locator('[data-screen="settings"]').click();await page.getByRole('tab',{name:'Технические',exact:true}).click();
- await page.waitForFunction(()=>!document.getElementById('network-save').disabled);
+ await page.waitForFunction(()=>!document.getElementById('network-mode').disabled);
  check(await page.locator('#network-form').isVisible(),'network settings in Technical');
  check(await page.locator('#network-auth').isHidden(),'system mode hides manual credentials');
+ await page.locator('#network-mode').selectOption('direct');
+ await page.waitForFunction(()=>document.getElementById('network-status').textContent.includes('Настройки сохранены'));
+ check(network18.mode==='direct','standard routing saves immediately');
  await page.locator('#network-mode').selectOption('manual');
  check(await page.locator('#network-auth').isVisible(),'manual proxy exposes optional credentials');
  await page.locator('#network-url').fill('socks5://127.0.0.1:8123');
@@ -424,6 +504,11 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
 
  // Full-window scene is a single surface, independent of wallpaper choice.
  check(await page.locator('.app-shell > #cover-atmosphere').count()===1,'one scene belongs to the shell');
+ await page.waitForFunction(()=>document.querySelector('.atmosphere-image').style.backgroundImage.includes('data:image/png'));
+ check(await page.locator('.atmosphere-image').evaluate(async layer=>{
+  const image=new Image();image.src=layer.style.backgroundImage.slice(5,-2);await image.decode();
+  return image.naturalWidth===48 && image.naturalHeight===48 && getComputedStyle(layer).filter==='none';
+ }),'cover uses a cached 48-pixel blur texture with no full-window filter');
  check(await page.locator('.app-shell').evaluate(e=>e.classList.contains('cover-scene')),'scene mode enabled');
  const bounds=await page.locator('#cover-atmosphere').boundingBox();
  check(bounds.x===0&&bounds.y===0&&bounds.width===1180&&bounds.height===800,'scene covers sidebar and footer too');
@@ -445,7 +530,7 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  }
  await page.locator('.workspace').evaluate(e=>e.scrollTop=500);await page.waitForTimeout(120);
  check(await page.locator('.settings-tabs').evaluate(e=>getComputedStyle(e).position)==='static','tabs never overlap scrolled content');
- check(await page.locator('.settings-tabs').evaluate(e=>getComputedStyle(e).backgroundColor)==='rgba(0, 0, 0, 0)','no black settings stripe');
+ check(await page.locator('.settings-tabs').evaluate(e=>e.offsetWidth<e.parentElement.clientWidth),'settings tabs do not form a full-width stripe');
  check(await page.locator('.settings-tabs').evaluate(e=>getComputedStyle(e,'::before').content)==='none','no oversized masking pseudo element');
  await page.locator('.workspace').evaluate(e=>e.scrollTop=0);await page.waitForTimeout(120);
  await page.screenshot({path:path.join(root,'tests/stage22-settings.png')});
@@ -462,8 +547,8 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
   activePlaylistId=null;librarySearch.value='';librarySort.value='original';
   const tracks=Array.from({length:8},(_,i)=>'C:/Music/layout-'+i+'.wav');
   if(currentTrackPath)tracks[0]=currentTrackPath;
-  libraryFiles.splice(0,libraryFiles.length,...tracks);
-  tracks.forEach((path,i)=>metadataMap.set(fileKey(path),{path,title:i%2?'Очень длинное название песни для проверки фиксированного расстояния и многоточия':'Трек '+(i+1),artist:i%3?'Исполнитель':'',album:i%2?'Альбом с длинным названием':'',cover_url:i%2?null:'/api/assets/track-covers/'+ 'a'.repeat(64)+'.jpg',duration_ms:i%3?180000:null}));
+  libraryFiles = tracks;
+  tracks.forEach((path,i)=>setTrackMetadata(fileKey(path),{path,title:i%2?'Очень длинное название песни для проверки фиксированного расстояния и многоточия':'Трек '+(i+1),artist:i%3?'Исполнитель':'',album:i%2?'Альбом с длинным названием':'',cover_url:i%2?null:'/api/assets/track-covers/'+ 'a'.repeat(64)+'.jpg',duration_ms:i%3?180000:null}));
   renderLibrary();showScreen('music');
  });
  for(const width of [1620,1180,900,540]){
@@ -528,18 +613,37 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  await page.screenshot({path:path.join(root,'tests/stage22-icons.png')});
  await page.getByRole('tab',{name:'Общие',exact:true}).click();
  await page.locator('#playing-screen-enabled').uncheck();
+ await page.waitForFunction(()=>window.savedPlayingScreen===false);
  check(await page.evaluate(()=>window.savedPlayingScreen)===false,'screen preference persisted');
- await page.evaluate(()=>showScreen('playing'));
- check(await page.evaluate(()=>activeScreen)==='settings','disabled now-playing cannot open');
- check(await page.locator('#player-cover').isDisabled(),'cover shortcut disabled while screen off');
- check(!await page.locator('#player-bar').isHidden(),'disabling screen keeps transport visible');
+ await page.evaluate(()=>{revealPlayingOnPoll=true;window.refreshPlayerState();});
+ await page.waitForFunction(()=>!revealPlayingOnPoll);
+ check(await page.evaluate(()=>activeScreen)==='settings','disabling auto-open keeps the current screen on playback');
+ await page.locator('#player-cover').click();
+ await page.waitForFunction(()=>activeScreen==='playing'&&screenReveal===null);
+ check(!await page.locator('#screen-playing').isHidden(),'the cover opens Now Playing with auto-open disabled');
+ await page.evaluate(()=>showScreen('settings'));
+ await page.waitForFunction(()=>activeScreen==='settings'&&screenReveal===null);
  await page.locator('#playing-screen-enabled').check();
- await page.evaluate(()=>showScreen('playing'));await page.waitForTimeout(50);
- check(await page.evaluate(()=>screenRevealAnimation?.playState)==='running','circular reveal runs on entry');
- await page.waitForFunction(()=>getComputedStyle(document.querySelector('.app-shell')).clipPath==='none');
- check(await page.locator('.app-shell').evaluate(e=>getComputedStyle(e).clipPath)==='none','reveal leaves no clipping after finish');
+ check(await page.evaluate(async()=>{
+  showScreen('playing');
+  const reveal=screenReveal;
+  if(!reveal || getComputedStyle(document.querySelector('.app-shell')).clipPath!=='none')return false;
+  if(document.documentElement.classList.contains('playing-reveal')){
+   await Promise.race([reveal.finished,new Promise(resolve=>window.addEventListener('player-screen-changed',resolve,{once:true}))]);
+   return getComputedStyle(document.documentElement,'::view-transition-new(root)').animationName==='playing-window-reveal';
+  }
+  return document.getElementById('screen-playing').getAnimations().some(animation=>animation.finished===reveal.finished);
+ }),'the circle runs on the viewport transition layer with an opacity fallback');
+ await page.waitForFunction(()=>screenReveal===null);
+ check(await page.evaluate(async()=>{
+  showScreen('music');showScreen('playing');const reveal=screenReveal;showScreen('music');
+  await reveal?.finished.catch(()=>{});
+  return activeScreen==='music' && screenReveal===null && !document.documentElement.classList.contains('playing-reveal');
+ }),'an immediate exit cancels the pending reveal and stays on the requested page');
  await page.emulateMedia({reducedMotion:'reduce'});await page.evaluate(()=>{showScreen('music');showScreen('playing');});
- check(await page.evaluate(()=>screenRevealAnimation===null),'reduced motion skips circular reveal');
+ check(await page.evaluate(()=>activeScreen==='playing' && screenReveal===null),'reduced motion opens Now Playing without a reveal');
+ await page.evaluate(()=>showScreen('music'));
+ check(await page.evaluate(()=>activeScreen==='music' && screenReveal===null),'reduced motion exits Now Playing without a reveal');
  await page.emulateMedia({reducedMotion:'no-preference'});
  await mini.bringToFront();
  for(const sel of ['#mini-toggle','#mini-hide','#mini-expand','[data-action="previous"]','[data-action="stop"]']){

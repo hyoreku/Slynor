@@ -19,6 +19,20 @@
         if (activeScreen === 'playing') {
             const cover = document.getElementById('large-track-cover').getBoundingClientRect();
             const footer = playerBar.getBoundingClientRect();
+            // На экране «Сейчас играет» нижний плеер скрыт: панель становится
+            // плавающей карточкой над низом окна, а не полосой во всю высоту.
+            if (!footer.height) {
+                const wave = document.getElementById('now-wave');
+                const contentBottom = (wave.hidden ? cover : wave.getBoundingClientRect()).bottom;
+                const availableHeight = Math.max(0, innerHeight - contentBottom - 24 - 8);
+                panel.style.removeProperty('--eq-top');
+                panel.style.top = 'auto';
+                panel.style.bottom = '24px';
+                panel.style.height = 'auto';
+                panel.style.maxHeight = `min(430px, 62vh, ${availableHeight}px)`;
+                panel.classList.toggle('eq-compact', availableHeight < 310);
+                return;
+            }
             panel.style.top = Math.min(footer.top - 64, cover.bottom + 8) + 'px';
             panel.style.setProperty('--eq-top', panel.style.top);
             panel.style.bottom = '0px';
@@ -28,7 +42,9 @@
             ['top','bottom','height','max-height'].forEach(name => panel.style.removeProperty(name));
         }
     }
-    new ResizeObserver(layoutPanel).observe(document.getElementById('large-track-cover'));
+    const layoutObserver = new ResizeObserver(layoutPanel);
+    layoutObserver.observe(document.getElementById('large-track-cover'));
+    layoutObserver.observe(document.querySelector('.now-main'));
     window.addEventListener('resize', layoutPanel);
     function openPanel() {
         if (playerBar.hidden) return;
@@ -43,7 +59,8 @@
         const finish = () => {
             if (generation !== panelGeneration) return;
             panel.hidden = true; document.documentElement.classList.remove('eq-open'); panelButton.setAttribute('aria-expanded','false');
-            if (focusInside) (playerBar.hidden ? screenTitle : panelButton).focus({preventScroll:true});
+            const panelReturn = activeScreen === 'playing' ? document.getElementById('now-eq') : (playerBar.hidden ? screenTitle : panelButton);
+            if (focusInside && panelReturn) panelReturn.focus({preventScroll:true});
         };
         if (immediate || matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
         closingAnimation = panel.animate([{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(12px)'}],{duration:160,easing:'ease-in',fill:'forwards'});

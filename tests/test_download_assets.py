@@ -76,6 +76,19 @@ class DownloadAssetsTests(unittest.TestCase):
         self.assertNotIn('cover_file', saved)
         self.assertIsNone(track_cover_url('../evil.jpg'))
 
+    def test_public_artwork_survives_download_without_a_local_copy(self):
+        url = 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg'
+        target = publish_download(wav_file(self.root / 'input.wav'), self.folder,
+                                  {**self.track, 'public_cover_url': url + '?token=private'})
+        self.assertEqual(read_download_metadata(target)['public_cover_url'], url)
+        self.assertEqual(read_track_metadata(str(target))['public_cover_url'], url)
+        self.assertNotIn('private', sidecar_path(target).read_text(encoding='utf-8'))
+
+    def test_untagged_audio_uses_artist_and_title_from_filename(self):
+        target = wav_file(self.root / 'Artist - Recording.wav')
+        track = read_track_metadata(str(target))
+        self.assertEqual((track['artist'], track['title']), ('Artist', 'Recording'))
+
     def test_webm_without_tags_gets_duration_from_measurement(self):
         target = self.folder / 'clip.webm'
         self.folder.mkdir(parents=True, exist_ok=True)

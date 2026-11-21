@@ -8,20 +8,25 @@
 <link rel="stylesheet" href="/static/assets/icons/icons.css">
 <link rel="icon" href="/static/assets/icons/app.ico">
 <link rel="stylesheet" href="/static/css/modern22.css">
+<link rel="stylesheet" href="/static/css/nocturne.css">
+<link rel="stylesheet" href="/static/css/liquid-background.css">
+<link rel="stylesheet" href="/static/css/settings.css">
+<link rel="stylesheet" href="/static/css/graphite.css">
 </head>
-<body>
+<body data-screen="home">
 <!-- Фон изолирован: размытие не применяется к тексту и кнопкам. -->
 <div id="wallpaper-layer" aria-hidden="true" hidden></div>
 <!-- Каркас приложения: боковая панель, прокручиваемый центр и нижний плеер. -->
 <div class="app-shell player-hidden">
+    <button id="sidebar-toggle" class="icon-button sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Свернуть панель" aria-label="Свернуть панель">‹</button>
     <!-- Навигация и список плейлистов. -->
 <aside id="sidebar" class="sidebar" aria-label="Навигация">
-        <button id="sidebar-toggle" class="icon-button sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Свернуть панель" aria-label="Свернуть панель">‹</button>
-        <a class="brand" href="#" id="brand-home" title="Главная" aria-label="Главная"><span class="brand-mark"><span class="app-mark" data-variant="1" aria-hidden="true"></span></span><span class="brand-name">Slynor</span></a>
-        <p class="sidebar-caption">ВАША БИБЛИОТЕКА</p>
+        <div class="sidebar-header">
+            <button class="brand" type="button" id="brand-home" aria-label="Главная"><span class="brand-mark"><span class="app-mark" data-variant="1" aria-hidden="true"></span></span><span class="brand-copy"><span class="brand-name">Slynor</span><span class="brand-sub">Music</span></span></button>
+        </div>
         <nav class="navigation">
             <button class="nav-button is-active" data-screen="home" type="button" aria-current="page" title="Главная"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">Главная</span></button>
-            <button class="nav-button" data-screen="music" type="button" title="Моя музыка"><span class="nav-icon" aria-hidden="true">♫</span><span class="nav-label">Моя музыка</span></button>
+            <button class="nav-button" data-screen="music" type="button" title="Моя музыка"><span class="nav-icon" aria-hidden="true">♫</span><span class="nav-label">Моя музыка</span><span id="nav-music-count" class="nav-count" aria-hidden="true"></span></button>
             <button class="nav-button" data-screen="online" type="button" title="Поиск музыки" aria-label="Поиск музыки"><span class="nav-icon" aria-hidden="true">⌕</span><span class="nav-label">Поиск музыки</span></button>
             <button class="nav-button" data-screen="settings" type="button" title="Настройки"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Настройки</span></button>
         </nav>
@@ -29,32 +34,81 @@
             <div class="sidebar-section-title"><span>ПЛЕЙЛИСТЫ</span><button id="new-playlist-shortcut" class="icon-button" type="button" title="Создать плейлист" aria-label="Создать плейлист">＋</button></div>
             <ul id="sidebar-playlists-list"></ul>
         </div>
-        <div class="sidebar-footnote"><span class="local-dot"></span><span>Музыка на вашем компьютере</span></div>
+        <div class="sidebar-foot">
+            <div class="sidebar-storage"><span class="sidebar-storage-label">Библиотека</span><span id="sidebar-storage-count" class="sidebar-storage-value">—</span></div>
+            <div class="sidebar-status"><span class="status-dot" aria-hidden="true"></span><span id="sidebar-service-text">Music Service</span></div>
+        </div>
     </aside>
 
     <!-- Основная область: показывается один выбранный экран. -->
 <main class="workspace">
         <!-- Эти слои видны только в «Сейчас играет», никогда не перехватывают нажатия. -->
         <div id="cover-atmosphere" aria-hidden="true" hidden><div class="atmosphere-image"></div><div class="atmosphere-colors"></div><div class="atmosphere-shade"></div></div>
-        <canvas id="spectrum-canvas" aria-hidden="true" hidden></canvas>
         <header class="topbar">
-            
-            
-            <div><p class="eyebrow">SLYNOR</p><h1 id="screen-title" tabindex="-1">Главная</h1></div>
-            <button title="Добавить музыку" aria-label="Добавить музыку" id="add-files-button" class="primary-button" type="button" disabled><span class="add-music-icon" aria-hidden="true">＋</span><span class="add-music-label">Добавить музыку</span></button>
+            <div class="topbar-crumb"><p class="eyebrow">SLYNOR</p><h1 id="screen-title" tabindex="-1">Главная</h1></div>
+            <div class="topbar-search">
+                <span class="topbar-search-icon search-icon" aria-hidden="true"></span>
+                <label class="sr-only" for="global-search">Поиск по библиотеке</label>
+                <input id="global-search" type="search" placeholder="Поиск по библиотеке" autocomplete="off" spellcheck="false">
+                <kbd>Ctrl K</kbd>
+            </div>
+            <button title="Добавить музыку" aria-label="Добавить музыку" id="add-files-button" class="primary-button" type="button" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
         <button id="back-to-tracks" class="icon-button back-tracks-icon" type="button" hidden title="К списку песен" aria-label="К списку песен"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1"/></svg></button>
         </header>
         <div id="result" class="app-message" role="status" aria-live="polite" hidden></div>
 
-        <!-- Главная: приветствие, статистика и карточки плейлистов. -->
+        <!-- Главная: приветствие, «продолжить слушать», плейлисты и недавние треки. -->
 <section id="screen-home" class="screen" aria-label="Главная">
-            <div class="welcome-panel">
-                <div><p class="eyebrow accent-text">ВАШЕ ПРОСТРАНСТВО</p><h2>Музыка, которая рядом.</h2><p>Соберите любимые песни и подборки в одном месте.</p><button id="open-library-button" class="primary-button" type="button">Открыть мою музыку <span aria-hidden="true">→</span></button></div>
-                <div class="welcome-art" aria-hidden="true"><span>♫</span><div class="sound-bars"><i></i><i></i><i></i><i></i><i></i></div></div>
+            <div class="home-greeting">
+                <h2 id="home-greeting-title">Добрый вечер</h2>
+                <p class="home-greet-meta"><span id="home-greeting-time">22:04</span><span aria-hidden="true">·</span><span><span id="home-track-count">0</span> локальных треков</span><span aria-hidden="true">·</span><span><span id="home-playlist-count">0</span> плейлистов</span></p>
             </div>
-            <div class="overview-stats"><div><span id="home-track-count">0</span><span>локальных треков</span></div><div><span id="home-playlist-count">0</span><span>плейлистов</span></div><div class="privacy-stat"><span>Локально</span><span>данные остаются у вас</span></div></div>
+            <!-- Состояние героя заполняет facelift.js по данным плеера. -->
+            <section id="home-hero" class="home-hero" aria-label="Продолжить слушать" hidden>
+                <div id="home-hero-art" class="home-hero-art song-art" aria-hidden="true">♫</div>
+                <div class="home-hero-copy">
+                    <p class="eyebrow">ПРОДОЛЖИТЬ СЛУШАТЬ</p>
+                    <h2 id="home-hero-title" data-user-text="true">—</h2>
+                    <p id="home-hero-sub" class="home-hero-sub" data-user-text="true"></p>
+                    <div class="home-hero-progress">
+                        <span id="home-hero-time">00:00</span>
+                        <span class="home-hero-track" aria-hidden="true"><i id="home-hero-fill"></i></span>
+                        <span id="home-hero-duration">00:00</span>
+                    </div>
+                </div>
+                <div class="home-hero-actions">
+                    <button id="home-hero-open" class="home-hero-ghost" type="button">Открыть экран</button>
+                    <button id="home-hero-play" class="home-hero-play" type="button" aria-label="Продолжить воспроизведение">▶</button>
+                </div>
+            </section>
+            <section id="home-hero-empty" class="home-hero-empty" aria-labelledby="home-bento-title">
+                <div class="home-bento-copy">
+                    <h2 id="home-bento-title">Включите первую песню</h2>
+                    <p>Здесь появится трек, который играл последним.</p>
+                    <button id="open-library-button" class="home-hero-ghost home-bento-action" type="button">Открыть мою музыку <span aria-hidden="true">→</span></button>
+                </div>
+                <div class="home-bento-wave" aria-hidden="true">
+                    <svg viewBox="0 0 360 150" fill="none">
+                        <defs>
+                            <linearGradient id="bento-wave-color" x2="1" y2="0">
+                                <stop stop-color="currentColor" stop-opacity=".06"/>
+                                <stop offset=".48" stop-color="currentColor"/>
+                                <stop offset=".75" stop-color="#a2ded6"/>
+                                <stop offset="1" stop-color="#a2ded6" stop-opacity=".06"/>
+                            </linearGradient>
+                            <path id="bento-wave-line" d="M0 75h72c29 0 27-22 49-22 25 0 24 51 47 51 31 0 21-68 49-68 24 0 24 39 45 39h98"/>
+                        </defs>
+                        <path class="home-bento-grid" d="M0 38h360M0 75h360M0 112h360M60 0v150M120 0v150M180 0v150M240 0v150M300 0v150"/>
+                        <g stroke="url(#bento-wave-color)" stroke-linecap="round">
+                            <use href="#bento-wave-line" transform="translate(0 -15)" opacity=".28"/>
+                            <use href="#bento-wave-line" transform="translate(0 15)" opacity=".28"/>
+                            <use href="#bento-wave-line" stroke-width="2.5"/>
+                        </g>
+                    </svg>
+                </div>
+            </section>
             <section class="home-playlists" aria-labelledby="playlists-heading">
-                <div class="section-heading"><div><p class="eyebrow">ПОДБОРКИ</p><h2 id="playlists-heading">Ваши плейлисты</h2></div><button id="show-playlist-form" class="secondary-button" type="button">＋ Плейлист</button></div>
+                <div class="home-rowhead"><h2 id="playlists-heading">Ваши плейлисты</h2><button id="show-playlist-form" class="home-link" type="button" aria-expanded="false">＋ Плейлист</button></div>
                 <form id="playlist-create-form" class="playlist-create-form" hidden>
                     <label class="sr-only" for="playlist-name">Название нового плейлиста</label>
                     <input id="playlist-name" type="text" maxlength="100" placeholder="Название нового плейлиста" autocomplete="off">
@@ -62,6 +116,11 @@
                 </form>
                 <p id="playlists-message" class="section-message" role="status" aria-live="polite">Загружаем плейлисты...</p>
                 <ul id="playlists-list" class="playlist-grid"></ul>
+            </section>
+            <section class="home-recent-section" aria-labelledby="home-recent-heading">
+                <div class="home-rowhead"><h2 id="home-recent-heading">Недавно добавленные</h2><button id="home-all-tracks" class="home-link" type="button">Вся библиотека</button></div>
+                <ul id="home-recent" class="home-recent"></ul>
+                <p id="home-recent-empty" class="empty-state" hidden>Библиотека пока пуста.</p>
             </section>
         </section>
 
@@ -78,13 +137,13 @@
             <div class="playlist-library-content">
             <div class="section-heading"><div><p class="eyebrow">БИБЛИОТЕКА</p><h2 id="library-heading">Локальные треки</h2></div><span id="library-count" class="subtle-label">Треков в списке: 0</span></div>
             <div class="library-toolbar">
-                <div class="search-field"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><label class="sr-only" for="library-search">Поиск по библиотеке</label><input id="library-search" type="search" placeholder="Название, исполнитель или альбом" autocomplete="off" spellcheck="false"></div>
-                <label class="sr-only" for="library-sort">Порядок треков</label>
-                <select id="library-sort"><option value="original">По добавлению</option><option value="title">По названию</option><option value="artist">По исполнителю</option><option value="duration">По длительности</option></select>
-                <button id="refresh-metadata-button" class="secondary-button" type="button" disabled title="Повторно прочитать названия, исполнителей и длительность">Обновить сведения</button>
-            </div>
-            <div class="playlist-selectors">
-                <div><label for="playlist-view">Показать список</label><select id="playlist-view" disabled><option value="">Все локальные треки</option></select></div>
+                <div class="search-field"><span class="search-icon" aria-hidden="true"></span><label class="sr-only" for="library-search">Поиск по библиотеке</label><input id="library-search" type="search" placeholder="Название, исполнитель или альбом" autocomplete="off" spellcheck="false"></div>
+                <div class="library-toolbar-actions">
+                    <div class="library-collection"><label class="sr-only" for="playlist-view">Показать список</label><select id="playlist-view" disabled><option value="">Все локальные треки</option></select></div>
+                    <label class="sr-only" for="library-sort">Порядок треков</label>
+                    <select id="library-sort" data-select-icon="sort"><option value="original">По добавлению</option><option value="title">По названию</option><option value="artist">По исполнителю</option><option value="duration">По длительности</option></select>
+                    <button id="refresh-metadata-button" class="icon-button" type="button" disabled aria-label="Обновить сведения" title="Повторно прочитать названия, исполнителей и длительность"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.35 5.65"/></svg></button>
+                </div>
             </div>
             <p class="library-hint">Поиск не сокращает очередь. Новый порядок применяется при запуске песни.</p>
             <p id="library-empty" class="empty-state">Добавьте музыку, чтобы начать.</p>
@@ -133,70 +192,243 @@
     </section>
 </section>
 
-        <!-- Текущая песня: ограниченная по размеру обложка, управление остаётся снизу. -->
+        <!-- Текущая песня: крупная обложка, транспорт и очередь рядом. -->
 <section id="screen-playing" class="screen playing-screen" aria-label="Сейчас играет" hidden>
-    <div class="playing-navigation"><span data-dev-only="true" id="spectrum-status" class="subtle-label" role="status" hidden></span></div>
-    <div class="playing-presentation"><div id="large-track-cover" class="large-track-cover" aria-hidden="true">♫</div><h2 id="large-track-title" data-user-text="true">Не выбран</h2><p id="large-track-artist" class="artist-line" data-user-text="true">Исполнитель не указан</p><span id="large-track-state" class="subtle-label"></span></div>
-</section>
-        <!-- Настройки: текущие возможности и запланированная персонализация. -->
-<section id="screen-settings" class="screen" aria-label="Настройки" hidden>
-            <div class="section-heading"><div><p class="eyebrow">ПЕРСОНАЛИЗАЦИЯ</p><h2>Сделаем плеер вашим</h2></div></div>
-            <p class="settings-intro">Выберите акцентный цвет. Изменения видны сразу, а кнопка «Сохранить цвет» запоминает выбор.</p>
-            <!-- Тема меняет всю палитру, а не только акцент. -->
-            <section class="accent-settings" aria-labelledby="playing-settings-heading"><p class="eyebrow">ВОСПРОИЗВЕДЕНИЕ</p><h3 id="playing-settings-heading">Экран текущей песни</h3><label class="effect-toggle"><input id="playing-screen-enabled" type="checkbox" checked disabled><span>Открывать экран «Сейчас играет»</span></label><p class="settings-note">Отключите, чтобы оставаться в библиотеке. Звук, очередь и нижний плеер продолжат работать.</p><p id="playing-screen-message" class="settings-note" role="status"></p></section>
-            <section class="accent-settings" aria-labelledby="theme-heading"><p class="eyebrow">ОФОРМЛЕНИЕ</p><h3 id="theme-heading">Тема приложения</h3><label for="theme-choice">Тема</label><select id="theme-choice" disabled><option value="dark">Тёмная</option><option value="light">Светлая</option><option value="transparent">Полупрозрачная</option></select><button id="save-theme" type="button" class="primary-button" disabled>Сохранить тему</button><p id="theme-message" class="settings-note" role="status">Загружаем тему...</p></section>
-            <!-- Предпросмотр цвета — только CSS. Сохранение выполняет DesktopApi. -->
-            <section class="accent-settings" aria-labelledby="accent-heading">
-                <div class="section-heading"><div><p class="eyebrow">ВНЕШНИЙ ВИД</p><h3 id="accent-heading">Акцентный цвет</h3></div><span id="accent-current" class="subtle-label">#8655EB</span></div>
-                <p class="settings-note">Цвет кнопок, выделения, ползунков и декоративных элементов. Акцент работает и в тёмной, и в светлой теме.</p>
-                <div id="accent-presets" class="accent-presets" aria-label="Готовые цвета">
-                    <button type="button" data-accent="#c9c9d1" disabled>Нейтральный</button>
-                    <button type="button" data-accent="#8655eb" disabled>Фиолетовый</button>
-                    <button type="button" data-accent="#287de0" disabled>Синий</button>
-                    <button type="button" data-accent="#13865e" disabled>Зелёный</button>
-                    <button type="button" data-accent="#d47712" disabled>Оранжевый</button>
-                    <button type="button" data-accent="#c94d8f" disabled>Розовый</button>
+    <span data-dev-only="true" id="spectrum-status" class="subtle-label" role="status" hidden></span>
+    <div class="now-top">
+        <div class="now-top-label">
+            <button id="now-back" class="now-round" type="button" title="Назад" aria-label="Назад"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <span class="now-eyebrow">СЕЙЧАС ИГРАЕТ</span>
+        </div>
+        <div class="now-top-actions">
+            <button id="now-mini" class="now-round" type="button" title="Миниплеер" aria-label="Миниплеер">▣</button>
+            <button id="now-queue-chip" class="now-chip" type="button" aria-controls="now-upcoming-queue" aria-expanded="false"><span class="now-chip-icon" aria-hidden="true"></span><span>Очередь</span><span aria-hidden="true">·</span><span id="now-queue-count" class="now-chip-count">0</span></button>
+            <button id="now-more" class="now-round" type="button" title="Сведения о файле" aria-label="Сведения о файле" aria-haspopup="dialog" aria-controls="track-details-dialog">⋯</button>
+        </div>
+    </div>
+    <p id="now-playback-error" class="now-playback-error" role="alert" hidden></p>
+    <div class="now-stage queue-hidden">
+        <div class="now-main playing-presentation">
+            <div class="now-cover-wrap" aria-hidden="true">
+                <canvas id="now-radial-spectrum" hidden></canvas>
+                <div id="large-track-cover" class="large-track-cover">♫</div>
+            </div>
+            <h2 id="large-track-title" data-user-text="true">Не выбран</h2>
+            <div class="now-track-meta">
+                <p id="large-track-artist" class="artist-line" data-user-text="true">Исполнитель не указан</p>
+                <span id="large-track-album" data-user-text="true" hidden></span>
+            </div>
+            <div class="now-track-state-line"><span id="large-track-state" class="subtle-label" role="status"></span></div>
+            <div id="now-wave" class="now-wave" aria-hidden="true" hidden><canvas id="spectrum-canvas"></canvas></div>
+            <div class="now-timeline">
+                <span id="now-current-time">00:00</span>
+                <label class="sr-only" for="now-seek">Позиция в треке</label>
+                <input id="now-seek" type="range" min="0" max="0" step="1" value="0" disabled>
+                <span id="now-duration-time">00:00</span>
+            </div>
+            <div class="now-transport">
+                <button id="now-shuffle" class="now-ctl" type="button" title="Случайный режим" aria-label="Случайный режим" aria-pressed="false">⇄</button>
+                <button id="now-prev" class="now-ctl" type="button" title="Предыдущий трек" aria-label="Предыдущий трек">◀│</button>
+                <button id="now-play" class="now-play" type="button" aria-label="Воспроизвести">▶</button>
+                <button id="now-next" class="now-ctl" type="button" title="Следующий трек" aria-label="Следующий трек">│▶</button>
+                <button id="now-stop" class="now-ctl" type="button" title="Стоп" aria-label="Стоп">■</button>
+            </div>
+            <div class="now-pills">
+                <button id="now-speed" class="now-pill" type="button" title="Скорость воспроизведения">1×</button>
+                <button id="now-eq" class="now-pill" type="button" aria-controls="eq-panel" aria-expanded="false" title="Открыть эквалайзер"><span class="now-eq-icon" aria-hidden="true"></span><span id="now-eq-label">Эквалайзер</span></button>
+                <button class="now-pill" type="button" disabled title="Текст песни появится позже">Текст песни</button>
+                <div class="now-volume">
+                    <label for="now-volume-slider"><svg class="now-volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/></svg><span class="sr-only">Громкость</span></label>
+                    <input id="now-volume-slider" type="range" min="0" max="100" step="1" value="50">
+                    <span id="now-volume-value" aria-hidden="true">50</span>
                 </div>
-                <div class="accent-custom"><label for="accent-picker">Свой цвет</label><input id="accent-picker" type="color" value="#c9c9d1" disabled><span class="settings-note">Можно выбрать любой оттенок.</span></div>
-                <div class="accent-actions"><button id="save-accent-button" class="primary-button" type="button" disabled>Сохранить цвет</button><button id="reset-accent-button" class="secondary-button" type="button" disabled>Вернуть нейтральный</button></div>
-                <p id="settings-message" class="settings-note" role="status" aria-live="polite">Загружаем настройки...</p>
-            </section>
-            <!-- Форма карточек: предпросмотр, затем явное сохранение. -->
-            <section class="accent-settings" aria-labelledby="app-icon-heading"><h3 id="app-icon-heading">Значок в боковой панели</h3><div id="app-icon-options" class="app-icon-options" role="group" aria-label="Значок приложения"></div><p id="app-icon-message" class="settings-note" role="status"></p></section>
-            <section class="accent-settings" aria-labelledby="shape-heading">
-                <p class="eyebrow">ПЛЕЙЛИСТЫ</p><h3 id="shape-heading">Форма обложек</h3>
-                <p class="settings-note">Квадратные по умолчанию или прежние широкие пропорции. Действия в обоих режимах находятся в панели редактирования.</p>
-                <label for="playlist-shape">Пропорции карточек</label><select id="playlist-shape" disabled><option value="square">Квадратные обложки</option><option value="landscape">Широкие обложки — как раньше</option></select>
-                <button id="save-shape-button" class="secondary-button" type="button" disabled>Сохранить форму</button><p id="shape-message" class="settings-note" role="status" aria-live="polite"></p>
-            </section>
-            <!-- Два независимых эффекта экрана: предпросмотр и сохранение. -->
-            <section class="accent-settings" aria-labelledby="visual-effects-heading">
-                <p class="eyebrow">СЕЙЧАС ИГРАЕТ</p><h3 id="visual-effects-heading">Фон обложки и спектр</h3>
-                <label class="effect-toggle"><input id="cover-background-toggle" type="checkbox" checked disabled><span>Мягкий фон из цветов обложки</span></label>
-                <p class="settings-note">Включён по умолчанию. Если выключить или у песни нет картинки, остаются ваши обои либо обычный тёмный фон.</p>
-                <label class="effect-toggle"><input id="spectrum-toggle" type="checkbox" disabled><span>Спектроанализатор</span></label>
-                <p class="settings-note">Частоты после EQ: беззвучная ветка VLC с теми же настройками и позицией текущей песни. Не захватывает микрофон и звук других приложений. Работает только на экране «Сейчас играет».</p>
-                <button id="save-visual-effects" type="button" class="primary-button" disabled>Сохранить эффекты экрана</button><p id="visual-effects-message" class="settings-note" role="status" aria-live="polite">Загружаем настройки...</p>
-            </section>
-            <!-- Выбор обоев сохраняет копию сразу; эффекты имеют отдельную кнопку сохранения. -->
-            <section class="accent-settings wallpaper-settings" aria-labelledby="wallpaper-heading">
-                <p class="eyebrow">ФОН ПРИЛОЖЕНИЯ</p><h3 id="wallpaper-heading">Собственные обои</h3>
+            </div>
+        </div>
+        <div class="now-queue-slot">
+            <aside id="now-upcoming-queue" class="now-queue" aria-labelledby="now-queue-heading" inert>
+                <div class="now-queue-head"><h3 id="now-queue-heading">Далее в очереди</h3><span id="now-queue-total" class="now-queue-total"></span><button id="now-queue-hide" class="now-queue-hide" type="button" title="Скрыть очередь" aria-label="Скрыть очередь">×</button></div>
+                <ol id="now-queue-list" class="now-queue-list"></ol>
+                <p id="now-queue-empty" class="now-queue-empty" role="status" hidden>Очередь пуста.</p>
+                <button id="now-queue-open" class="now-queue-open" type="button" aria-haspopup="dialog" aria-controls="queue-panel" aria-expanded="false">Вся очередь</button>
+            </aside>
+        </div>
+    </div>
+</section>
+<section id="screen-settings" class="screen" aria-label="Настройки" hidden>
+    <div class="settings-tabs" role="tablist" aria-label="Раздел настроек">
+        <button id="settings-tab-general" role="tab" type="button" aria-controls="settings-general" aria-selected="true">Общие</button>
+        <button id="settings-tab-appearance" role="tab" type="button" aria-controls="settings-appearance" aria-selected="false" tabindex="-1">Оформление</button>
+        <button id="settings-tab-technical" role="tab" type="button" aria-controls="settings-technical" aria-selected="false" tabindex="-1">Технические</button>
+        <button id="settings-tab-tester" role="tab" type="button" aria-controls="settings-tester" aria-selected="false" tabindex="-1" hidden>Эксперименты</button>
+    </div>
+    <p id="settings-load-error" class="settings-note" role="status"></p>
+    <div class="settings-panel" id="settings-general" role="tabpanel" aria-labelledby="settings-tab-general">
+        <section class="settings-group" aria-labelledby="playing-settings-heading">
+            <h2 id="playing-settings-heading">Воспроизведение</h2>
+            <div class="settings-row">
+                <label for="playing-screen-enabled">Открывать «Сейчас играет» при запуске трека</label>
+                <input class="settings-switch" id="playing-screen-enabled" type="checkbox" role="switch" checked disabled>
+                <p id="playing-screen-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-row">
+                <label for="language-choice">Язык интерфейса</label>
+                <select id="language-choice" disabled><option value="ru">Русский</option><option value="en">English</option></select>
+                <p id="language-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+        <section id="discord-settings" class="settings-group" aria-labelledby="discord-settings-heading" hidden>
+            <h2 id="discord-settings-heading">Discord</h2>
+            <div class="settings-row">
+                <label for="discord-presence-enabled">Показывать трек в Discord</label>
+                <input class="settings-switch" id="discord-presence-enabled" type="checkbox" role="switch" aria-describedby="discord-presence-note" disabled>
+                <p id="discord-presence-note" class="settings-note">Название, исполнитель и доступная обложка появятся в активности, пока запущен Discord Desktop.</p>
+                <p id="discord-presence-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+        <section class="settings-group" aria-labelledby="desktop-settings-heading">
+            <h2 id="desktop-settings-heading">Окно и трей</h2>
+            <div class="settings-row">
+                <label for="close-to-tray">Закрывать окно в системный трей</label>
+                <input class="settings-switch" id="close-to-tray" type="checkbox" role="switch" disabled>
+                <p id="desktop-settings-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-row" hidden>
+                <label for="sidebar-auto-collapse">Сворачивать после 60 секунд неиспользования</label>
+                <input class="settings-switch" id="sidebar-auto-collapse" type="checkbox" role="switch" checked disabled>
+                <p id="sidebar-settings-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-row settings-row-action">
+                <button id="quit-application" type="button" class="secondary-button">Выйти из приложения</button>
+            </div>
+        </section>
+    </div>
+    <div class="settings-panel" id="settings-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" hidden>
+        <section class="settings-group" aria-labelledby="theme-heading">
+            <h2 id="theme-heading">Тема и цвет</h2>
+            <div class="settings-row">
+                <label for="theme-choice">Тема приложения</label>
+                <select id="theme-choice" disabled><option value="dark">Тёмная</option><option value="light">Светлая</option><option value="transparent">Полупрозрачная</option></select>
+                <p id="theme-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-block">
+                <h3 id="accent-heading">Акцентный цвет</h3>
+                <div id="accent-presets" class="accent-presets" role="group" aria-labelledby="accent-heading">
+                    <button type="button" data-accent="#c9c9d1" aria-pressed="false" disabled>Нейтральный</button>
+                    <button type="button" data-accent="#8655eb" aria-pressed="false" disabled>Фиолетовый</button>
+                    <button type="button" data-accent="#287de0" aria-pressed="false" disabled>Синий</button>
+                    <button type="button" data-accent="#13865e" aria-pressed="false" disabled>Зелёный</button>
+                    <button type="button" data-accent="#d47712" aria-pressed="false" disabled>Оранжевый</button>
+                    <button type="button" data-accent="#c94d8f" aria-pressed="false" disabled>Розовый</button>
+                </div>
+                <div class="accent-custom">
+                    <label for="accent-picker">Свой цвет</label><input id="accent-picker" type="color" value="#c9c9d1" disabled>
+                    <output id="accent-current" for="accent-picker" class="subtle-label">#C9C9D1</output>
+                    <button id="reset-accent-button" class="secondary-button" type="button" disabled>Вернуть нейтральный</button>
+                </div>
+                <p id="settings-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+        <section class="settings-group" aria-labelledby="visual-effects-heading">
+            <h2 id="visual-effects-heading">Сейчас играет</h2>
+            <div class="settings-row">
+                <label for="cover-background-toggle">Мягкие цвета обложки</label>
+                <input class="settings-switch" id="cover-background-toggle" type="checkbox" role="switch" checked disabled>
+                <p id="cover-experiment-active" class="settings-note" hidden>Включён экспериментальный фон «Текучие формы».</p>
+            </div>
+            <div class="settings-row">
+                <label for="visualizer-mode">Визуализатор</label>
+                <select id="visualizer-mode" aria-describedby="visualizer-hint" disabled>
+                    <option value="off">Выкл.</option><option value="bars">Полосы</option><option value="wave">Волна</option><option value="rays">Контуры</option>
+                </select>
+                <p id="visualizer-hint" class="settings-note">Визуализатор использует частоты локального трека после эквалайзера. Выбранный эффект работает на экране «Сейчас играет» и в миниплеере.</p>
+                <p id="visual-effects-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+        <section class="settings-group" aria-labelledby="card-appearance-heading">
+            <h2 id="card-appearance-heading">Обложки и значок</h2>
+            <div class="settings-row">
+                <label for="playlist-shape">Пропорции карточек</label>
+                <select id="playlist-shape" disabled><option value="square">Квадратные обложки</option><option value="landscape">Широкие обложки</option></select>
+                <p id="shape-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-block">
+                <h3 id="app-icon-heading">Значок в боковой панели</h3>
+                <div id="app-icon-options" class="app-icon-options" role="group" aria-labelledby="app-icon-heading"></div>
+                <p id="app-icon-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+        <section class="settings-group wallpaper-settings" aria-labelledby="wallpaper-heading">
+            <h2 id="wallpaper-heading">Обои</h2>
+            <div class="settings-row">
+                <label for="mini-background-mode">Фон миниплеера</label>
+                <select id="mini-background-mode" disabled>
+                    <option value="classic">По теме приложения</option><option value="wallpaper">Обои приложения</option><option value="colors">Цвета обложки</option>
+                </select>
+                <p id="mini-experiment-active" class="settings-note" hidden>Включён экспериментальный фон миниплеера.</p>
+                <p id="mini-background-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-block">
+                <h3>Собственные обои</h3>
                 <p class="settings-note">JPG/PNG/WEBP до 20 МБ; GIF и короткие MP4/WebM до 30 секунд и 50 МБ. Видео без звука; проверка требует ffprobe.</p>
                 <div class="accent-actions"><button id="choose-wallpaper" class="secondary-button" type="button" disabled>Выбрать фон</button><button id="reset-wallpaper" class="secondary-button" type="button" disabled>Сбросить обои</button></div>
                 <div class="wallpaper-controls"><div><label for="wallpaper-dim">Затемнение <output id="wallpaper-dim-value">65%</output></label><input id="wallpaper-dim" type="range" min="0" max="90" value="65" disabled></div><div><label for="wallpaper-blur">Размытие <output id="wallpaper-blur-value">0 px</output></label><input id="wallpaper-blur" type="range" min="0" max="30" value="0" disabled></div></div>
-                <button id="save-wallpaper" class="primary-button" type="button" disabled>Сохранить эффекты</button><p id="wallpaper-message" class="settings-note" role="status" aria-live="polite">Загружаем настройки...</p>
-            </section>
-            
-        <section class="accent-settings" aria-labelledby="desktop-settings-heading"><p class="eyebrow">ОКНО ПРИЛОЖЕНИЯ</p><h3 id="desktop-settings-heading">Трей и миниплеер</h3><label class="effect-toggle"><input id="close-to-tray" type="checkbox" disabled><span>Закрывать окно в системный трей</span></label><p id="desktop-settings-message" class="settings-note" role="status"></p><p id="provider-dependencies" class="settings-note" role="status"></p><button id="capture-diagnostics" type="button" class="secondary-button">Сохранить снимок диагностики</button><button id="quit-application" type="button" class="secondary-button">Выйти из приложения</button></section>
-        <section class="accent-settings" aria-labelledby="sidebar-settings-heading"><p class="eyebrow">НАВИГАЦИЯ</p><h3 id="sidebar-settings-heading">Боковая панель</h3><label class="effect-toggle" hidden><input id="sidebar-auto-collapse" type="checkbox" checked disabled><span>Сворачивать после 60 секунд неиспользования</span></label><p class="settings-note">На экране «Сейчас играет» боковая панель полностью скрыта. Кнопка возврата справа вверху возвращает список песен и прежнюю ширину панели.</p><p id="sidebar-settings-message" class="settings-note" role="status"></p></section>
-        <section class="accent-settings" aria-labelledby="language-heading"><p class="eyebrow">ЯЗЫК</p><h3 id="language-heading">Язык интерфейса</h3><label for="language-choice">Язык</label><select id="language-choice" disabled><option value="ru">Русский</option><option value="en">English</option></select><p id="language-message" class="settings-note" role="status"></p></section>
-<section class="accent-settings" aria-labelledby="developer-heading"><p class="eyebrow">ДЛЯ РАЗРАБОТЧИКА</p><h3 id="developer-heading">Режим разработчика</h3><label class="effect-toggle"><input id="developer-mode" type="checkbox" disabled><span>Показывать технические сообщения и диагностику</span></label><p class="settings-note">Обычные ошибки остаются видимыми. Музыкальные файлы не изменяются.</p><p id="developer-message" class="settings-note" role="status"></p></section>
+                <p id="wallpaper-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+    </div>
+    <div class="settings-panel" id="settings-technical" role="tabpanel" aria-labelledby="settings-tab-technical" hidden>
+        <section class="settings-group" aria-labelledby="advanced-heading">
+            <h2 id="advanced-heading">Расширенные настройки</h2>
+            <div class="settings-row">
+                <label for="tester-mode">Режим тестировщика</label>
+                <input class="settings-switch" id="tester-mode" type="checkbox" role="switch" disabled>
+                <p class="settings-note">Открывает вкладку «Эксперименты» с тестовыми эффектами.</p>
+                <p id="tester-mode-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-row">
+                <label for="developer-mode">Показывать технические сообщения и диагностику</label>
+                <input class="settings-switch" id="developer-mode" type="checkbox" role="switch" disabled>
+                <p id="developer-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+        <section class="settings-group" aria-labelledby="audio-output-heading">
+            <h2 id="audio-output-heading">Устройство вывода</h2>
+            <div class="settings-row">
+                <label for="audio-output">Куда выводить звук</label>
+                <select id="audio-output" data-select-layout="audio-output" disabled><option value="">По умолчанию в Windows</option></select>
+                <p id="audio-output-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-row settings-row-action"><button id="refresh-audio-output" class="secondary-button" type="button">Обновить список</button></div>
+        </section>
+        <section class="settings-group" id="settings-network"></section>
+        <section class="settings-group" id="settings-diagnostics" aria-labelledby="settings-diagnostics-heading">
+            <h2 id="settings-diagnostics-heading">Диагностика</h2>
+            <p id="provider-dependencies" class="settings-note" role="status"></p>
+            <button id="capture-diagnostics" type="button" class="secondary-button">Сохранить снимок диагностики</button>
+            <p id="diagnostics-message" class="settings-note" role="status"></p>
+        </section>
+    </div>
+    <div class="settings-panel" id="settings-tester" role="tabpanel" aria-labelledby="settings-tab-tester" hidden>
+        <section class="settings-group" aria-labelledby="liquid-experiment-heading">
+            <h2 id="liquid-experiment-heading">Текучие формы</h2>
+            <div class="settings-row">
+                <label for="tester-cover-liquid">Текучие формы на экране «Сейчас играет»</label>
+                <input class="settings-switch" id="tester-cover-liquid" type="checkbox" role="switch" disabled>
+                <p id="liquid-cover-message" class="settings-note" role="status"></p>
+            </div>
+            <div class="settings-row">
+                <label for="tester-mini-liquid">Текучие формы в миниплеере</label>
+                <input class="settings-switch" id="tester-mini-liquid" type="checkbox" role="switch" disabled>
+                <p id="tester-mini-message" class="settings-note" role="status"></p>
+            </div>
+        </section>
+    </div>
 </section>
     </main>
 
     <!-- Плеер скрыт без выбранной песни. Пауза оставляет панель, Стоп снимает её. -->
 <footer id="player-bar" class="player-bar" hidden aria-label="Управление воспроизведением">
-        <div class="now-playing"><button id="player-cover" class="track-art" type="button" title="Открыть экран текущей песни" aria-label="Открыть экран текущей песни">♫</button><div class="now-playing-text"><span data-user-text="true" id="track-name">Выберите песню</span><span data-user-text="true" id="player-artist" class="artist-line">Ваша локальная библиотека</span><span class="player-status"><strong id="player-state">Подключаемся...</strong><span aria-hidden="true"> · </span><span id="queue-position">Очередь не создана</span></span></div></div>
+        <div class="now-playing"><button id="player-cover" class="track-art" type="button" title="Открыть экран текущей песни" aria-label="Открыть экран текущей песни">♫</button><div class="now-playing-text"><span data-user-text="true" id="track-name">Выберите песню</span><span data-user-text="true" id="player-artist" class="artist-line">Ваша локальная библиотека</span><span class="player-status"><strong id="player-state">Подключаемся...</strong><span aria-hidden="true"> · </span><span id="queue-position">Очередь не создана</span></span></div><canvas id="player-spectrum" class="player-spectrum" width="144" height="44" aria-hidden="true" hidden></canvas></div>
         <div class="player-center"><div class="transport-controls"><button type="button" data-action="previous" class="icon-button" title="Предыдущий трек" aria-label="Предыдущий трек">◀│</button><button id="play-toggle-button" type="button" class="play-toggle" title="Воспроизвести" aria-label="Воспроизвести">▶</button><button type="button" data-action="next" class="icon-button" title="Следующий трек" aria-label="Следующий трек">│▶</button></div><div class="timeline"><span id="current-time">00:00</span><label class="sr-only" for="seek-slider">Позиция в треке</label><input id="seek-slider" type="range" min="0" max="0" step="1" value="0" disabled><span id="duration-time">00:00</span></div></div>
         <div class="player-actions"><button id="shuffle-button" class="icon-button" type="button" aria-pressed="false" title="Включить случайный режим" aria-label="Включить случайный режим" disabled>⇄</button><button id="open-mini-player" class="icon-button" title="Миниплеер" aria-label="Миниплеер" type="button">▣</button><button type="button" data-action="stop" class="icon-button" title="Стоп — снять песню и скрыть плеер" aria-label="Стоп — снять песню и скрыть плеер">■</button><button id="equalizer-button" class="icon-button" type="button" title="Эквалайзер" aria-label="Открыть эквалайзер" aria-controls="eq-panel" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 3v18M12 3v18M19 3v18M2 8h6M9 16h6M16 10h6"/></svg></button><button id="queue-button" class="icon-button" type="button" title="Открыть очередь" aria-label="Открыть очередь" aria-expanded="false" aria-controls="queue-panel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h1M3 12h1M3 18h1" stroke-width="3"/></svg></button><div class="volume-control"><label for="volume-slider" title="Громкость плеера"><span aria-hidden="true">♪</span><span id="volume-value">50</span><span class="sr-only"> процентов</span></label><input id="volume-slider" type="range" min="0" max="100" step="1" value="50"><span id="actual-volume" class="sr-only">—</span></div></div>
         <p id="playback-error" class="playback-error" role="alert" hidden></p>
@@ -212,7 +444,17 @@
 </section>
 <div id="queue-backdrop" class="queue-backdrop" hidden></div>
 <!-- Правый диалог просмотра реальной очереди. -->
-<aside id="queue-panel" class="queue-panel" role="dialog" aria-modal="true" aria-labelledby="queue-heading" hidden><div class="section-heading"><div><p class="eyebrow">ТЕКУЩИЙ ПРОХОД</p><h2 id="queue-heading">Очередь</h2></div><button id="close-queue-button" class="icon-button" type="button" title="Закрыть очередь" aria-label="Закрыть очередь">×</button></div><p id="queue-message" class="section-message">Загружаем...</p><ol id="queue-list"></ol></aside>
+<aside id="queue-panel" class="queue-panel" role="dialog" aria-modal="true" aria-labelledby="queue-heading" hidden>
+    <div class="section-heading">
+        <h2 id="queue-heading">Очередь</h2>
+        <button id="close-queue-button" class="icon-button" type="button" title="Закрыть очередь" aria-label="Закрыть очередь">×</button>
+    </div>
+    <div class="queue-summary">
+        <p id="queue-message" class="section-message">Загружаем...</p>
+        <button id="queue-jump-button" type="button" aria-controls="queue-list" disabled>К текущему треку</button>
+    </div>
+    <ol id="queue-list" tabindex="-1" aria-label="Треки в очереди"></ol>
+</aside>
 <!-- Общее всплывающее меню ⋯. Кнопки текущей песни подставляет JavaScript. -->
 <div id="track-menu" class="track-menu" role="menu" aria-label="Действия с песней" hidden></div>
 <!-- Просмотр сведений о файле без изменения тегов. -->
@@ -240,6 +482,8 @@
 <script src="/static/js/app.js" defer></script>
 <!-- Эффекты изолированы от библиотечного кода: анимации, цвета, FFT-рисование. -->
 <script src="/static/js/cover-effects.js" defer></script>
+<script src="/static/js/liquid-background.js" defer></script>
+<script src="/static/js/cover-visualizer.js" defer></script>
 <script src="/static/js/visuals.js" defer></script>
 <!-- Интерполяция времени между настоящими снимками VLC. -->
 <script src="/static/js/motion.js" defer></script>
@@ -254,9 +498,12 @@
 <script src="/static/js/selects.js" defer></script>
 <script src="/static/js/settings15.js" defer></script>
 <script src="/static/js/media-background.js" defer></script>
+<script src="/static/vendor/anime-4.2.2.umd.min.js" defer></script>
 <script src="/static/js/icons.js" defer></script>
 <script src="/static/js/settings16.js" defer></script>
 <script src="/static/js/experience22.js" defer></script>
+<script src="/static/js/discord-settings.js" defer></script>
+<script src="/static/js/facelift.js" defer></script>
 <script src="/static/js/network18.js" defer></script>
 <script src="/static/js/responsiveness.js" defer></script>
 </body>

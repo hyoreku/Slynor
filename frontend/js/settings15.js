@@ -1,25 +1,183 @@
 (() => {
- const screen=document.getElementById('screen-settings'),tabs=document.createElement('div');tabs.className='settings-tabs';tabs.role='tablist';tabs.setAttribute('aria-label','Раздел настроек');screen.prepend(tabs);
- const names={general:'Общие',appearance:'Оформление',technical:'Технические'};
- const general=new Set(['desktop-settings-heading','sidebar-settings-heading','language-heading','playing-settings-heading']);
- let active='general';const groups=new Map();
- screen.querySelectorAll(':scope > .accent-settings').forEach(s=>{const id=s.getAttribute('aria-labelledby');groups.set(s,id==='developer-heading'?'technical':general.has(id)?'general':'appearance');});
- const mini=document.createElement('section');mini.className='accent-settings';mini.innerHTML='<h3>Фон миниплеера</h3><label for="mini-background-mode">Режим</label><select id="mini-background-mode"><option value="classic">По теме приложения</option><option value="wallpaper">Обои приложения</option><option value="colors">Цвета обложки</option></select><p id="mini-background-message" role="status"></p>';screen.append(mini);groups.set(mini,'appearance');
- const audio=document.createElement('section');audio.className='accent-settings';audio.innerHTML='<h3>Устройство вывода</h3><label for="audio-output">Куда выводить звук</label><select id="audio-output"><option value="">По умолчанию в Windows</option></select><button id="refresh-audio-output" class="secondary-button" type="button">Обновить список</button><p id="audio-output-message" role="status"></p>';screen.append(audio);groups.set(audio,'technical');
- for(const id of ['provider-dependencies','capture-diagnostics']){const node=document.getElementById(id);if(node)audio.append(node);}
- const intro=screen.querySelector('.settings-intro');if(intro)intro.hidden=true;
- screen.querySelector(':scope > .section-heading')?.setAttribute('hidden','');
- const buttons={};function select(key){active=key;for(const [s,g] of groups)s.hidden=g!==key;for(const [g,b] of Object.entries(buttons)){b.setAttribute('aria-selected',String(key===g));b.tabIndex=key===g?0:-1;}}
- for(const [key,label] of Object.entries(names)){const b=document.createElement('button');b.type='button';b.role='tab';b.textContent=label;b.addEventListener('click',()=>select(key));tabs.append(b);buttons[key]=b;}
- tabs.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const keys=Object.keys(names),i=keys.indexOf(active);const k=e.key==='Home'?keys[0]:e.key==='End'?keys.at(-1):keys[(i+(e.key==='ArrowRight'?1:2))%3];select(k);buttons[k].focus();});select(active);
- const mode=document.getElementById('mini-background-mode');window.miniBackgroundMode='classic';
- const load=e=>{window.miniBackgroundMode=e.detail.mini_background||'classic';mode.value=window.miniBackgroundMode;publish();};window.addEventListener('visual-settings-loaded',load);
- mode.addEventListener('change',async()=>{const previous=window.miniBackgroundMode;try{await window.pywebview.api.save_mini_background(mode.value);window.miniBackgroundMode=mode.value;publish();document.getElementById('mini-background-message').textContent='Режим сохранён.';}catch(e){mode.value=previous;document.getElementById('mini-background-message').textContent=e.message;}});
- let signature='',timer=null;
- function publish(){clearTimeout(timer);timer=setTimeout(()=>{const data={theme:document.documentElement.dataset.theme||'dark',accent:typeof currentAccent==='string'?currentAccent:'#c9c9d1',wallpaper:typeof wallpaperFile==='string'?wallpaperFile:null,dim:Number(document.getElementById('wallpaper-dim').value),blur:Number(document.getElementById('wallpaper-blur').value),mini_background:window.miniBackgroundMode};const value=JSON.stringify(data);if(value===signature)return;signature=value;void fetch('/api/appearance',{method:'POST',headers:{'Content-Type':'application/json'},body:value,signal:AbortSignal.timeout(3000)}).catch(()=>{signature='';});},120);}
- new MutationObserver(publish).observe(document.documentElement,{attributes:true,attributeFilter:['style','data-theme','class']});for(const id of ['wallpaper-dim','wallpaper-blur'])document.getElementById(id).addEventListener('input',publish);window.publishAppearance=publish;
- if(window.visualSettingsSnapshot)load({detail:window.visualSettingsSnapshot});else publish();
- const outputs=document.getElementById('audio-output'),msg=document.getElementById('audio-output-message');
- async function refresh(){try{const r=await fetch('/api/player/output-devices',{signal:AbortSignal.timeout(4000)});if(!r.ok)throw new Error('Не удалось прочитать аудиовыходы VLC.');const data=await r.json();outputs.replaceChildren();for(const d of data.devices||[])outputs.add(new Option(d.name,d.id));outputs.value=data.selected||'';msg.textContent=data.available?'Выбор применяется к плееру, не меняет системный выход Windows.':'VLC не вернул отдельные устройства. Используется системный выход.';}catch(e){msg.textContent=e.message;}}
- document.getElementById('refresh-audio-output').addEventListener('click',refresh);outputs.addEventListener('change',async()=>{outputs.disabled=true;try{const r=await fetch('/api/player/output-device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:outputs.value}),signal:AbortSignal.timeout(5000)});const data=await r.json();if(!r.ok)throw new Error(data.detail||'VLC отказал');msg.textContent=data.message;await window.pywebview.api.save_audio_output(outputs.value);}catch(e){msg.textContent=e.message;}finally{outputs.disabled=false;}});void refresh();
+    const tablist = document.querySelector('#screen-settings .settings-tabs');
+    const tabs = [...tablist.querySelectorAll('[role=tab]')];
+    const technical = document.getElementById('settings-tab-technical');
+    const experiments = document.getElementById('settings-tab-tester');
+    let activeTab = tabs[0];
+
+    function selectTab(tab) {
+        activeTab = tab;
+        for (const item of tabs) {
+            const selected = item === tab;
+            item.setAttribute('aria-selected', String(selected));
+            item.tabIndex = selected ? 0 : -1;
+            document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
+        }
+    }
+
+    for (const tab of tabs) tab.addEventListener('click', () => selectTab(tab));
+    tablist.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const visible = tabs.filter(tab => !tab.hidden);
+        const index = visible.indexOf(activeTab);
+        let next;
+        if (event.key === 'Home') next = visible[0];
+        else if (event.key === 'End') next = visible.at(-1);
+        else next = visible[(index + visible.length + (event.key === 'ArrowRight' ? 1 : -1)) % visible.length];
+        selectTab(next);
+        next.focus();
+    });
+
+    const tester = document.getElementById('tester-mode');
+    const testerMessage = document.getElementById('tester-mode-message');
+    const miniMode = document.getElementById('mini-background-mode');
+    const miniMessage = document.getElementById('mini-background-message');
+    const miniLiquid = document.getElementById('tester-mini-liquid');
+    const miniLiquidMessage = document.getElementById('tester-mini-message');
+    const miniExperiment = document.getElementById('mini-experiment-active');
+    const testerWriter = createSettingsWriter(enabled => window.pywebview.api.save_tester_mode(enabled), applyTester);
+    const miniWriter = createSettingsWriter(value => window.pywebview.api.save_mini_background(value), applyMiniMode);
+    const liquidWriter = createSettingsWriter(enabled => window.pywebview.api.save_mini_liquid(enabled), applyMiniLiquid);
+    window.miniBackgroundMode = 'classic';
+
+    function applyTester(enabled) {
+        tester.checked = enabled;
+        window.testerModeEnabled = enabled;
+        experiments.hidden = !enabled;
+        miniLiquid.disabled = !enabled;
+        if (!enabled && activeTab === experiments) {
+            selectTab(technical);
+            tester.focus();
+        }
+        updateMiniMode();
+        window.dispatchEvent(new Event('tester-mode-changed'));
+    }
+
+    function applyMiniMode(value) {
+        miniMode.value = value;
+        updateMiniMode();
+    }
+
+    function applyMiniLiquid(enabled) {
+        miniLiquid.checked = enabled;
+        updateMiniMode();
+    }
+
+    function updateMiniMode() {
+        const experimental = tester.checked && miniLiquid.checked;
+        miniExperiment.hidden = !experimental;
+        miniMode.disabled = !settingsReady || experimental;
+        window.miniBackgroundMode = experimental ? 'liquid' : miniMode.value;
+        publish();
+    }
+
+    function load(data) {
+        const enabled = data.tester_mode ?? false;
+        const mode = data.mini_background === 'liquid' ? 'colors' : data.mini_background ?? 'classic';
+        const liquid = data.mini_liquid ?? (data.mini_background === 'liquid');
+        testerWriter.setSaved(enabled);
+        miniWriter.setSaved(mode);
+        liquidWriter.setSaved(liquid);
+        tester.disabled = false;
+        miniMode.value = mode;
+        miniLiquid.checked = liquid;
+        applyTester(enabled);
+    }
+
+    tester.addEventListener('change', () => {
+        applyTester(tester.checked);
+        testerWriter.save(tester.checked, testerMessage);
+    });
+    miniMode.addEventListener('change', () => {
+        updateMiniMode();
+        miniWriter.save(miniMode.value, miniMessage);
+    });
+    miniLiquid.addEventListener('change', () => {
+        updateMiniMode();
+        liquidWriter.save(miniLiquid.checked, miniLiquidMessage);
+    });
+
+    const dim = document.getElementById('wallpaper-dim');
+    const blur = document.getElementById('wallpaper-blur');
+    let signature = '', timer = null, posting = false;
+
+    function appearance() {
+        return JSON.stringify({
+            theme: document.documentElement.dataset.theme || 'dark',
+            accent: currentAccent,
+            wallpaper: wallpaperFile,
+            dim: Number(dim.value),
+            blur: Number(blur.value),
+            mini_background: window.miniBackgroundMode,
+            visualizer_mode: document.getElementById('visualizer-mode').value,
+        });
+    }
+    async function sendAppearance() {
+        const value = appearance();
+        if (posting || value === signature) return;
+        posting = true;
+        try {
+            const response = await fetch('/api/appearance', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: value, signal: AbortSignal.timeout(3000),
+            });
+            if (response.ok) signature = value;
+        } catch {
+            // The next appearance change can retry a temporary connection failure.
+        } finally {
+            posting = false;
+            if (value !== appearance()) publish();
+        }
+    }
+    function publish() {
+        clearTimeout(timer);
+        timer = setTimeout(sendAppearance, 120);
+    }
+    for (const event of ['theme-changed', 'accent-changed']) document.addEventListener(event, publish);
+    for (const event of ['wallpaper-media', 'wallpaper-rendered', 'wallpaper-effects-changed']) window.addEventListener(event, publish);
+    window.publishAppearance = publish;
+    window.addEventListener('visual-settings-loaded', event => load(event.detail));
+    if (window.visualSettingsSnapshot) load(window.visualSettingsSnapshot);
+    else publish();
+
+    const output = document.getElementById('audio-output');
+    const outputMessage = document.getElementById('audio-output-message');
+    let devicesAvailable = false;
+    window.addEventListener('visual-settings-loaded', () => { output.disabled = !devicesAvailable; });
+    async function refreshOutputs() {
+        try {
+            const response = await fetch('/api/player/output-devices', { signal: AbortSignal.timeout(4000) });
+            if (!response.ok) throw new Error('Не удалось прочитать аудиовыходы VLC.');
+            const data = await response.json();
+            output.replaceChildren(...(data.devices || []).map(device => new Option(device.name, device.id)));
+            output.value = data.selected || '';
+            devicesAvailable = Boolean(data.available);
+            output.disabled = !settingsReady || !devicesAvailable;
+            outputMessage.textContent = data.available ? '' : 'VLC не вернул отдельные устройства. Используется системный выход.';
+        } catch (error) {
+            outputMessage.textContent = error.message;
+        }
+    }
+    document.getElementById('refresh-audio-output').addEventListener('click', refreshOutputs);
+    output.addEventListener('change', async () => {
+        output.disabled = true;
+        try {
+            const response = await fetch('/api/player/output-device', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device: output.value }), signal: AbortSignal.timeout(5000),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Не удалось применить аудиовыход.');
+            await window.pywebview.api.save_audio_output(data.selected);
+            outputMessage.textContent = '';
+        } catch (error) {
+            const warning = error.message;
+            await refreshOutputs();
+            outputMessage.textContent = warning;
+        } finally {
+            output.disabled = !settingsReady || !devicesAvailable;
+        }
+    });
+    void refreshOutputs();
 })();

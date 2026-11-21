@@ -27,6 +27,14 @@ Slynor распространяется под GNU General Public License вер
 | [socksio](https://github.com/sethmlarson/socksio) | 1.0.0 | MIT |
 | [typing-extensions](https://github.com/python/typing_extensions) | 4.16.0 | PSF-2.0 |
 
+## Интерфейс
+
+| Компонент | Версия | Лицензия |
+|---|---|---|
+| [Anime.js](https://animejs.com/) | 4.2.2 | [MIT](frontend/vendor/anime-LICENSE.md) |
+
+Локальный UMD-файл взят из [релиза npm](https://registry.npmjs.org/animejs/-/animejs-4.2.2.tgz). Slynor использует его для анимации значков кнопок.
+
 ## Инструменты поиска и загрузки (изолированное окружение .providers)
 
 | Компонент | Версия | Лицензия |

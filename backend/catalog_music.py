@@ -6,6 +6,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -19,17 +20,13 @@ import httpx
 from backend.internet_music import InternetLibrary,ProviderError,MAX_AUDIO
 from backend.provider_worker import validate_url, validate_track_url
 from backend.download_metadata import publish_download, write_missing_tags, remember_cached_metadata
+from backend.discord_artwork import public_cover_url, youtube_thumbnail
 
-COVER_HOSTS=('i.scdn.co','mosaic.scdn.co','i.ytimg.com','img.youtube.com')
 # googlevideo URLs stay valid for hours, so a resolved stream is reused instead
 # of paying yt-dlp extraction again on every play within the same session.
 STREAM_CACHE_SECONDS=1800
 def cover_url(url):
- try:
-  u=urlparse(url)
-  if u.scheme=='https' and (u.hostname in COVER_HOSTS or (u.hostname or '').endswith('.sndcdn.com')) and not u.username and not u.password and u.port in (None,443):return url
- except (ValueError,TypeError):pass
- return None
+ return url if public_cover_url(url) else None
 
 class CatalogueLibrary(InternetLibrary):
  def __init__(self,*args,**kwargs):
@@ -188,6 +185,7 @@ class CatalogueLibrary(InternetLibrary):
   if not ref.startswith('online:catalog:'):return super().start_download(ref,confirmed,audio_format)
   with self.lock:track=deepcopy(self.catalogue.get(ref))
   if not track:raise ProviderError('Запись устарела. Повторите поиск.')
+  track['public_cover_url']=public_cover_url(self.cover_origin(track.get('cover_url')))
   cache_ref=ref if audio_format=='original' else ref+'|mp3'
   cached=self.downloaded.get(cache_ref)
   if not cached and audio_format=='mp3':
@@ -235,6 +233,41 @@ class CatalogueLibrary(InternetLibrary):
    self.cover_sources[key]=url
    while len(self.cover_sources)>1000:self.cover_sources.pop(next(iter(self.cover_sources)))
   return '/api/assets/online-covers/'+key+'.jpg'
+
+ def cover_origin(self, url):
+  """Return the upstream URL behind an online artwork reference."""
+  if not isinstance(url, str):return None
+  match = re.fullmatch(r"/api/assets/online-covers/([0-9a-f]{64})\.jpg", url)
+  if not match:return url
+  with self.lock:
+   key = match[1]
+   if self.cover_failures.get(key,0) > monotonic():return None
+   return getattr(self,"cover_sources",{}).get(key)
+
+ def track_cover(self, track, artwork=None, duration=None):
+  """Keep local and online art on the existing image proxy. Search only for active tracks."""
+  link=track.get('cover_url')
+  if isinstance(link,str):
+   if link.startswith('/api/assets/track-covers/') or public_cover_url(self.cover_origin(link)):
+    return track
+  known=public_cover_url(track.get('public_cover_url'))
+  if not known and artwork is None and track.get('source')=='youtube':
+   known=youtube_thumbnail(track.get('permalink_url'))
+  if known:
+   proxy=self.cached_cover_url(known)
+   if self.cover_origin(proxy):return {**track,'cover_url':proxy}
+  if artwork is not None:
+   tags=(track.get('title'),track.get('artist'),track.get('album'),duration or track.get('duration_ms'))
+   page=track.get('permalink_url')
+   found=artwork.lookup(*tags,source=track.get('source'),permalink_url=page,isrc=track.get('isrc'))
+   if found:
+    proxy=self.cached_cover_url(found)
+    if self.cover_origin(proxy):return {**track,'cover_url':proxy}
+    if page:
+     found=artwork.lookup(*tags,isrc=track.get('isrc'))
+     proxy=self.cached_cover_url(found)
+     if self.cover_origin(proxy):return {**track,'cover_url':proxy}
+  return {**track,'cover_url':None} if link else track
 
  def _fetch_cover_file(self,key):
   import re,io,ipaddress,socket
@@ -293,9 +326,9 @@ class CatalogueLibrary(InternetLibrary):
     if not update:continue
     url=self.cached_cover_url(update.get('cover_url'))
     if url:
-     track['cover_url']=url;track['cover_source']='spotify';track['metadata_source']='spotify';track['metadata_url']=update.get('metadata_url')
+     track['cover_url']=url;track['cover_source']='spotify';track['metadata_source']='spotify';track['metadata_url']=update.get('metadata_url');track['public_cover_url']=public_cover_url(update.get('cover_url'))
      with self.lock:
-      if track['path'] in self.public:self.public[track['path']].update({k:track[k] for k in ('cover_url','cover_source','metadata_source','metadata_url')})
+      if track['path'] in self.public:self.public[track['path']].update({k:track[k] for k in ('cover_url','cover_source','metadata_source','metadata_url','public_cover_url')})
   except Exception:pass # Absence of a verified match must not become a fabricated cover.
   return tracks
 

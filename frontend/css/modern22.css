@@ -9,15 +9,11 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:2px solid var
 .secondary-button { border:1px solid var(--border-subtle); }
 .primary-button { box-shadow:0 3px 12px #0002; }
 .accent-settings { border-radius:16px; padding:24px; }
-#screen-settings>.accent-settings { max-width:1120px; }
 .accent-settings>h3 { margin-bottom:16px; }
 .settings-note { line-height:1.65; }
 :root[data-theme=transparent] .accent-settings,:root[data-theme=transparent] .playlist-summary { background:#211f2bbf; }
 :root[data-theme=transparent] .library-item { background-color:#211f2b80; }
 :root[data-theme=transparent] .library-item:hover { background-color:#45404cb3; }
-.settings-tabs { gap:8px; }
-.settings-tabs button { border-radius:12px; min-height:44px; padding:10px 20px; }
-.settings-tabs [aria-selected=true] { box-shadow:inset 0 0 0 1px var(--accent-border); }
 .track-columns { font-size:13px; border:0; }
 .library-item { border-radius:12px; }
 .library-item .library-name { font-weight:600; }
@@ -31,20 +27,20 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:2px solid var
 .select-popup [role=option] { min-height:40px; }
 .styled-select>button::after { content:''; width:7px; height:7px; border-right:1.8px solid currentColor; border-bottom:1.8px solid currentColor; transform:rotate(45deg) translateY(-2px); margin-left:6px; }
 /* Branding: the user's silhouette, not a font letter. */
-.brand-mark { flex:0 0 38px; width:38px; height:38px; border-radius:10px; transition:transform .24s var(--ease-out),filter .24s ease; }
-.brand:hover .brand-mark,.brand:focus-visible .brand-mark { transform:scale(1.1); filter:drop-shadow(0 2px 8px #0003); }
+.brand-mark { flex:0 0 38px; width:38px; height:38px; }
 .app-mark { position:relative; display:block; width:100%; height:100%; overflow:hidden; background:#fff; mask:url('/static/assets/app-icons/mask.png') center/contain no-repeat; -webkit-mask:url('/static/assets/app-icons/mask.png') center/contain no-repeat; }
 .app-mark i { display:none; }
 .app-mark[data-variant='2'] { background:var(--accent); }
-.app-mark[data-variant='3'],.app-mark[data-variant='5'] { background:#6c57bf; }
+.app-mark[data-variant='3'] { background:#6c57bf; }
+.app-mark[data-variant='5'] { background:rgb(var(--mark-song-1, 115, 118, 131)); }
 .app-mark[data-variant='3'] i,.app-mark[data-variant='5'] i { display:block; position:absolute; width:120%; height:130%; border-radius:45%; filter:blur(6px); opacity:.92; animation:mark-lava 4.6s ease-in-out infinite alternate; animation-play-state:paused; }
 .app-mark[data-variant='3'] i:nth-child(1) { left:-50%; top:-40%; background:#ff4f8e; }
 .app-mark[data-variant='3'] i:nth-child(2) { right:-40%; top:-10%; background:#27d4ef; animation-delay:-2s; animation-duration:5.3s; }
 .app-mark[data-variant='3'] i:nth-child(3) { left:10%; bottom:-70%; background:#ffce67; animation-delay:-3s; animation-duration:3.7s; }
-.app-mark[data-variant='5'] i:nth-child(1) { left:-50%; top:-40%; background:rgb(var(--mark-song-1,134,85,235)); }
-.app-mark[data-variant='5'] i:nth-child(2) { right:-40%; top:-10%; background:rgb(var(--mark-song-2,241,131,175)); animation-delay:-2s; }
-.app-mark[data-variant='5'] i:nth-child(3) { left:10%; bottom:-70%; background:rgb(var(--mark-song-3,79,202,187)); animation-delay:-3s; }
-.app-mark[data-variant='4'] { background:var(--accent); mask-image:url('/static/assets/app-icons/pixel-mask.png'); -webkit-mask-image:url('/static/assets/app-icons/pixel-mask.png'); image-rendering:pixelated; }
+.app-mark[data-variant='5'] i:nth-child(1) { left:-50%; top:-40%; background:rgb(var(--mark-song-1, 115, 118, 131)); }
+.app-mark[data-variant='5'] i:nth-child(2) { right:-40%; top:-10%; background:rgb(var(--mark-song-2, 145, 148, 159)); animation-delay:-2s; }
+.app-mark[data-variant='5'] i:nth-child(3) { left:10%; bottom:-70%; background:rgb(var(--mark-song-3, 91, 94, 108)); animation-delay:-3s; }
+.app-mark[data-variant='4'] { background:#a7a4b8; mask-image:url('/static/assets/app-icons/pixel-mask.png'); -webkit-mask-image:url('/static/assets/app-icons/pixel-mask.png'); image-rendering:pixelated; }
 .app-mark[data-variant='6'] { background:linear-gradient(135deg,#a3b6d1 4%,#f8fcff 28%,#677d99 42%,#e4efff 58%,#7489a7 75%,#ecf5ff); }
 .app-mark[data-variant='7'] { background:linear-gradient(135deg,#75ffee,#ac86ff); mask-image:url('/static/assets/app-icons/7.webp'); -webkit-mask-image:url('/static/assets/app-icons/7.webp'); }
 .app-mark[data-variant='8'] { background:radial-gradient(circle at 22% 30%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 75% 66%,#fff 0 1px,transparent 1.5px),linear-gradient(145deg,#1b296d,#8c5bbd 50%,#3edcc1); background-size:14px 17px,23px 21px,100% 100%; }
@@ -56,12 +52,9 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:2px solid var
 .app-icon-options .app-mark { width:38px; height:38px; flex:0 0 38px; transition:transform .22s var(--ease-out); }
 .app-icon-options button:hover .app-mark,.app-icon-options button:focus-visible .app-mark { transform:scale(1.12); }
 .app-mark-label { font-size:14px; font-weight:500; }
-:root[data-theme=light] .app-icon-options button[data-value='1'],:root[data-theme=light] .brand-mark[data-variant='1'] { background:#5a5564; }
+:root[data-theme=light] .app-icon-options button[data-value='1'],:root[data-theme=light] .brand-mark .app-mark[data-variant='1'] { background:#5a5564; }
 :root[data-theme=light] .app-icon-options button[data-value='1'] { color:white; }
 @keyframes mark-lava { 0% { transform:translate(-12%,-8%) rotate(-18deg) scale(1); } 50% { transform:translate(30%,20%) rotate(22deg) scale(1.1,.85); } 100% { transform:translate(10%,-18%) rotate(65deg) scale(.9,1.15); } }
-/* Three real artwork colours, moving in continuous subsecond increments. */
-.atmosphere-blob { width:72%; height:85%; opacity:.55; filter:blur(clamp(30px,5vw,64px)); }
-.atmosphere-colors { opacity:1; }
 .playing-mode .large-track-cover { border-radius:22px; }
 .playing-presentation h2 { font-weight:650; }
 @media(max-width:560px) { .app-icon-options { grid-template-columns:repeat(2,minmax(0,1fr)); } .accent-settings { padding:20px 16px; } h1 { font-size:24px; } }

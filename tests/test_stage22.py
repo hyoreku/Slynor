@@ -27,6 +27,86 @@ class ViewPreferenceTests(unittest.TestCase):
    with self.assertRaises(RuntimeError):a.save_playing_screen(True)
    self.assertEqual(a._settings_path.read_text(),text)
 
+
+class VisualizerPreferenceTests(unittest.TestCase):
+    def setUp(self):
+        root = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(patch.dict(os.environ, {"LOCALAPPDATA": root}))
+        self.api = DesktopApi()
+
+    def test_legacy_file_keeps_the_users_spectrum_choice(self):
+        self.api.save_settings("#123456")
+        for enabled in (False, True):
+            legacy = json.dumps({"version": 1, "accent": "#123456", "spectrum_enabled": enabled})
+            self.api._settings_path.write_text(legacy, encoding="utf-8")
+            settings = self.api.load_settings()
+            self.assertEqual(settings["visualizer_mode"], "bars" if enabled else "off")
+            self.assertEqual(settings["cover_background_style"], "soft")
+            self.assertEqual(self.api._settings_path.read_text(encoding="utf-8"), legacy)
+
+    def test_each_mode_survives_reload_and_preserves_other_preferences(self):
+        self.api.save_theme("light")
+        for mode in ("off", "bars", "wave", "rays"):
+            self.api.save_visual_effects(False, mode != "off", mode)
+            settings = DesktopApi().load_settings()
+            self.assertEqual(settings["visualizer_mode"], mode)
+            self.assertIs(settings["spectrum_enabled"], mode != "off")
+            self.assertIs(settings["cover_background"], False)
+            self.assertEqual(settings["theme"], "light")
+
+    def test_invalid_mode_does_not_modify_saved_preferences(self):
+        self.api.save_visual_effects(True, True, "wave")
+        before = self.api._settings_path.read_bytes()
+        with self.assertRaises(ValueError):
+            self.api.save_visual_effects(False, False, "unknown")
+        self.assertEqual(self.api._settings_path.read_bytes(), before)
+
+    def test_cover_style_and_mini_mode_are_independent(self):
+        from backend.appearance import Appearance
+
+        self.api.save_visual_effects(True, True, "rays", "liquid")
+        self.api.save_mini_background("colors")
+        self.api.save_visual_effects(False, False, "off")
+        settings = DesktopApi().load_settings()
+        self.assertEqual(settings["cover_background_style"], "liquid")
+        self.assertEqual(settings["mini_background"], "colors")
+        self.api.save_mini_background("liquid")
+        settings = DesktopApi().load_settings()
+        self.assertIs(settings["cover_background"], False)
+        self.assertEqual(Appearance(mini_background=settings["mini_background"]).mini_background, "liquid")
+
+    def test_invalid_background_style_does_not_modify_saved_preferences(self):
+        self.api.save_visual_effects(True, True, "wave", "liquid")
+        before = self.api._settings_path.read_bytes()
+        with self.assertRaises(ValueError):
+            self.api.save_visual_effects(False, False, "off", "unknown")
+        self.assertEqual(self.api._settings_path.read_bytes(), before)
+
+    def test_tester_mode_is_opt_in_and_preserves_the_legacy_effects(self):
+        self.api.save_settings("#123456")
+        legacy = '{"version": 1, "accent": "#123456", "mini_background": "liquid", "cover_background_style": "liquid"}'
+        self.api._settings_path.write_text(legacy, encoding="utf-8")
+        settings = self.api.load_settings()
+        self.assertIs(settings["tester_mode"], False)
+        self.assertIs(settings["mini_liquid"], True)
+        self.assertEqual(settings["cover_background_style"], "liquid")
+        self.assertEqual(self.api._settings_path.read_text(encoding="utf-8"), legacy)
+
+    def test_tester_mode_and_mini_override_save_independently(self):
+        self.api.save_mini_background("wallpaper")
+        self.api.save_mini_liquid(True)
+        self.api.save_tester_mode(True)
+        self.api.save_tester_mode(False)
+        settings = DesktopApi().load_settings()
+        self.assertEqual(settings["mini_background"], "wallpaper")
+        self.assertIs(settings["mini_liquid"], True)
+        self.assertIs(settings["tester_mode"], False)
+        before = self.api._settings_path.read_bytes()
+        for save in (self.api.save_tester_mode, self.api.save_mini_liquid):
+            with self.assertRaises(ValueError):
+                save("false")
+        self.assertEqual(self.api._settings_path.read_bytes(), before)
+
 class StartupTests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.file=Path(self.tmp.name)/'audio.wav';self.file.touch();self.e=AudioEngine()

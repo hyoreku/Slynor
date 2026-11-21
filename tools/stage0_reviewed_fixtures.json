@@ -19,5 +19,8 @@
   ],
   "tests/test_source_experiment.py": [
     "d47779f890e598797d34958b7373d6d46ceceaf8096d62c7193d90a0242471de"
+  ],
+  "tests/test_discord_presence.py": [
+    "df469c7bcc2255952c0012ad971083ec140adbb7d0f5da78ccc93a9d5742a844"
   ]
 }

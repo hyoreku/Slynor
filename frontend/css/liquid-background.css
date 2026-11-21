@@ -1,0 +1,90 @@
+.liquid-backdrop {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 48% 38%, var(--liquid-ambient, #72778836), transparent 78%);
+    contain: paint;
+}
+.liquid-backdrop[hidden] { display: none; }
+
+.liquid-shape {
+    position: absolute;
+    width: var(--liquid-size, 36%);
+    height: auto;
+    left: var(--liquid-x);
+    top: var(--liquid-y);
+    translate: -50% -50%;
+    opacity: var(--liquid-opacity, .84);
+    animation: slynor-liquid-drift var(--liquid-period, 16s) ease-in-out var(--liquid-delay) infinite alternate paused;
+}
+.liquid-backdrop.is-moving .liquid-shape { animation-play-state: running; }
+.liquid-shape:nth-child(1) {
+    --liquid-x: 10%; --liquid-y: 13%; --liquid-size: 42%; --liquid-tilt: -14deg;
+    --liquid-shift: 20%; --liquid-rise: 19%; --liquid-delay: -2s;
+}
+.liquid-shape:nth-child(2) {
+    --liquid-x: 42%; --liquid-y: 5%; --liquid-size: 33%; --liquid-tilt: 37deg;
+    --liquid-shift: -22%; --liquid-rise: 21%; --liquid-period: 18s; --liquid-delay: -6s;
+}
+.liquid-shape:nth-child(3) {
+    --liquid-x: 77%; --liquid-y: 9%; --liquid-size: 45%; --liquid-tilt: 18deg;
+    --liquid-shift: -19%; --liquid-rise: 22%; --liquid-period: 14s; --liquid-delay: -7s;
+}
+.liquid-shape:nth-child(4) {
+    --liquid-x: 93%; --liquid-y: 35%; --liquid-size: 41%; --liquid-tilt: -38deg;
+    --liquid-shift: -18%; --liquid-rise: -21%; --liquid-period: 20s; --liquid-delay: -4s;
+}
+.liquid-shape:nth-child(5) {
+    --liquid-x: 64%; --liquid-y: 35%; --liquid-size: 27%; --liquid-tilt: 21deg;
+    --liquid-shift: 24%; --liquid-rise: 8%; --liquid-opacity: .64; --liquid-delay: -9s;
+}
+.liquid-shape:nth-child(6) {
+    --liquid-x: 29%; --liquid-y: 35%; --liquid-size: 37%; --liquid-tilt: -42deg;
+    --liquid-shift: -25%; --liquid-rise: 9%; --liquid-period: 22s; --liquid-delay: -11s;
+}
+.liquid-shape:nth-child(7) {
+    --liquid-x: 2%; --liquid-y: 57%; --liquid-size: 37%; --liquid-tilt: 4deg;
+    --liquid-shift: 22%; --liquid-rise: 15%; --liquid-delay: -5s;
+}
+.liquid-shape:nth-child(8) {
+    --liquid-x: 18%; --liquid-y: 81%; --liquid-size: 45%; --liquid-tilt: 31deg;
+    --liquid-shift: 19%; --liquid-rise: -22%; --liquid-period: 17s; --liquid-delay: -3s;
+}
+.liquid-shape:nth-child(9) {
+    --liquid-x: 47%; --liquid-y: 83%; --liquid-size: 34%; --liquid-tilt: 8deg;
+    --liquid-shift: -18%; --liquid-rise: 15%; --liquid-opacity: .7; --liquid-delay: -10s;
+}
+.liquid-shape:nth-child(10) {
+    --liquid-x: 77%; --liquid-y: 75%; --liquid-size: 49%; --liquid-tilt: -29deg;
+    --liquid-shift: -15%; --liquid-rise: 12%; --liquid-period: 23s; --liquid-delay: -5s;
+}
+.liquid-shape:nth-child(11) {
+    --liquid-x: 96%; --liquid-y: 92%; --liquid-size: 32%; --liquid-tilt: -12deg;
+    --liquid-shift: -26%; --liquid-rise: -22%; --liquid-delay: -8s;
+}
+.liquid-shape:nth-child(12) {
+    --liquid-x: 69%; --liquid-y: 59%; --liquid-size: 29%; --liquid-tilt: 45deg;
+    --liquid-shift: 29%; --liquid-rise: -14%; --liquid-opacity: .68; --liquid-delay: -12s;
+}
+@keyframes slynor-liquid-drift {
+    0% { transform: rotate(var(--liquid-tilt)) scale(.94, 1.04); }
+    54% { transform: translate(calc(var(--liquid-shift) * .55), calc(var(--liquid-rise) * .42)) rotate(calc(var(--liquid-tilt) + 20deg)) scale(1.15, .88); }
+    100% { transform: translate(var(--liquid-shift), var(--liquid-rise)) rotate(calc(var(--liquid-tilt) + 42deg)) scale(.98, 1.18); }
+}
+
+#cover-atmosphere[data-cover-style="liquid"] > :is(.atmosphere-colors, .atmosphere-image) { visibility: hidden; }
+#cover-atmosphere[data-cover-style="liquid"] > .atmosphere-shade {
+    background: linear-gradient(180deg, #07090e26, #0a0c143d 45%, #080910d4 100%);
+}
+:root[data-theme="light"] #cover-atmosphere[data-cover-style="liquid"] > .atmosphere-shade {
+    background: linear-gradient(180deg, #f7f7f9b0, #f7f7f9c3 47%, #ececf0f2);
+}
+
+#mini-background[data-mode="liquid"]::after { background: linear-gradient(110deg, #17161de0 5%, #17161dd0 49%, #17161d6e); }
+:root[data-theme="light"] #mini-background[data-mode="liquid"]::after { background: linear-gradient(110deg, #f5f4f8e8 5%, #f5f4f8da 49%, #f5f4f889); }
+#mini-background .liquid-shape { max-width: 255px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .liquid-backdrop.is-moving .liquid-shape { animation-play-state: paused; }
+}

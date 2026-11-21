@@ -1,36 +1,104 @@
 // App network routing; proxy passwords are sent only to the local backend, never persisted here.
 (() => {
- const group=document.getElementById('audio-output-message').closest('section');
+ const group=document.getElementById('settings-network');
+ group.setAttribute('aria-labelledby','settings-network-heading');
  const box=document.createElement('div');box.className='network-settings';
- box.innerHTML=`<h3>Сеть и прокси</h3>
+ box.innerHTML=`<h2 id="settings-network-heading">Сеть и прокси</h2>
  <p class="settings-note">Поиск, обложки, потоки и загрузчики используют выбранный маршрут. Адрес и порт возьмите из своей VPN-программы — приложение их не угадывает.</p>
  <form id="network-form"><div class="network-fields">
- <label>Подключение<select id="network-mode"><option value="system">Системные настройки</option><option value="manual">Указать прокси</option><option value="direct">Без явного прокси</option></select></label>
+ <label for="network-mode">Подключение<select id="network-mode"><option value="system">Системные настройки</option><option value="manual">Указать прокси</option><option value="direct">Без явного прокси</option></select></label>
  <label id="network-url-label">Адрес прокси<input id="network-url" type="text" autocomplete="off" spellcheck="false" placeholder="http://адрес:порт или socks5://адрес:порт" maxlength="2048"></label>
- <label>Искать сначала<select id="network-first"><option value="auto">Автоматически: Spotify → YouTube → SoundCloud</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="spotify">Spotify</option></select></label>
+ <label for="network-first">Искать сначала<select id="network-first"><option value="auto">Автоматически: Spotify → YouTube → SoundCloud</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="spotify">Spotify</option></select></label>
  </div><fieldset id="network-auth"><legend>Авторизация прокси — только если требуется</legend>
  <label>Логин<input id="network-user" type="text" autocomplete="off" maxlength="512"></label>
  <label>Пароль<input id="network-password" type="password" autocomplete="off" maxlength="512"></label>
  <label><input id="network-clear-auth" type="checkbox"> Удалить ранее введённые данные авторизации</label>
  <p class="settings-note">Логин и пароль хранятся только до закрытия приложения и не входят в диагностический отчёт.</p></fieldset>
- <div class="network-actions"><button type="submit" class="primary-button" id="network-save">Сохранить сеть</button><button type="button" class="secondary-button" id="network-check">Проверить доступ</button></div></form>
- <p id="network-status" role="status"></p><pre id="network-report" class="network-check-report" hidden></pre>`;
+ <div class="network-actions"><button type="submit" class="primary-button" id="network-save" hidden>Подключить прокси</button><button type="button" class="secondary-button" id="network-check">Проверить доступ</button></div></form>
+ <p id="network-status" class="settings-note" role="status"></p><pre id="network-report" class="network-check-report" hidden></pre>`;
  group.prepend(box);
  const form=box.querySelector('form'),mode=box.querySelector('#network-mode'),url=box.querySelector('#network-url'),first=box.querySelector('#network-first'),user=box.querySelector('#network-user'),password=box.querySelector('#network-password'),clear=box.querySelector('#network-clear-auth'),message=box.querySelector('#network-status'),report=box.querySelector('#network-report'),save=box.querySelector('#network-save'),check=box.querySelector('#network-check');
- let ready=false,busy=false;
- function visibility(){const manual=mode.value==='manual';url.disabled=!manual;box.querySelector('#network-auth').disabled=!manual;box.querySelector('#network-auth').hidden=!manual;}
- function apply(value){mode.value=value.mode;url.value=value.url||'';first.value=value.search_first||'auto';mode.dispatchEvent(new Event('change'));first.dispatchEvent(new Event('change'));visibility();message.textContent=value.error|| (value.mode==='direct'?'Явный прокси отключён. Системный VPN-туннель, если он есть, продолжает работать.':value.proxy_detected?'Прокси: '+value.effective+(value.credentials_present?' · авторизация задана на эту сессию':''):'Статический системный прокси не найден. Для локального прокси выберите «Указать прокси».')+' PAC/WPAD и прокси-расширение браузера автоматически не подхватываются.';}
- function lock(value){busy=value;save.disabled=value||!ready;check.disabled=value||!ready;}
- async function request(method,body){const r=await fetch('/api/network/'+(method==='GET'?'settings':method==='SAVE'?'settings':'check'),{method:method==='GET'?'GET':'POST',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Не удалось применить настройки сети.');return data;}
- mode.addEventListener('change',visibility);visibility();lock(false);
- form.addEventListener('submit',async e=>{e.preventDefault();if(busy||!ready)return;lock(true);try{
-  const body={mode:mode.value,url:url.value.trim(),search_first:first.value,clear_credentials:clear.checked};
-  if(mode.value==='manual'&&(user.value||password.value)){body.username=user.value;body.password=password.value;}
-  window.dispatchEvent(new Event('ownplayer-user-command'));
-  const result=await request('SAVE',body);user.value='';password.value='';clear.checked=false;apply(result);report.hidden=true;message.textContent+=' Настройки сохранены. Текущие задания отменены; повторите поиск и запуск трека.';
- }catch(e){message.textContent=e.message;}finally{lock(false);}});
- check.addEventListener('click',async()=>{if(busy||!ready)return;lock(true);report.hidden=false;report.textContent='Проверяем сохранённый маршрут…';try{const data=await request('CHECK');report.textContent=JSON.stringify(data,null,2);}catch(e){report.textContent=e.message;}finally{lock(false);}});
- void request('GET').then(value=>{ready=true;apply(value);}).catch(e=>{message.textContent=e.message;}).finally(()=>lock(false));
+ let saved, busy = false;
+ const addressRow = document.getElementById('network-url-label');
+ const credentials = document.getElementById('network-auth');
+
+ function syncControls() {
+  const manual = mode.value === 'manual';
+  addressRow.hidden = credentials.hidden = save.hidden = !manual;
+  mode.disabled = first.disabled = check.disabled = busy || !saved;
+  url.disabled = credentials.disabled = save.disabled = busy || !saved || !manual;
+ }
+ function apply(value, keepDraft = false) {
+  saved = value;
+  if (!keepDraft) {
+   mode.value = value.mode;
+   url.value = value.url || '';
+  }
+  first.value = value.search_first || 'auto';
+  message.textContent = value.error || (value.mode === 'manual' && mode.value === 'manual' && value.proxy_detected
+   ? 'Прокси: ' + value.effective
+   : value.mode === 'direct' ? 'Явный прокси отключён.' : '');
+ }
+ async function request(method, body) {
+  const response = await fetch('/api/network/' + (method === 'CHECK' ? 'check' : 'settings'), {
+   method: method === 'GET' ? 'GET' : 'POST', cache: 'no-store', signal: AbortSignal.timeout(20000),
+   ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+  });
+  const data = await response.json();
+  if (!response.ok) throw Error(typeof data.detail === 'string' ? data.detail : 'Не удалось применить настройки сети.');
+  return data;
+ }
+ async function saveNetwork(body, keepDraft = false, keepOnError = keepDraft) {
+  if (busy || !saved) return;
+  busy = true;
+  message.textContent = '';
+  syncControls();
+  try {
+   window.dispatchEvent(new Event('ownplayer-user-command'));
+   apply(await request('SAVE', body), keepDraft);
+   if (!keepDraft) { user.value = ''; password.value = ''; clear.checked = false; }
+   report.hidden = true;
+   message.textContent = 'Настройки сохранены. Текущие задания отменены; повторите поиск и запуск трека.';
+  } catch (error) {
+   apply(saved, keepOnError);
+   message.textContent = error.message;
+  } finally {
+   busy = false;
+   syncControls();
+  }
+ }
+ mode.addEventListener('change', () => {
+  if (!saved || busy) return;
+  syncControls();
+  if (mode.value === 'manual') {
+   message.textContent = 'Укажите адрес и нажмите «Подключить прокси».';
+   return;
+  }
+  void saveNetwork({ mode: mode.value, url: saved.url || '', search_first: first.value });
+ });
+ first.addEventListener('change', () => {
+  if (!saved || busy) return;
+  void saveNetwork({ mode: saved.mode, url: saved.url || '', search_first: first.value }, true);
+ });
+ form.addEventListener('submit', event => {
+  event.preventDefault();
+  if (mode.value !== 'manual') return;
+  const body = { mode: mode.value, url: url.value.trim(), search_first: first.value, clear_credentials: clear.checked };
+  if (user.value || password.value) { body.username = user.value; body.password = password.value; }
+  void saveNetwork(body, false, true);
+ });
+ check.addEventListener('click', async () => {
+  if (busy || !saved) return;
+  busy = true;
+  syncControls();
+  report.hidden = false;
+  report.textContent = 'Проверяем сохранённый маршрут…';
+  try { report.textContent = JSON.stringify(await request('CHECK'), null, 2); }
+  catch (error) { report.textContent = error.message; }
+  finally { busy = false; syncControls(); }
+ });
+ syncControls();
+ void request('GET').then(value => apply(value)).catch(error => { message.textContent = error.message; }).finally(syncControls);
 
  // Selectable text, explicit copy with fallback, native Save dialog (browser download fallback).
  const output=document.querySelector('.provider-report:not(#network-report)');

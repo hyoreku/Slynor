@@ -172,12 +172,14 @@ class PostEqSpectrumAnalyzer:
 
     def snapshot(self, state, config):
         path = state.get('file_path'); playing = state.get('state') == 'playing' and bool(path)
+        generation = state.get('playback_generation')
         empty = {'bands': [0.0]*BANDS, 'file_path': path, 'state': state.get('state','idle'),
+                 'playback_generation': generation,
                  'time_ms': state.get('time_ms',0), 'status': 'paused' if path else 'idle',
                  'source': 'vlc_post_eq_branch', 'message': ''}
         if np is None:return {**empty, 'status':'unavailable', 'message':'Для спектра установите NumPy и перезапустите приложение.'}
         volume = state.get('volume'); volume = int(volume) if isinstance(volume, (int,float)) else 100
-        identity = (path, config['enabled'], config['preamp'], tuple(config['bands']), config.get('speed_mode','standard'), volume) if playing else None
+        identity = (path, generation, config['enabled'], config['preamp'], tuple(config['bands']), config.get('speed_mode','standard'), volume) if playing else None
         with self.condition:
             self.last_poll = monotonic()
             if identity != self.identity:

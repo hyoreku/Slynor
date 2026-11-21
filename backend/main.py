@@ -2,9 +2,6 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from time import perf_counter
-from collections import OrderedDict
-from threading import RLock
-import ntpath
 import httpx
 from typing import Annotated, Literal
 
@@ -28,17 +25,14 @@ from player.post_eq_spectrum import PostEqSpectrumAnalyzer
 from player.equalizer import EqualizerController
 from backend.image_assets import get_data_dir
 from backend.metadata import read_track_metadata
+from backend.current_track_metadata import cache_metadata, get_cached_metadata, resolve_current_track_metadata
+from backend.discord_artwork import DiscordArtwork
+from backend.discord_presence import DISCORD_APPLICATION_ID
 from backend.image_assets import get_cover_path
 from backend.wallpaper_assets import get_wallpaper_path
 from backend.track_covers import get_track_cover_path, clear_track_cover_cache
 
 
-_metadata_cache=OrderedDict();_metadata_lock=RLock()
-def metadata_key(path):return path if path.startswith('online:') else ntpath.normcase(ntpath.normpath(path))
-def cache_metadata(track):
-    with _metadata_lock:
-        _metadata_cache[metadata_key(track['path'])]=dict(track)
-        while len(_metadata_cache)>512:_metadata_cache.popitem(last=False)
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_FILE = PROJECT_DIR / "frontend" / "index.html"
 
@@ -57,6 +51,9 @@ async def lifespan(app: FastAPI):
     app.state.service_client = service_client
     app.state.service_runtime = service_runtime
     app.state.online = CatalogueLibrary(get_data_dir(), service=service_client)
+    app.state.track_artwork = DiscordArtwork(
+        get_data_dir() / "discord-covers.sqlite3", DISCORD_APPLICATION_ID, app.state.online.network,
+    )
     app.state.library_service = LibraryService(get_data_dir(), service_client)
     if service_runtime is not None:
         # Wait briefly so the first window reads the shared state, not only the
@@ -290,10 +287,11 @@ def get_player_state():
     result['appearance']=snapshot()
     path=result.get('file_path')
     if path:
-        with _metadata_lock:result['current_metadata']=_metadata_cache.get(metadata_key(path))
-        if result['current_metadata'] is None and path.startswith('online:'):
-            try:result['current_metadata']=app.state.online.metadata(path)
-            except ProviderError:pass
+        track = resolve_current_track_metadata(path, lambda ref: app.state.online.metadata(ref))
+        artwork = getattr(app.state, "track_artwork", None)
+        if track and artwork and result.get("state") in ("playing", "paused"):
+            track = app.state.online.track_cover(track, artwork, result.get("duration_ms"))
+        result['current_metadata'] = track
     return result
 
 
@@ -464,7 +462,7 @@ def get_library_metadata(body: MetadataRequest):
                        'cover_url':None,'cover_error':None,'error':str(error)}
         else: track=read_track_metadata(path)
         cache_metadata(track)
-        tracks.append(track)
+        tracks.append(app.state.online.track_cover(track) if getattr(app.state, "track_artwork", None) else track)
     return {'tracks':tracks}
 
 
@@ -647,9 +645,8 @@ def music_job(key:str):
     try:
         result=app.state.online.job(key)
         path=result.get('path') if result.get('status')=='done' else None
-        if path:
-            with _metadata_lock:cached=metadata_key(path) in _metadata_cache
-            if not cached:cache_metadata(read_track_metadata(path))
+        if path and get_cached_metadata(path) is None:
+            cache_metadata(read_track_metadata(path))
         return result
     except ProviderError as error:raise HTTPException(404,str(error)) from error
 @app.post('/api/online/jobs/{key}/cancel')

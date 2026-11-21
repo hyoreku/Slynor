@@ -72,8 +72,8 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  check(await page.locator('#online-audio-format').evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;}),'format selector fits narrow window');
  await page.setViewportSize({width:1280,height:800});
  await page.evaluate(()=>{
-   libraryFiles.splice(0,libraryFiles.length);
-   for(let i=0;i<25000;i++){const p=`C:/Music/song-${i}.opus`;libraryFiles.push(p);metadataMap.set(fileKey(p),{path:p,title:`Song ${i}`,artist:'Artist',duration_ms:180000});}
+   libraryFiles = [];
+   for(let i=0;i<25000;i++){const p=`C:/Music/song-${i}.opus`;libraryFiles.push(p);setTrackMetadata(fileKey(p),{path:p,title:`Song ${i}`,artist:'Artist',duration_ms:180000});}
    showScreen('music');renderLibrary();
  });
  const rendered=await page.locator('#library-list .library-item').count();

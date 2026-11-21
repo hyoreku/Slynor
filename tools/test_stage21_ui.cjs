@@ -462,8 +462,8 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
   activePlaylistId=null;librarySearch.value='';librarySort.value='original';
   const tracks=Array.from({length:8},(_,i)=>'C:/Music/layout-'+i+'.wav');
   if(currentTrackPath)tracks[0]=currentTrackPath;
-  libraryFiles.splice(0,libraryFiles.length,...tracks);
-  tracks.forEach((path,i)=>metadataMap.set(fileKey(path),{path,title:i%2?'Очень длинное название песни для проверки фиксированного расстояния и многоточия':'Трек '+(i+1),artist:i%3?'Исполнитель':'',album:i%2?'Альбом с длинным названием':'',cover_url:i%2?null:'/api/assets/track-covers/'+ 'a'.repeat(64)+'.jpg',duration_ms:i%3?180000:null}));
+  libraryFiles = tracks;
+  tracks.forEach((path,i)=>setTrackMetadata(fileKey(path),{path,title:i%2?'Очень длинное название песни для проверки фиксированного расстояния и многоточия':'Трек '+(i+1),artist:i%3?'Исполнитель':'',album:i%2?'Альбом с длинным названием':'',cover_url:i%2?null:'/api/assets/track-covers/'+ 'a'.repeat(64)+'.jpg',duration_ms:i%3?180000:null}));
   renderLibrary();showScreen('music');
  });
  for(const width of [1620,1180,900,540]){

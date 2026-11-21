@@ -11,9 +11,12 @@ import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from tools.source_experiment import common, report, run
+from tools.source_experiment import common, integrity, report, run
+
+FIXED_DATASET = Path(common.ROOT) / "docs/experiment/queries-v1.csv"
 
 class ProtocolTests(unittest.TestCase):
+    @unittest.skipUnless(FIXED_DATASET.is_file(), "local experiment dataset is not published")
     def test_fixed_dataset_is_60_unique_queries_with_downloads_disabled(self):
         rows=run.load_queries()
         self.assertEqual(len(rows),60)
@@ -93,14 +96,12 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(common.route_record('http://127.0.0.1:10809'),
                          {'mode': 'proxy', 'endpoint': 'http://127.0.0.1:10809'})
 
+    @unittest.skipUnless(FIXED_DATASET.is_file(), "local experiment dataset is not published")
     def test_preflight_only_manifest_records_the_route(self):
-        dataset = Path(common.ROOT) / 'docs/experiment/queries-v1.csv'
-        if not dataset.is_file():
-            self.skipTest('local experiment dataset is not published in the repository')
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'docs/experiment').mkdir(parents=True)
-            shutil.copy(dataset, root / 'docs/experiment/queries-v1.csv')
+            shutil.copy(FIXED_DATASET, root / 'docs/experiment/queries-v1.csv')
             folder = run.run('home_owner', 'smoke', ['archive.http'], preflight_only=True,
                              root=root, proxy='http://127.0.0.1:10809')
             manifest = json.loads((folder / 'manifest.json').read_text())
@@ -178,6 +179,15 @@ for line in sys.stdin:
         self.assertEqual(result['error_category'],'worker_protocol_error');self.assertNotIn('private.invalid',str(result))
 
 class ReportTests(unittest.TestCase):
+    def setUp(self):
+        queries = [
+            {"query_id": f"Q{number:03d}", "group": "negative_control" if number == 58 else "fixture"}
+            for number in range(1, 61)
+        ]
+        dataset = patch.object(integrity, "load_queries", return_value=queries)
+        dataset.start()
+        self.addCleanup(dataset.stop)
+
     def attempt(self,status='ok'):
         return {'attempt_id':'Q001-archive.http-cold','query_id':'Q001','adapter':'archive.http','phase':'cold',
                 'status':status,'technical_success':status!='failed','cards':0 if status=='failed' else 1,

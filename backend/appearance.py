@@ -10,7 +10,8 @@ class Appearance(BaseModel):
  wallpaper:str|None=Field(default=None,pattern=r'^[0-9a-f]{32}\.(jpg|gif|mp4|webm)$')
  dim:int=Field(default=65,ge=0,le=90)
  blur:int=Field(default=0,ge=0,le=30)
- mini_background:Literal['classic','wallpaper','colors']='classic'
+ visualizer_mode:Literal['off','bars','wave','rays']='off'
+ mini_background:Literal['classic','wallpaper','colors','liquid']='classic'
 _lock=RLock();_snapshot={**Appearance().model_dump(),'revision':0}
 def publish(data):
  global _snapshot

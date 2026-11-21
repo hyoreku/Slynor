@@ -1,0 +1,334 @@
+/* Shared geometry for the new controls. The graphite palette applies to dark mode. */
+.home-bento-wave { display: none; }
+.home-bento-copy .home-bento-action { margin-top: 12px; }
+.player-spectrum {
+    --compact-spectrum-width: clamp(44px, 5vw, 64px);
+    flex: 0 0 var(--compact-spectrum-width);
+    width: var(--compact-spectrum-width);
+    height: 24px;
+    margin-inline-start: auto;
+}
+
+.playlist-play {
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 10px;
+    inset-inline-start: 10px;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    border-radius: 50%;
+    background: var(--accent-button-gradient);
+    color: var(--accent-on);
+    box-shadow: 0 5px 16px #0008;
+    opacity: 0;
+    transform: translateY(5px) scale(.94);
+    pointer-events: none;
+    transition: opacity .18s, transform .18s var(--ease-out), filter .18s;
+}
+.playlist-play::before {
+    content: "";
+    width: 19px;
+    height: 19px;
+    background: currentColor;
+    mask: url('/static/assets/icons/play.svg') center / contain no-repeat;
+}
+.playlist-play:hover:not(:disabled) { filter: brightness(1.12); }
+.playlist-play:disabled { cursor: default; filter: grayscale(.45); }
+.playlist-tile:is(:hover, :focus-within) .playlist-play {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+:root:is([data-theme='dark'], :not([data-theme])) {
+    --background: #0b0b0e;
+    --graphite-edge: rgba(255, 255, 255, .08);
+    --graphite-glass: rgba(23, 23, 31, .68);
+    --graphite-halo: color-mix(in srgb, var(--accent-strong) 52%, #7263c2);
+}
+
+:root:is([data-theme='dark'], :not([data-theme])) body { background: var(--background); }
+:root:is([data-theme='dark'], :not([data-theme])):not(.has-wallpaper) body::before {
+    background:
+        radial-gradient(ellipse 68% 63% at 69% -14%, color-mix(in srgb, var(--graphite-halo) 42%, transparent), transparent 75%),
+        radial-gradient(ellipse 40% 50% at 100% 8%, #148c8429, transparent 82%);
+}
+
+:root:is([data-theme='dark'], :not([data-theme])) .sidebar {
+    border: 1px solid var(--graphite-edge);
+    border-radius: 18px;
+    background: linear-gradient(158deg, #ffffff08, transparent 55%), rgba(20, 20, 28, .71);
+    backdrop-filter: blur(20px) saturate(125%);
+    box-shadow: 0 18px 40px -30px #000;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .sidebar .navigation { gap: 4px; }
+:root:is([data-theme='dark'], :not([data-theme])) .sidebar .nav-button { gap: 10px; min-height: 37px; }
+:root:is([data-theme='dark'], :not([data-theme])) .sidebar .nav-icon[data-ui-icon] { --ui-icon-size: 18px; }
+:root:is([data-theme='dark'], :not([data-theme])) .sidebar .nav-button.is-active {
+    background: linear-gradient(100deg, color-mix(in srgb, var(--accent-strong) 24%, transparent), #ffffff04);
+    box-shadow: inset 0 0 0 1px var(--graphite-edge);
+}
+:root:is([data-theme='dark'], :not([data-theme])) .sidebar .nav-button.is-active .nav-icon { color: var(--accent); }
+
+:root:is([data-theme='dark'], :not([data-theme])) body[data-screen='home'] .workspace { padding: 22px clamp(18px, 3vw, 42px) 28px; }
+:root:is([data-theme='dark'], :not([data-theme])) body[data-screen='home'] .topbar > .topbar-search {
+    display: flex;
+    flex: 0 1 360px;
+    max-width: 48%;
+    min-width: 0;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .topbar-search #global-search {
+    height: 42px;
+    border-radius: 12px;
+    border-color: var(--graphite-edge);
+    background: #ffffff07;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .topbar-search #global-search:focus {
+    border-color: var(--accent-border);
+    background: #ffffff0d;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .topbar-search:focus-within .search-icon,
+:root:is([data-theme='dark'], :not([data-theme])) .search-field:focus-within .search-icon { color: var(--accent); }
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home { gap: clamp(22px, 3vw, 32px); }
+:root:is([data-theme='dark'], :not([data-theme])) .home-greet-meta { color: var(--copy-muted); }
+
+:root:is([data-theme='dark'], :not([data-theme])) .home-hero-empty {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(16px, 3vw, 40px);
+    padding: clamp(20px, 2.5vw, 34px);
+    border: 1px solid var(--graphite-edge);
+    border-radius: 24px;
+    background:
+        radial-gradient(ellipse at 76% -22%, color-mix(in srgb, var(--graphite-halo) 34%, transparent), transparent 73%),
+        radial-gradient(ellipse at 103% 120%, #1d7b705e, transparent 58%),
+        linear-gradient(121deg, #201c2c, #14141f 66%, #171822);
+    box-shadow: inset 0 1px #ffffff09, 0 25px 55px -37px #000;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-hero-empty h2 {
+    max-width: 20ch;
+    font-size: clamp(25px, 3.3vw, 44px);
+    font-weight: 700;
+    line-height: 1.07;
+    letter-spacing: -.04em;
+    text-wrap: balance;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-hero-empty p {
+    margin-top: 10px;
+    color: var(--copy-muted);
+    font-size: 13px;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-hero-empty .home-bento-action {
+    display: inline-flex;
+    align-items: center;
+    min-height: 46px;
+    margin-top: 18px;
+    padding: 0 18px;
+    gap: 12px;
+    border: 0;
+    border-radius: 99px;
+    background: var(--accent-button-gradient);
+    color: var(--accent-on);
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--accent-strong) 28%, transparent);
+    transition: box-shadow .18s, filter .18s;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-bento-action:hover {
+    background: var(--accent-button-gradient);
+    color: var(--accent-on);
+    filter: brightness(1.1);
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--accent-strong) 41%, transparent);
+}
+
+:root:is([data-theme='dark'], :not([data-theme])) .home-bento-wave {
+    display: grid;
+    place-items: center;
+    min-height: 144px;
+    align-self: stretch;
+    overflow: hidden;
+    border: 1px solid var(--graphite-edge);
+    border-radius: 17px;
+    color: color-mix(in srgb, var(--accent) 62%, #c6ccff);
+    background:
+        radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--graphite-halo) 38%, transparent), transparent 71%),
+        linear-gradient(145deg, #d6c7ff12, #75d6c717);
+}
+.home-bento-wave svg { display: block; width: 100%; max-height: 164px; }
+.home-bento-grid { stroke: currentColor; stroke-opacity: .14; }
+.home-bento-wave svg g { filter: drop-shadow(0 0 9px currentColor); }
+
+:root:is([data-theme='dark'], :not([data-theme])) :is(#screen-home .home-hero, #screen-home .playlist-open) {
+    border: 1px solid var(--graphite-edge);
+    backdrop-filter: blur(12px);
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-playlists { margin-top: 0; }
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(142px, 15vw, 202px)), 1fr));
+    gap: clamp(12px, 1.45vw, 22px);
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile {
+    --cover-bright: #a99ae4;
+    --cover-middle: #594298;
+    --cover-deep: #282245;
+
+    border-radius: 18px;
+    transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:nth-child(4n+2) {
+    --cover-bright: #8acaba;
+    --cover-middle: #287b72;
+    --cover-deep: #172e35;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:nth-child(4n+3) {
+    --cover-bright: #e6b08e;
+    --cover-middle: #a35345;
+    --cover-deep: #3b2438;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:nth-child(4n+4) {
+    --cover-bright: #9bbde8;
+    --cover-middle: #406aad;
+    --cover-deep: #26264d;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:is(:hover, :focus-within) {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 36px -19px color-mix(in srgb, var(--cover-bright) 42%, transparent);
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-open {
+    border-radius: 18px;
+    padding: 8px 8px 12px;
+    background:
+        radial-gradient(ellipse 90% 50% at 50% 90%, color-mix(in srgb, var(--cover-middle) 27%, transparent), transparent 82%),
+        var(--graphite-glass);
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-open .playlist-cover {
+    margin-bottom: 10px;
+    border-color: var(--graphite-edge);
+    border-radius: 12px;
+    box-shadow: 0 13px 22px -12px color-mix(in srgb, var(--cover-bright) 60%, transparent);
+    transition: box-shadow .2s var(--ease-out);
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-cover:not(.has-image) {
+    color: #f9f5ff;
+    background:
+        repeating-radial-gradient(ellipse at 83% 5%, transparent 0 15px, #ffffff22 16px, transparent 17px 25px),
+        radial-gradient(ellipse at 99% 0%, color-mix(in srgb, var(--cover-bright) 81%, transparent), transparent 75%),
+        linear-gradient(152deg, var(--cover-middle), var(--cover-deep) 90%);
+}
+:root:is([data-theme='dark'], :not([data-theme])) .playlist-cover > .cover-note {
+    font-size: clamp(32px, 3.7vw, 50px);
+    opacity: .87;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-open :is(.playlist-name, .playlist-card-count) {
+    display: block;
+    margin: 0;
+    padding-inline: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-open .playlist-name { line-height: 22px; }
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-open .playlist-card-count { line-height: 17px; color: var(--copy-muted); }
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-play {
+    inset-block: auto 68px;
+    inset-inline: auto 15px;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-edit { inset: 14px auto auto 14px; }
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:is(:hover, :focus-within) .playlist-cover {
+    transform: none;
+    box-shadow: 0 13px 25px -10px color-mix(in srgb, var(--cover-bright) 60%, transparent);
+}
+:root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:has(.playlist-play):is(:hover, :focus-within) .playlist-cover img {
+    filter: brightness(.78);
+}
+
+:root:is([data-theme='dark'], :not([data-theme])) :is(.home-recent-art, .song-art, .track-art):not(.has-image) {
+    background: radial-gradient(ellipse at 10% 0%, #b6a5ff58, transparent 75%), linear-gradient(145deg, #3d345c, #202333);
+    color: #e5ddff;
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-recent { gap: 5px; }
+:root:is([data-theme='dark'], :not([data-theme])) :is(.home-recent-item, #screen-music .library-item) {
+    border: 1px solid transparent;
+    border-radius: 12px;
+    transition: background-color .16s, border-color .16s;
+}
+:root:is([data-theme='dark'], :not([data-theme])) :is(.home-recent-item, #screen-music .library-item):is(:hover, :focus-within) {
+    background: #ffffff08;
+    border-color: var(--graphite-edge);
+}
+:root:is([data-theme='dark'], :not([data-theme])) .home-recent-item {
+    padding: 8px 12px;
+    background: #ffffff05;
+}
+
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar {
+    margin: 0 10px 9px;
+    padding: 5px 14px;
+    border: 1px solid var(--graphite-edge);
+    border-radius: 17px;
+    background:
+        radial-gradient(ellipse 48% 138% at 10% -78%, color-mix(in srgb, var(--graphite-halo) 38%, transparent), transparent 90%),
+        rgba(19, 19, 26, .85);
+    box-shadow: 0 6px 24px #0008, inset 0 1px #ffffff09;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar .play-toggle { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar .track-art { width: 46px; height: 46px; border-radius: 11px; }
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar #track-name { color: var(--text); }
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar .player-status {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: 10px;
+}
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar :is(.timeline, #player-artist) { color: var(--copy-muted); }
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar .player-actions .icon-button { width: 34px; min-width: 34px; height: 34px; min-height: 34px; }
+:root:is([data-theme='dark'], :not([data-theme])) #player-bar .player-actions .volume-control {
+    border-inline-start: 1px solid var(--graphite-edge);
+    padding-inline-start: 9px;
+}
+
+@media (min-width: 851px) {
+    :root:is([data-theme='dark'], :not([data-theme])) .sidebar { margin: 10px 0 9px 10px; }
+    :root:is([data-theme='dark'], :not([data-theme])) .app-shell > .sidebar-toggle { inset-block-start: 28px; }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar {
+        grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.15fr) minmax(295px, 1fr);
+        gap: clamp(12px, 2vw, 24px);
+    }
+}
+@media (561px <= width <= 850px) {
+    :root:is([data-theme='dark'], :not([data-theme])) .app-shell > .sidebar-toggle { inset-block-start: 18px; }
+    :root:is([data-theme='dark'], :not([data-theme])) body:not([data-screen='playing']) { --player-height: 128px; }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 12px;
+    }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar .volume-control input { width: clamp(42px, 9vw, 71px); }
+}
+@media (max-width: 560px) {
+    :root:is([data-theme='dark'], :not([data-theme])) body:not([data-screen='playing']) { --player-height: 166px; }
+    :root:is([data-theme='dark'], :not([data-theme])) .sidebar { border-radius: 0 0 14px 14px; }
+    :root:is([data-theme='dark'], :not([data-theme])) body[data-screen='home'] .topbar > .topbar-search { max-width: 62%; }
+    :root:is([data-theme='dark'], :not([data-theme])) .topbar-search #global-search { padding-right: 10px; }
+    :root:is([data-theme='dark'], :not([data-theme])) .topbar-search kbd { display: none; }
+    :root:is([data-theme='dark'], :not([data-theme])) .home-hero-empty { grid-template-columns: minmax(0, 1fr); }
+    :root:is([data-theme='dark'], :not([data-theme])) .home-bento-wave { min-height: 62px; }
+    .home-bento-wave svg { max-height: 76px; }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar { margin: 0 7px 6px; padding: 4px 9px; row-gap: 4px; }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar .track-art { width: 37px; height: 37px; }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar .player-status { display: none; }
+    :root:is([data-theme='dark'], :not([data-theme])) #player-bar .volume-control input { width: clamp(44px, 19vw, 84px); }
+}
+@media (hover: none), (pointer: coarse) {
+    .playlist-tile .playlist-play { opacity: 1; transform: none; pointer-events: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+    :root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile { transition: none; }
+    :root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:is(:hover, :focus-within),
+    :root:is([data-theme='dark'], :not([data-theme])) #screen-home .playlist-tile:is(:hover, :focus-within) .playlist-cover img { transform: none; }
+    :root:is([data-theme='dark'], :not([data-theme])) .home-hero-empty .home-bento-action { transition: none; }
+    .playlist-tile .playlist-play { transform: none; transition: none; }
+}

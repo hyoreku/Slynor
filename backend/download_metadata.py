@@ -6,6 +6,8 @@ import re
 import shutil
 from uuid import uuid4
 
+from backend.discord_artwork import public_cover_url, track_page
+
 SIDECAR_SUFFIX = '.slynor.json'
 MAX_RECORD = 32 * 1024
 TAG_FORMATS = {'.mp3', '.m4a', '.flac', '.ogg', '.opus', '.wav'}
@@ -75,12 +77,12 @@ def recording(track):
     source = track.get('source')
     if source in ('youtube', 'spotify', 'soundcloud', 'hitmo', 'muzbomb', 'archive'):
         result['source'] = source
-    if source in ('youtube', 'spotify', 'soundcloud'):
-        from backend.provider_worker import validate_track_url
-        try:
-            result['permalink_url'] = validate_track_url(track.get('permalink_url'), source)
-        except (ValueError, TypeError):
-            pass
+    page = track_page(track.get('permalink_url'), source)
+    if page:
+        result['permalink_url'] = page
+    artwork = public_cover_url(track.get('public_cover_url')) or public_cover_url(track.get('cover_url'))
+    if artwork:
+        result['public_cover_url'] = artwork
     # Neither signed media URLs, credentials nor machine paths are persisted.
     # A catalogue duration is not proof of this downloaded file's duration.
     return result

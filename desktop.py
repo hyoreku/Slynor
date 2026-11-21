@@ -2,21 +2,29 @@ import json
 from pathlib import Path
 import ntpath
 import re
+import sys
 from threading import RLock
 from uuid import uuid4
 
 import webview
 
+from backend.discord_presence import DiscordPresence
 from backend.image_assets import discard_cover, get_data_dir, import_cover, is_cover_name
 
 
 from backend.wallpaper_assets import import_wallpaper, discard_wallpaper, is_cover_name as is_wallpaper_name
 
 
+VISUALIZER_MODES = ("off", "bars", "wave", "rays")
+COVER_BACKGROUND_STYLES = ("soft", "liquid")
+MINI_BACKGROUND_MODES = ("classic", "wallpaper", "colors", "liquid")
+
+
 class DesktopApi:
     # Создание объектов и приватного состояния; вызывается один раз при запуске.
     def __init__(self):
         self._window = None
+        self._discord_presence = None
         self._storage_lock = RLock()
 
         self._data_dir = get_data_dir()
@@ -423,7 +431,8 @@ class DesktopApi:
         if not self._settings_path.exists():
             return {"version": 1, "accent": "#c9c9d1", "playlist_shape": "square",
                     "wallpaper": None, "wallpaper_dim": 65, "wallpaper_blur": 0,
-                    "cover_background": True, "spectrum_enabled": False, "theme": "dark", "language": "ru", "developer_mode": False, "sidebar_auto_collapse": True, "close_to_tray": True, "mini_background":"classic", "audio_output":"", "playing_screen_enabled":True}
+                    "cover_background": True, "cover_background_style": "soft", "spectrum_enabled": False, "visualizer_mode": "off", "theme": "dark", "language": "ru", "developer_mode": False, "tester_mode": False, "sidebar_auto_collapse": True, "close_to_tray": True, "mini_background":"classic", "mini_liquid": False, "audio_output":"", "playing_screen_enabled":True,
+                    "discord_presence_enabled": False}
         try:
             data = json.loads(self._settings_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -447,23 +456,37 @@ class DesktopApi:
         data.setdefault("playing_screen_enabled", True)
         if type(data["playing_screen_enabled"]) is not bool:
             raise RuntimeError("Некорректная настройка экрана песни.")
+        data.pop("discord_application_id", None)  # Migrate the preview setting.
+        data["discord_presence_enabled"] = data.get("discord_presence_enabled") is True
         data.setdefault("sidebar_auto_collapse", True)
         if type(data["sidebar_auto_collapse"]) is not bool:
             raise RuntimeError("Некорректная настройка боковой панели.")
         data.setdefault('app_icon','1')
         if data['app_icon'] not in tuple(str(i) for i in range(1,9)):raise RuntimeError('Некорректный значок приложения.')
         data.setdefault('mini_background','classic')
-        if data['mini_background'] not in ('classic','wallpaper','colors'):raise RuntimeError('Некорректный фон миниплеера.')
+        if data['mini_background'] not in MINI_BACKGROUND_MODES:
+            raise RuntimeError('Некорректный фон миниплеера.')
+        data.setdefault('tester_mode', False)
+        data.setdefault('mini_liquid', data['mini_background'] == 'liquid')
+        if type(data['tester_mode']) is not bool or type(data['mini_liquid']) is not bool:
+            raise RuntimeError('Некорректные настройки экспериментальных эффектов.')
         data.setdefault('audio_output','')
         if not isinstance(data['audio_output'],str) or len(data['audio_output'])>2048:raise RuntimeError('Некорректный аудиовыход.')
         data.setdefault("theme", "dark")
         if data["theme"] not in ("dark", "light", "transparent"):
             raise RuntimeError("Некорректная тема в settings.json.")
         data.setdefault("cover_background", True)
+        data.setdefault("cover_background_style", "soft")
+        if data["cover_background_style"] not in COVER_BACKGROUND_STYLES:
+            raise RuntimeError("Некорректный стиль фона обложки в settings.json.")
         data.setdefault("spectrum_enabled", False)
         for key in ("cover_background", "spectrum_enabled"):
             if type(data[key]) is not bool:
                 raise RuntimeError("Некорректный переключатель эффектов в settings.json.")
+        data.setdefault("visualizer_mode", "bars" if data["spectrum_enabled"] else "off")
+        if data["visualizer_mode"] not in VISUALIZER_MODES:
+            raise RuntimeError("Некорректный режим визуализатора в settings.json.")
+        data["spectrum_enabled"] = data["visualizer_mode"] != "off"
         data.setdefault("playlist_shape", "square")
         data.setdefault("wallpaper", None)
         data.setdefault("wallpaper_dim", 65)
@@ -480,7 +503,48 @@ class DesktopApi:
     # При запуске интерфейс читает сохранённый цвет через Python-мост.
     def load_settings(self):
         with self._storage_lock:
-            return self._read_settings()
+            data = self._read_settings()
+            data["discord_presence_available"] = self._discord_presence is not None
+            return data
+
+    def save_discord_presence(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError("Некорректная настройка Discord.")
+        with self._storage_lock:
+            data = self._read_settings()
+            data["discord_presence_enabled"] = enabled
+            result = self._write_settings(data)
+            if self._discord_presence is not None:
+                self._discord_presence.configure(enabled)
+            return result
+
+    def _start_discord_presence(self):
+        if sys.platform != "win32":
+            return
+        from backend.main import app
+        from backend.current_track_metadata import resolve_current_track_metadata
+        from backend.metadata import read_track_metadata
+
+        engine = getattr(app.state, "audio_engine", None)
+        if engine is None:
+            return
+
+        def track_metadata(path):
+            metadata = resolve_current_track_metadata(path, app.state.online.metadata)
+            if metadata is None and not path.startswith("online:"):
+                metadata = read_track_metadata(path)
+            if metadata and not metadata.get("public_cover_url"):
+                return {**metadata, "public_cover_url": app.state.online.cover_origin(metadata.get("cover_url"))}
+            return metadata
+
+        artwork = app.state.track_artwork
+        self._discord_presence = DiscordPresence(engine.get_playback_snapshot, track_metadata, artwork=artwork)
+        self._discord_presence.start()
+        try:
+            settings = self.load_settings()
+        except RuntimeError:
+            return  # The settings page reports the error. Presence stays disabled.
+        self._discord_presence.configure(settings["discord_presence_enabled"])
 
     # Разрешаем только #RRGGBB, а не CSS-код. Запись атомарна.
     def save_settings(self, accent):
@@ -544,14 +608,23 @@ class DesktopApi:
             data["language"] = language; data["developer_mode"] = developer_mode
             return self._write_settings(data)
 
-    # Сохранение двух независимых переключателей без изменения прочих настроек.
-    def save_visual_effects(self, cover_background, spectrum_enabled):
+    # spectrum_enabled keeps the settings readable by earlier desktop versions.
+    def save_visual_effects(self, cover_background, spectrum_enabled, visualizer_mode=None, cover_background_style=None):
         if type(cover_background) is not bool or type(spectrum_enabled) is not bool:
             raise ValueError("Переключатели эффектов должны быть True или False.")
+        if visualizer_mode is None:
+            visualizer_mode = "bars" if spectrum_enabled else "off"
+        if visualizer_mode not in VISUALIZER_MODES:
+            raise ValueError("Неизвестный режим визуализатора.")
+        if cover_background_style is not None and cover_background_style not in COVER_BACKGROUND_STYLES:
+            raise ValueError("Неизвестный стиль фона обложки.")
         with self._storage_lock:
             data = self._read_settings()
             data["cover_background"] = cover_background
-            data["spectrum_enabled"] = spectrum_enabled
+            if cover_background_style is not None:
+                data["cover_background_style"] = cover_background_style
+            data["visualizer_mode"] = visualizer_mode
+            data["spectrum_enabled"] = visualizer_mode != "off"
             return self._write_settings(data)
 
     # Меняется только форма; неизвестные будущие поля настроек сохраняются.
@@ -565,9 +638,30 @@ class DesktopApi:
 
     # Эффекты CSS не меняют изображение; разрешены только целые числа в пределах.
     def save_mini_background(self, mode):
-        if mode not in ('classic','wallpaper','colors'):raise ValueError('Неизвестный фон миниплеера.')
+        if mode not in MINI_BACKGROUND_MODES:
+            raise ValueError('Неизвестный фон миниплеера.')
         with self._storage_lock:
-            data=self._read_settings();data['mini_background']=mode;return self._write_settings(data)
+            data = self._read_settings()
+            data['mini_background'] = mode
+            if mode == 'liquid':
+                data['mini_liquid'] = True
+            return self._write_settings(data)
+
+    def save_tester_mode(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError('Некорректная настройка режима тестировщика.')
+        with self._storage_lock:
+            data = self._read_settings()
+            data['tester_mode'] = enabled
+            return self._write_settings(data)
+
+    def save_mini_liquid(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError('Некорректная настройка экспериментального фона миниплеера.')
+        with self._storage_lock:
+            data = self._read_settings()
+            data['mini_liquid'] = enabled
+            return self._write_settings(data)
 
     def save_playing_screen(self, enabled):
         if type(enabled) is not bool:
@@ -683,8 +777,11 @@ def main(debug=False):
         window.events.maximized += lambda *args: (setattr(shell,'main_mode','maximized'),native_visibility(False))
 
     try:
+        desktop_api._start_discord_presence()
         webview.start(debug=debug)
     finally:
+        if desktop_api._discord_presence is not None:
+            desktop_api._discord_presence.close()
         shell.stop_tray()
         register(None)
 

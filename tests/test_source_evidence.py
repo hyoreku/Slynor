@@ -6,11 +6,21 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from tools.source_experiment import common, compare, report, run
+from tools.source_experiment import common, compare, integrity, report, run
 
 
 class EvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.queries = [
+            {"query_id": f"Q{number:03d}", "group": "negative_control" if number >= 58 else "fixture"}
+            for number in range(1, 61)
+        ]
+        dataset = patch.object(integrity, "load_queries", return_value=self.queries)
+        dataset.start()
+        self.addCleanup(dataset.stop)
+
     def test_documented_isolated_cli_entry_points_start_without_import_errors(self):
         for script in ('run.py','report.py','compare.py'):
             with self.subTest(script=script):
@@ -22,7 +32,7 @@ class EvidenceTests(unittest.TestCase):
     def folder(self, network='home_owner', profile='smoke'):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         folder = Path(tmp.name)
-        queries = run.load_queries()
+        queries = self.queries
         if profile == 'smoke': queries = [queries[i] for i in (0, 24, 57)]
         manifest = {'run_id':network + '-fixture','network_label':network,'profile':profile,
             'dataset_sha256':common.DATASET_SHA256,'selected_queries':len(queries),

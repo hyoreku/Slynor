@@ -152,9 +152,94 @@ class EngineRegressionTests(unittest.TestCase):
         self.start(); self.mode('speedup'); self.native.events.emit('ended')
         self.wait(lambda:self.engine.get_queue()['index']==1)
         self.native.started(); self.wait(lambda:self.native.rate==1.25)
+    def test_queue_revision_changes_with_order_position_and_shuffle(self):
+        def revision():
+            snapshot = self.engine.get_queue()
+            self.assertEqual(snapshot["queue_revision"], self.engine.get_state()["queue_revision"])
+            return snapshot["queue_revision"]
+
+        third = Path(self.tmp.name) / "third.wav"
+        third.touch()
+        self.paths.append(str(third))
+        self.start()
+        original = self.engine.get_queue()["paths"]
+        first = revision()
+        self.engine.pause()
+        self.engine.resume()
+        self.assertEqual(revision(), first)
+
+        # Another client can replace the order without changing size, index or current track.
+        reordered = [original[0], original[2], original[1]]
+        self.engine.play_queue(reordered, 0)
+        self.assertGreater(revision(), first)
+        self.assertEqual(self.engine.get_queue()["paths"], reordered)
+
+        before_advance = revision()
+        self.native.events.emit("ended")
+        self.wait(lambda: self.engine.get_queue()["index"] == 1)
+        self.assertGreater(revision(), before_advance)
+
+        before_shuffle = revision()
+        self.engine.set_shuffle(True, reordered)
+        self.assertGreater(revision(), before_shuffle)
+        shuffled = revision()
+        self.engine.set_shuffle(False, [])
+        self.assertGreater(revision(), shuffled)
+        self.assertEqual(self.engine.get_queue()["paths"], reordered)
+
+        before_stop = revision()
+        self.engine.stop()
+        self.assertGreater(revision(), before_stop)
+        self.assertEqual(self.engine.get_queue()["paths"], [])
+
     def test_stop_makes_old_callbacks_harmless(self):
         self.start(); old=self.native.events.callbacks['ended']; self.engine.stop(); old(None)
         time.sleep(.02); self.assertEqual(self.engine.get_state()['state'],'idle')
+
+    def test_playback_snapshot_tracks_commands_and_preserves_legacy_state(self):
+        self.engine.play_queue(self.paths, 0)
+        revision = self.engine.get_queue()['queue_revision']
+        opening = self.engine.get_playback_snapshot()
+        self.assertEqual(opening['state'], 'opening')
+        self.assertEqual(opening['file_path'], self.paths[0])
+        self.assertFalse(opening['can_seek'])
+
+        self.native.started()
+        self.engine.pause()
+        self.engine.seek(90000, self.paths[0])
+        self.mode('slowed')
+        paused = self.engine.get_playback_snapshot()
+        self.assertEqual(paused, {
+            'state': 'paused', 'filename': 'first.wav', 'file_path': self.paths[0],
+            'playback_generation': opening['playback_generation'],
+            'time_ms': 90000, 'duration_ms': 180000, 'can_seek': True,
+            'rate': 0.8, 'speed_mode': 'slowed', 'playback_error': None,
+        })
+        legacy = self.engine.get_state()
+        self.assertEqual({key: legacy[key] for key in paused}, paused)
+        self.assertEqual(legacy['queue_index'], 0)
+        self.assertEqual(legacy['queue_size'], 2)
+        self.assertEqual(legacy['queue_revision'], revision)
+        self.assertFalse(legacy['shuffle_enabled'])
+        self.assertEqual(legacy['volume'], 50)
+        self.assertEqual(legacy['startup']['source'], 'local')
+
+        self.engine.resume()
+        self.assertEqual(self.engine.get_playback_snapshot()['state'], 'playing')
+        self.engine.next_track()
+        next_track = self.engine.get_playback_snapshot()
+        self.assertEqual(next_track['file_path'], self.paths[1])
+        self.assertEqual(next_track['state'], 'opening')
+        self.assertEqual(next_track['rate'], 0.8)
+        self.assertEqual(paused['file_path'], self.paths[0])
+
+        self.engine.stop()
+        idle = self.engine.get_playback_snapshot()
+        self.assertEqual(idle['state'], 'idle')
+        self.assertIsNone(idle['file_path'])
+        self.assertEqual(idle['time_ms'], 0)
+        self.assertEqual(idle['duration_ms'], 0)
+        self.assertFalse(idle['can_seek'])
 
 class SettingsRegressionTests(unittest.TestCase):
     def setUp(self):

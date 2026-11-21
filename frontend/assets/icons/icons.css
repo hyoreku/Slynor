@@ -6,7 +6,18 @@
 #play-toggle-button[data-ui-icon]{--ui-icon-size:19px;}
 .track-play-symbol{font-size:0;}
 .track-play-symbol::after{content:'';width:16px;height:16px;background:currentColor;mask:url('/static/assets/icons/play.svg') center/contain no-repeat;-webkit-mask:url('/static/assets/icons/play.svg') center/contain no-repeat;}
+.cover-note{position:absolute;inset:0;margin:auto;width:1em;height:1em;pointer-events:none;background:currentColor;mask:url('/static/assets/icons/music.svg') center/contain no-repeat;-webkit-mask:url('/static/assets/icons/music.svg') center/contain no-repeat;}
+.has-image > .cover-note{visibility:hidden;}
 /* Icon size and hit target are independent; compact native window is only 112px high. */
 body.mini-window [data-ui-icon]{--ui-icon-size:15px;width:28px;height:28px;min-width:28px;min-height:28px;flex:0 0 28px;padding:0;}
 body.mini-window #mini-toggle{--ui-icon-size:16px;}
 body.mini-window #mini-hide,body.mini-window #mini-expand{--ui-icon-size:14px;}
+
+.search-icon {
+    display: block;
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    background: currentColor;
+    mask: url('/static/assets/icons/search.svg') center / contain no-repeat;
+}

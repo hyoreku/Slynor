@@ -55,16 +55,17 @@ function restorePlaybackLibraryContext() {
     renderLibrary();
 }
 
-const libraryFiles = [];
+let libraryFiles = [];
 const metadataMap = new Map();
+let libraryOrder = null;
 
 let metadataLoading = false;
 let metadataReloadRequested = false;
 let reloadCoverCache = false;
 let currentTrackPath = null;
 let currentPlaybackState = "idle";
-window.playingScreenEnabled = true;
-let screenRevealAnimation = null;
+window.autoOpenPlayingScreen = true;
+let screenReveal = null;
 let libraryInitStarted = false;
 let libraryBusy = false;
 
@@ -92,11 +93,7 @@ async function saveLibrary(nextFiles) {
     try {
         await window.pywebview.api.save_library(nextFiles);
 
-        libraryFiles.splice(
-            0,
-            libraryFiles.length,
-            ...nextFiles
-        );
+        libraryFiles = nextFiles;
 
         renderLibrary();
         void loadLibraryMetadata();
@@ -161,20 +158,17 @@ function highlightCurrentTrack() {
         );
 
         item.classList.toggle("is-current", isCurrent);
-        let badge = item.querySelector(".track-status");
+        const badge = item.querySelector(".track-status");
+        const hideBadge = !isCurrent;
+        if (badge.hidden !== hideBadge) badge.hidden = hideBadge;
         if (isCurrent) {
-            if (!badge) {
-                badge = document.createElement("span");
-                badge.className = "track-status";
-                item.querySelector(".library-info").append(badge);
-            }
-            badge.textContent = currentPlaybackState === "paused" ? "На паузе"
+            const status = currentPlaybackState === "paused" ? "На паузе"
                 : currentPlaybackState === "playing" ? "Сейчас играет" : "Открываем трек";
-        } else if (badge) badge.remove();
-
-        if (isCurrent) {
+            if (window.i18n.source(badge) !== status) badge.textContent = status;
+            if (item.dataset.playbackState !== currentPlaybackState) item.dataset.playbackState = currentPlaybackState;
             item.setAttribute("aria-current", "true");
         } else {
+            delete item.dataset.playbackState;
             item.removeAttribute("aria-current");
         }
     });
@@ -232,12 +226,14 @@ async function loadLibraryMetadata() {
 
                 const data = await response.json();
                 reloadCoverCache = false;
+                const currentKey = currentTrackPath && fileKey(currentTrackPath);
 
                 for (const track of data.tracks) {
-                    metadataMap.set(
-                        fileKey(track.path),
-                        track
-                    );
+                    const key = fileKey(track.path);
+                    setTrackMetadata(key, track);
+                    if (key === currentKey && track.cover_url) {
+                        window.playerVisuals?.trackChanged(track, currentPlaybackState);
+                    }
                 }
 
                 renderLibrary();
@@ -267,9 +263,8 @@ async function loadLibraryMetadata() {
 
 function getActiveLibraryFiles() {
     if (activeArtistName) return getArtistFiles(activeArtistName);
-    if (!activePlaylistId) return [...libraryFiles];
-    const playlist = playlists.find((p) => p.id === activePlaylistId);
-    return playlist ? [...(playlist.tracks || [])] : [];
+    if (!activePlaylistId) return libraryFiles;
+    return playlists.find(playlist => playlist.id === activePlaylistId)?.tracks ?? [];
 }
 
 // Все известные пути для чтения метаданных, включая вручную запущенный файл.
@@ -281,79 +276,82 @@ function getAllKnownFiles() {
     return [...unique.values()];
 }
 
-// Сортировка полного списка. Поиск не участвует в построении очереди.
-
-function getOrderedLibraryFiles() {
-    const ordered = getActiveLibraryFiles();
-    const mode = librarySort.value;
-    if (mode === "original") return ordered;
-
-    function titleFor(path) {
-        return metadataMap.get(fileKey(path))?.title || fileName(path);
+// Cover-only responses do not change the order or the searchable text.
+function setTrackMetadata(key, metadata) {
+    const previous = metadataMap.get(key);
+    metadataMap.set(key, metadata);
+    const textChanged = previous?.title !== metadata.title || previous?.artist !== metadata.artist;
+    if ((textChanged || previous?.cover_url !== metadata.cover_url) && renderedQueue?.keys.has(key)) {
+        queueMetadataDirty = true;
     }
-
-    ordered.sort((left, right) => {
-        const a = metadataMap.get(fileKey(left));
-        const b = metadataMap.get(fileKey(right));
-
-        if (mode === "artist") {
-            const artistA = a?.artist || "";
-            const artistB = b?.artist || "";
-            if (Boolean(artistA) !== Boolean(artistB)) return artistA ? -1 : 1;
-            const artistOrder = textCollator.compare(artistA, artistB);
-            if (artistOrder) return artistOrder;
-        }
-
-        if (mode === "duration") {
-            const durationA = a?.duration_ms;
-            const durationB = b?.duration_ms;
-            const knownA = Number.isFinite(durationA);
-            const knownB = Number.isFinite(durationB);
-            if (knownA !== knownB) return knownA ? -1 : 1;
-            if (knownA && durationA !== durationB) return durationA - durationB;
-        }
-
-        return textCollator.compare(titleFor(left), titleFor(right));
-    });
-    return ordered;
+    if (!libraryOrder?.positions.has(key)) return;
+    if (textChanged || previous?.album !== metadata.album || previous?.duration_ms !== metadata.duration_ms) libraryOrder = null;
 }
 
-// Фильтр только для отображения: все слова запроса должны встретиться в тегах.
+function getLibraryOrder(source = getActiveLibraryFiles()) {
+    const mode = librarySort.value;
+    if (libraryOrder?.source === source && libraryOrder.mode === mode) return libraryOrder;
 
-function getFilteredLibraryFiles() {
-    const query = normalizeSearchText(librarySearch.value);
-    const orderedFiles = getOrderedLibraryFiles();
-
-    if (!query) {
-        return orderedFiles;
+    const entries = source.map(path => {
+        const key = fileKey(path);
+        const file = fileName(path);
+        const metadata = metadataMap.get(key);
+        const title = metadata?.title || "";
+        const artist = metadata?.artist || "";
+        return {
+            path, key, artist,
+            title: title || file,
+            duration: metadata?.duration_ms,
+            searchText: normalizeSearchText([title, artist, metadata?.album, file].filter(Boolean).join(" ")),
+        };
+    });
+    if (mode !== "original") {
+        entries.sort((left, right) => {
+            if (mode === "artist") {
+                if (Boolean(left.artist) !== Boolean(right.artist)) return left.artist ? -1 : 1;
+                const order = textCollator.compare(left.artist, right.artist);
+                if (order) return order;
+            }
+            if (mode === "duration") {
+                const knownLeft = Number.isFinite(left.duration);
+                const knownRight = Number.isFinite(right.duration);
+                if (knownLeft !== knownRight) return knownLeft ? -1 : 1;
+                if (knownLeft && left.duration !== right.duration) return left.duration - right.duration;
+            }
+            return textCollator.compare(left.title, right.title);
+        });
     }
+    libraryOrder = {
+        source, mode,
+        paths: entries.map(entry => entry.path),
+        positions: new Map(entries.map((entry, index) => [entry.key, index + 1])),
+        searchText: entries.map(entry => entry.searchText),
+    };
+    return libraryOrder;
+}
+
+// Search changes the visible list. Playback still uses the full sorted queue.
+function getOrderedLibraryFiles() {
+    return getLibraryOrder().paths;
+}
+
+function getFilteredLibraryFiles({ paths, searchText }) {
+    const query = normalizeSearchText(librarySearch.value);
+    if (!query) return paths;
 
     const words = query.split(/\s+/);
-
-    return orderedFiles.filter((path) => {
-        const metadata = metadataMap.get(fileKey(path));
-
-        const searchableText = normalizeSearchText([
-            metadata?.title,
-            metadata?.artist,
-            metadata?.album,
-            fileName(path)
-        ].filter(Boolean).join(" "));
-
-        return words.every(
-            (word) => searchableText.includes(word)
-        );
-    });
+    return paths.filter((_, index) => words.every(word => searchText[index].includes(word)));
 }
 
 // ОТОБРАЖЕНИЕ СПИСКА ПЕСЕН: создание строк, кнопок, миниатюр и меню.
 
-function renderLibrary() {
+function renderLibrary({ refreshOverview = true } = {}) {
     closeTrackMenu(false);
     // Keep the previous extent until the replacement window is ready; clearing
     // first clamps scrollTop during asynchronous metadata refreshes.
-    const visibleFiles = getFilteredLibraryFiles();
-    const sourceFiles = getActiveLibraryFiles();
+    const order = getLibraryOrder();
+    const visibleFiles = getFilteredLibraryFiles(order);
+    const sourceFiles = order.paths;
     const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
     document.getElementById("library-heading").textContent = activePlaylist
         ? `Плейлист: ${activePlaylist.name}`
@@ -374,12 +372,12 @@ function renderLibrary() {
         : "По этому запросу ничего не найдено.";
 
     document.getElementById("track-columns").hidden = visibleFiles.length === 0;
-    const orderedFiles = getOrderedLibraryFiles();
-    const positions = new Map(orderedFiles.map((path, index) => [fileKey(path), index + 1]));
-    libraryWindowState={files:visibleFiles,positions,first:-1,last:-1};
+    libraryWindowState={files:visibleFiles,positions:order.positions,first:-1,last:-1};
     renderLibraryWindow(true);
+    if (!refreshOverview) return;
     updateHomeOverview();
     renderSidebarPlaylists();
+    document.dispatchEvent(new Event("slynor-library"));
 }
 
 let libraryWindowState={files:[],positions:new Map(),first:-1,last:-1};
@@ -412,7 +410,6 @@ function renderLibraryWindow(force=false) {
         const artwork = document.createElement("div");
         artwork.className = "song-art";
         artwork.setAttribute("aria-hidden", "true");
-        artwork.textContent = "♫";
         setSongCover(artwork, metadata?.cover_url);
 
         const name = document.createElement("span");
@@ -447,7 +444,7 @@ function renderLibraryWindow(force=false) {
         const playButton = document.createElement("button");
         playButton.type = "button";
         playButton.className = "track-play";
-        playButton.innerHTML = '<span class="track-number" aria-hidden="true"></span><span class="track-play-symbol" aria-hidden="true">▶</span>';
+        playButton.innerHTML = '<span class="track-number" aria-hidden="true"></span><span class="track-play-symbol" aria-hidden="true"></span>';
         playButton.querySelector(".track-number").textContent = String(positions.get(fileKey(path)));
         playButton.setAttribute("aria-label", "Воспроизвести: " + name.textContent);
         playButton.title = "Воспроизвести: " + name.textContent;
@@ -524,7 +521,13 @@ function renderLibraryWindow(force=false) {
         actionsButton.addEventListener("click", () => {
             openTrackMenu(actionsButton, [addToPlaylistButton, infoButton, removeButton]);
         });
-        info.append(name, details, fullPath);
+        const trackStatus = document.createElement("span");
+        trackStatus.className = "track-status";
+        trackStatus.hidden = true;
+        const trackMeta = document.createElement("div");
+        trackMeta.className = "library-meta";
+        trackMeta.append(details, trackStatus);
+        info.append(name, trackMeta, fullPath);
         item.addEventListener('click', event => {
             if (event.target.closest('button,a,input,select,textarea') || commandBusy) return;
             if (window.getSelection()?.toString()) return;
@@ -554,6 +557,9 @@ function setPlaybackControlsBusy(busy) {
     playToggleButton.disabled = busy || window.onlinePreparing || ["opening","buffering"].includes(currentPlaybackState);
     buttons.forEach((button) => { button.disabled = busy; });
     libraryList.querySelectorAll("[data-play-track]").forEach((button) => {
+        button.disabled = busy;
+    });
+    playlistsList.querySelectorAll(".playlist-play").forEach((button) => {
         button.disabled = busy;
     });
     shuffleButton.disabled = busy || shufflePending ||
@@ -590,9 +596,9 @@ async function uploadLargeQueue(paths,index,shuffle=false) {
     }
 }
 
-async function sendCommand(action) {
+async function sendCommand(action, { path: selectedPath, queue, context } = {}) {
     if (commandBusy || (window.onlinePreparing && !["stop","next","previous"].includes(action)) || (["pause","resume"].includes(action) && !["playing","paused"].includes(currentPlaybackState))) return;
-    const path = pathInput.value.trim().replace(/^"|"$/g, "");
+    const path = selectedPath ?? pathInput.value.trim().replace(/^"|"$/g, "");
 
     if (action === "play" && !path) {
         result.textContent = "Сначала введи путь к файлу.";
@@ -602,9 +608,10 @@ async function sendCommand(action) {
 
     // Отключение кнопки Stop может снять фокус: запоминаем его заранее.
     if (["play","stop","next","previous"].includes(action)) window.dispatchEvent(new Event("ownplayer-user-command"));
-    const nextLibraryContext = action === "play" ? captureLibraryContext() : null;
+    const nextLibraryContext = action === "play" ? (context ?? captureLibraryContext()) : null;
     const restoreAfterStop = action === "stop" &&
-        (playerBar.contains(document.activeElement) || queuePanel.contains(document.activeElement));
+        (playerBar.contains(document.activeElement) || queuePanel.contains(document.activeElement) ||
+         document.getElementById('screen-playing').contains(document.activeElement));
     if (['play','stop','next','previous'].includes(action)) cancelQueuedSeeks();
     setPlaybackControlsBusy(true);
 
@@ -621,7 +628,7 @@ async function sendCommand(action) {
         };
 
         if (action === "play") {
-            const orderedPaths = getOrderedLibraryFiles();
+            const orderedPaths = queue ?? getOrderedLibraryFiles();
             const selectedIndex = orderedPaths.findIndex(
                 (itemPath) => fileKey(itemPath) === fileKey(path)
             );
@@ -676,8 +683,7 @@ async function sendCommand(action) {
             currentPlaybackState = "idle";
             highlightCurrentTrack();
             setSongCover(playerCover, null);
-            setPlayerVisible(false);
-            if (restoreAfterStop) screenTitle.focus({ preventScroll: true });
+            setPlayerVisible(false, restoreAfterStop);
         }
     } catch (error) {
         result.textContent = "Ошибка: " + error.message;
@@ -704,11 +710,7 @@ async function enableFilePicker() {
         const savedFiles =
             await window.pywebview.api.load_library();
 
-        libraryFiles.splice(
-            0,
-            libraryFiles.length,
-            ...savedFiles
-        );
+        libraryFiles = savedFiles;
 
         libraryReady = true;
         renderLibrary();
@@ -774,6 +776,8 @@ const actualVolume = document.getElementById("actual-volume");
 
 const volumeSlider = document.getElementById("volume-slider");
 const volumeValue = document.getElementById("volume-value");
+const nowVolumeSlider = document.getElementById("now-volume-slider");
+const nowVolumeValue = document.getElementById("now-volume-value");
 let pendingVolume = null;
 let volumeRequestBusy = false;
 let volumeTimer = null;
@@ -815,52 +819,86 @@ const stateLabels = {
         );
     }
 
-    // ОПРОС СОСТОЯНИЯ: каждую секунду обновляет плеер, обложку, время и громкость.
-
-    let statePollTimer = null, statePollBusy = false, statePollController = null, stateRefreshQueued = false;
-    window.refreshPlayerState = () => {
+// Скрытый WebView останавливает опрос. В трее проверяем только видимость окна.
+let statePollTimer = null, statePollController = null, stateRefreshQueued = false;
+let lastQueueState = null;
+window.refreshPlayerState = () => {
+    if (document.hidden) return;
+    clearTimeout(statePollTimer);
+    if (statePollController) {
+        stateRefreshQueued = true;
+        statePollController.abort();
+    } else {
+        void updatePlayerState();
+    }
+};
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
         clearTimeout(statePollTimer);
-        if (statePollBusy) { stateRefreshQueued = true; statePollController?.abort(); }
-        else void updatePlayerState();
-    };
-    async function updatePlayerState() {
-    if (statePollBusy) return;
-    statePollBusy = true; clearTimeout(statePollTimer);
-    statePollController = new AbortController();
+        stateRefreshQueued = false;
+        statePollController?.abort();
+    } else {
+        window.refreshPlayerState();
+    }
+});
+window.addEventListener("focus", () => {
+    if (!statePollController) window.refreshPlayerState();
+});
+window.addEventListener("pageshow", event => {
+    if (event.persisted && !statePollController) window.refreshPlayerState();
+});
+
+async function updatePlayerState() {
+    if (statePollController || document.hidden) return;
+    clearTimeout(statePollTimer);
+    const controller = new AbortController();
+    statePollController = controller;
+    const options = { cache: "no-store", signal: controller.signal };
     const requestedSeekRevision = seekRevision;
-    const timeout = setTimeout(() => statePollController?.abort(), 3000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    let visibilityChanged = false;
+    let publishPlayerState = false;
     try {
+        if (window.__mainVisible === false) {
+            const response = await fetch("/api/desktop/status", options);
+            if (!response.ok) return;
+            const status = await response.json();
+            if (controller.signal.aborted || document.hidden || status.main_visible !== true) return;
+        }
         const requestedVolumeRevision = volumeRevision;
         const requestedPlaybackRevision = playbackRevision;
-        const response = await fetch("/api/player/state", {
-            cache: "no-store",
-            signal: statePollController.signal
-        });
+        const response = await fetch("/api/player/state", options);
 
         if (!response.ok) {
             throw new Error(`Ошибка сервера: ${response.status}`);
         }
 
         const data = await response.json();
-        if (typeof data.window_visibility?.main === 'boolean' && window.__mainVisible !== data.window_visibility.main) {
-            window.__mainVisible = data.window_visibility.main;
-            window.dispatchEvent(new CustomEvent('native-window-state', {detail:{minimized:!window.__mainVisible}}));
+        if (controller.signal.aborted || document.hidden) return;
+        const mainVisible = data.window_visibility?.main;
+        if (typeof mainVisible === "boolean" && window.__mainVisible !== mainVisible) {
+            window.__mainVisible = mainVisible;
+            visibilityChanged = true;
         }
-        if (data.window_visibility?.main === false) return;
+        if (mainVisible === false) return;
         if (commandBusy || requestedPlaybackRevision !== playbackRevision) return;
+        publishPlayerState = true;
         currentTrackPath = data.file_path || null;
         currentPlaybackState = data.state;
+        lastQueueState = {
+            index: data.queue_index,
+            size: data.queue_size,
+            shuffled: Boolean(data.shuffle_enabled),
+            queueRevision: data.queue_revision,
+            revision: playbackRevision
+        };
         // The server may enrich artwork/title after an internet file is prepared.
         // Do not keep an earlier incomplete search result forever.
         const freshMetadata = data.current_metadata;
         if (currentTrackPath && freshMetadata && typeof freshMetadata === "object" &&
             typeof freshMetadata.path === "string" &&
             fileKey(freshMetadata.path) === fileKey(currentTrackPath)) {
-            metadataMap.set(fileKey(currentTrackPath), freshMetadata);
-        }
-        if (revealPlayingOnPoll && currentTrackPath) {
-            revealPlayingOnPoll = false;
-            showScreen("playing");
+            setTrackMetadata(fileKey(currentTrackPath), freshMetadata);
         }
         setPlayerVisible(Boolean(currentTrackPath));
         // Ручной запуск файла вне библиотеки тоже получает сведения и обложку.
@@ -932,8 +970,7 @@ const stateLabels = {
             requestedVolumeRevision === volumeRevision &&
             !volumeDragging && !volumeRequestBusy &&
             pendingVolume === null && volumeTimer === null) {
-            volumeSlider.value = String(data.volume);
-            volumeValue.textContent = String(data.volume);
+            setVolumeDisplay(data.volume);
         }
 
         durationTime.textContent = formatTime(data.duration_ms);
@@ -948,8 +985,13 @@ const stateLabels = {
             currentTime.textContent = formatTime(data.time_ms);
         }
         window.playerVisuals?.updateRanges();
+        if (revealPlayingOnPoll && currentTrackPath) {
+            revealPlayingOnPoll = false;
+            if (window.autoOpenPlayingScreen) showScreen("playing");
+        }
     } catch (error) {
-        if (stateRefreshQueued) return;
+        if (document.hidden || stateRefreshQueued || window.__mainVisible === false) return;
+        publishPlayerState = true;
         playerState.textContent = "Нет связи с сервером";
         window.playerVisuals?.connectionLost();
         window.playerMotion?.connectionLost();
@@ -961,14 +1003,22 @@ const stateLabels = {
         seekSlider.disabled = true;
         isEditingSeek = false;
     } finally {
-        clearTimeout(timeout); statePollController = null; statePollBusy = false;
-        statePollTimer = setTimeout(updatePlayerState, stateRefreshQueued ? 0 : (!document.hidden && window.__mainVisible !== false && ["opening","buffering"].includes(currentPlaybackState) ? 200 : 1000)); stateRefreshQueued = false;
+        if (visibilityChanged) {
+            window.dispatchEvent(new CustomEvent("native-window-state", { detail: { minimized: !window.__mainVisible } }));
+        }
+        if (publishPlayerState) document.dispatchEvent(new CustomEvent("slynor-player", { detail: lastQueueState }));
+        clearTimeout(timeout);
+        statePollController = null;
+        if (!document.hidden) {
+            const delay = window.__mainVisible === false ? 2000
+                : ["opening", "buffering"].includes(currentPlaybackState) ? 200 : 1000;
+            statePollTimer = setTimeout(updatePlayerState, stateRefreshQueued ? 0 : delay);
+        }
+        stateRefreshQueued = false;
     }
 }
 
-// Последовательная отправка громкости: быстрые движения объединяются,
-// а последнее выбранное значение обязательно отправляется.
-// Очередь изменения громкости: отправляем последовательно последнее значение.
+// Последовательная отправка громкости: быстрые движения объединяются.
 async function flushVolume() {
     if (volumeRequestBusy || pendingVolume === null) return;
     const volume = pendingVolume;
@@ -999,17 +1049,31 @@ async function flushVolume() {
     }
 }
 
-// Изменение ползунка сразу ставит новое значение громкости в очередь отправки.
-volumeSlider.addEventListener("input", () => {
-    volumeValue.textContent = volumeSlider.value;
-    pendingVolume = Number(volumeSlider.value);
-    volumeRevision += 1;
-    if (!volumeRequestBusy && volumeTimer === null) void flushVolume();
-});
-volumeSlider.addEventListener("pointerdown", () => { volumeDragging = true; });
+function setVolumeDisplay(volume) {
+    const value = String(Math.max(0, Math.min(100, volume)));
+    for (const slider of [volumeSlider, nowVolumeSlider]) {
+        if (slider.value !== value) slider.value = value;
+        slider.style.setProperty('--range-fill', value + '%');
+    }
+    for (const label of [volumeValue, nowVolumeValue]) {
+        if (label.textContent !== value) label.textContent = value;
+    }
+}
+
+// Оба ползунка управляют одной громкостью и одной очередью запросов.
+for (const slider of [volumeSlider, nowVolumeSlider]) {
+    slider.addEventListener("input", () => {
+        pendingVolume = Number(slider.value);
+        setVolumeDisplay(pendingVolume);
+        volumeRevision += 1;
+        if (!volumeRequestBusy && volumeTimer === null) void flushVolume();
+    });
+    slider.addEventListener("pointerdown", () => { volumeDragging = true; });
+    slider.addEventListener("lostpointercapture", () => { volumeDragging = false; });
+    slider.addEventListener("blur", () => { volumeDragging = false; });
+}
 document.addEventListener("pointerup", () => { volumeDragging = false; });
-volumeSlider.addEventListener("pointercancel", () => { volumeDragging = false; });
-volumeSlider.addEventListener("blur", () => { volumeDragging = false; });
+document.addEventListener("pointercancel", () => { volumeDragging = false; });
 
 // Предпросмотр перемотки; запрос отправляется после завершения изменения.
 seekSlider.addEventListener("input", () => {
@@ -1134,13 +1198,15 @@ shuffleButton.addEventListener("click", async () => {
     }
 });
 librarySort.addEventListener("change", () => {
-    renderLibrary();
+    renderLibrary({ refreshOverview: false });
 });
 
 // Ручное повторное чтение текстовых тегов и встроенных обложек.
 refreshMetadataButton.addEventListener("click", async () => {
     if (!libraryReady || metadataLoading) return;
     metadataMap.clear();
+    queueMetadataDirty = true;
+    libraryOrder = null;
     reloadCoverCache = true;
     delete playerCover.dataset.coverUrl;
     delete largeTrackCover.dataset.coverUrl;
@@ -1150,7 +1216,7 @@ refreshMetadataButton.addEventListener("click", async () => {
 });
 
 librarySearch.addEventListener("input", () => {
-    renderLibrary();
+    renderLibrary({ refreshOverview: false });
 });
 
 // 3. Элементы и состояние плейлистов.
@@ -1179,7 +1245,7 @@ function renderPlaylists() {
         cover.className = "playlist-cover";
         cover.setAttribute("aria-hidden", "true");
         const symbol = document.createElement("span");
-        symbol.textContent = "♫";
+        symbol.className = "cover-note";
         cover.append(symbol);
         addPlaylistCoverImage(cover, playlist.cover);
         const label = document.createElement("strong");
@@ -1205,13 +1271,31 @@ function renderPlaylists() {
         edit.disabled = playlistsBusy;
         edit.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 5 4 4M4 20l5-1L21 7a2.8 2.8 0 0 0-4-4L5 15z"/></svg>';
         edit.addEventListener("click", () => openPlaylistEditor(playlist.id));
-        row.append(open, edit);
+        row.append(open);
+        if (playlist.tracks?.length) {
+            const play = document.createElement("button");
+            play.type = "button";
+            play.className = "playlist-play";
+            play.disabled = commandBusy;
+            play.title = window.i18n.t("Воспроизвести плейлист");
+            play.setAttribute("aria-label", `${play.title} «${playlist.name}»`);
+            play.addEventListener("click", () => {
+                const queue = getLibraryOrder(playlist.tracks).paths;
+                void sendCommand("play", {
+                    path: queue[0], queue,
+                    context: { kind: "library", playlistId: playlist.id, query: "", sort: librarySort.value, scrollTop: 0 },
+                });
+            });
+            row.append(play);
+        }
+        row.append(edit);
         playlistsList.append(row);
     }
     renderSidebarPlaylists();
     updateHomeOverview();
     playlistsMessage.hidden = playlists.length > 0 &&
         !/ошиб|не удалось/i.test(playlistsMessage.textContent);
+    document.dispatchEvent(new Event("slynor-playlists"));
 }
 
 // Общий обработчик сохранения плейлистов: блокировка, результат, ошибки.
@@ -1414,42 +1498,96 @@ const queuePanel = document.getElementById("queue-panel");
 const queueBackdrop = document.getElementById("queue-backdrop");
 const queueButton = document.getElementById("queue-button");
 const closeQueueButton = document.getElementById("close-queue-button");
+const queueJumpButton = document.getElementById("queue-jump-button");
 const queueList = document.getElementById("queue-list");
 const queueMessage = document.getElementById("queue-message");
 let queueLoading = false;
+let renderedQueue = null;
+let queueMetadataDirty = false;
+let queueScrollOnOpen = false;
 let activeScreen = "home";
 
-// Навигация между главной, музыкой и настройками без перезагрузки страницы.
-
-function showScreen(name) {
-    if (name === "playing" && !window.playingScreenEnabled) return;
-    const enteringPlaying = name === "playing" && activeScreen !== "playing";
-    screenRevealAnimation?.cancel(); screenRevealAnimation = null;
+// Навигация между экранами без перезагрузки страницы.
+function showScreen(name, onShown) {
     const titles = { home: "Главная", music: "Моя музыка", settings: "Настройки", online: "Поиск музыки", artist: "Исполнитель", playing: "Сейчас играет" };
     if (!titles[name]) return;
+    if (screenReveal?.name === name) return;
+    if (screenReveal) {
+        const previousReveal = screenReveal;
+        finishScreenReveal(previousReveal);
+        previousReveal.cancel();
+    }
+    const entering = name === 'playing' && activeScreen !== 'playing';
+    const leaving = name !== 'playing' && activeScreen === 'playing';
+    const render = (reveal = null) => {
+        renderScreen(name, titles[name], reveal);
+        onShown?.();
+    };
+    if ((!entering && !leaving) || document.hidden || window.__mainVisible === false ||
+        matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        render();
+        return;
+    }
+
+    if (typeof document.startViewTransition === 'function') {
+        // Animate the browser's transition layer while the new view's heavy effects are suspended.
+        const root = document.documentElement;
+        root.classList.add('playing-reveal');
+        root.classList.toggle('playing-reveal-exit', leaving);
+        const transition = document.startViewTransition(() => {
+            if (screenReveal !== reveal) return;
+            render(reveal);
+        });
+        const reveal = watchScreenReveal(name, transition.finished, () => transition.skipTransition());
+        transition.ready.catch(() => {});
+        return;
+    }
+
+    // On older WebView2 engines, exit uses the destination screen's usual entrance animation.
+    if (leaving) { render(); return; }
+    const fade = document.getElementById('screen-playing').animate(
+        [{ opacity: .3 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' }
+    );
+    render(watchScreenReveal(name, fade.finished, () => fade.cancel()));
+}
+
+function watchScreenReveal(name, finished, cancel) {
+    const reveal = { name, finished, cancel };
+    screenReveal = reveal;
+    const finish = () => finishScreenReveal(reveal);
+    finished.then(finish, finish);
+    return reveal;
+}
+
+function finishScreenReveal(reveal) {
+    if (screenReveal !== reveal) return;
+    screenReveal = null;
+    document.documentElement.classList.remove('playing-reveal', 'playing-reveal-exit');
+}
+
+function renderScreen(name, title, reveal = null) {
+    const screenChanged = name !== activeScreen;
     activeScreen = name;
+    document.body.dataset.screen = name;
+    if (screenChanged) document.body.classList.toggle('skip-screen-enter', Boolean(reveal && name !== 'playing'));
     if (["home", "music", "settings", "online"].includes(name)) activeArtistName = "";
     document.querySelectorAll(".screen").forEach((screen) => {
         screen.hidden = screen.id !== `screen-${name}`;
     });
-    document.querySelectorAll("[data-screen]").forEach((button) => {
+    document.querySelectorAll(".nav-button[data-screen]").forEach((button) => {
         const active = button.dataset.screen === (name === "playing" ? (playbackLibraryContext?.kind === "online" ? "online" : "music") : name);
         button.classList.toggle("is-active", active);
         if (active) button.setAttribute("aria-current", "page");
         else button.removeAttribute("aria-current");
     });
-    screenTitle.textContent = titles[name];
+    screenTitle.textContent = title;
+    if (screenChanged && !queuePanel.hidden) closeQueue(true);
     document.getElementById('back-to-tracks').hidden = name !== 'playing';
-    window.dispatchEvent(new Event('player-screen-changed'));
     document.querySelector(".workspace").scrollTop = 0;
-    window.playerVisuals?.screenChanged(name);
-    window.equalizerPanel?.layout();
     addFilesButton.hidden = !['home','music'].includes(name);
-    addFilesButton.classList.toggle('home-add-button', name === 'home');
-    if (enteringPlaying && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        const radius=Math.ceil(Math.hypot(innerWidth,innerHeight)/2)+2;
-        screenRevealAnimation=appShell.animate([{clipPath:'circle(0px at 50% 50%)',opacity:.72},{clipPath:`circle(${radius}px at 50% 50%)`,opacity:1}],{duration:380,easing:'cubic-bezier(.16,1,.3,1)'});
-    }
+    if (screenChanged) window.playerVisuals?.screenChanged(name, name === 'playing' ? reveal : null);
+    window.dispatchEvent(new Event('player-screen-changed'));
+    window.equalizerPanel?.layout();
 }
 
 // 4.1. Страница исполнителя: имя из тегов открывает все локальные песни автора.
@@ -1734,20 +1872,22 @@ function openArtistPage(name) {
     }
     activeArtistName = value;
     artistOnlineKey = "";
-    showScreen("artist");
-    renderArtistPage();
-    document.getElementById("artist-name").focus({preventScroll: true});
+    showScreen("artist", () => {
+        renderArtistPage();
+        document.getElementById("artist-name").focus({preventScroll: true});
+    });
 }
 
 function closeArtistPage() {
     const origin = artistReturn || {screen: "music", scrollTop: 0};
-    const target = origin.screen === "playing" && !window.playingScreenEnabled ? "music" : origin.screen;
+    const target = origin.screen || "music";
     activeArtistName = "";
     artistReturn = null;
-    showScreen(target || "music");
-    const workspace = document.querySelector(".workspace");
-    if (workspace) workspace.scrollTop = origin.scrollTop || 0;
-    screenTitle.focus({preventScroll: true});
+    showScreen(target, () => {
+        document.querySelector(".workspace").scrollTop = origin.scrollTop || 0;
+        const focusTarget = target === 'playing' ? document.getElementById('now-back') : screenTitle;
+        focusTarget.focus({preventScroll: true});
+    });
 }
 
 window.openArtistPage = openArtistPage;
@@ -1783,17 +1923,29 @@ function renderSidebarPlaylists() {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "sidebar-playlist-button";
-        button.classList.toggle("is-active", playlist.id === activePlaylistId);
+        if (playlist.id === activePlaylistId) {
+            button.classList.add("is-active");
+            button.setAttribute("aria-current", "true");
+        }
         button.title = playlist.name;
         button.setAttribute("aria-label", playlist.name);
         const icon = document.createElement("span");
         icon.className = "sidebar-playlist-symbol";
         icon.setAttribute("aria-hidden", "true");
-        icon.textContent = "♫";
+        const note = document.createElement("span");
+        note.className = "cover-note";
+        icon.append(note);
         addPlaylistCoverImage(icon, playlist.cover);
+        const copy = document.createElement("span");
+        copy.className = "sidebar-playlist-copy";
         const label = document.createElement("span");
+        label.className = "sidebar-playlist-name";
         label.dataset.userText = "true"; label.textContent = playlist.name;
-        button.append(icon, label);
+        const count = document.createElement("span");
+        count.className = "sidebar-playlist-count";
+        count.textContent = `Треков: ${(playlist.tracks || []).length}`;
+        copy.append(label, count);
+        button.append(icon, copy);
         button.addEventListener("click", () => {
             activeArtistName = "";
             activePlaylistId = playlist.id;
@@ -1807,7 +1959,7 @@ function renderSidebarPlaylists() {
     }
 }
 
-document.querySelectorAll("[data-screen]").forEach((button) => {
+document.querySelectorAll(".nav-button[data-screen]").forEach((button) => {
     button.addEventListener("click", () => {
         if (button.dataset.screen === "music") {
             activeArtistName = "";
@@ -1819,10 +1971,7 @@ document.querySelectorAll("[data-screen]").forEach((button) => {
         showScreen(button.dataset.screen);
     });
 });
-document.getElementById("brand-home").addEventListener("click", (event) => {
-    event.preventDefault();
-    showScreen("home");
-});
+document.getElementById("brand-home").addEventListener("click", () => showScreen("home"));
 document.getElementById("open-library-button").addEventListener("click", () => {
     activeArtistName = "";
     activePlaylistId = "";
@@ -1870,8 +2019,13 @@ playToggleButton.addEventListener("click", async () => {
 
 // Правый список очереди: только просмотр текущего порядка воспроизведения.
 
-async function refreshQueue() {
+async function refreshQueue(force = false) {
     if (queueLoading || queuePanel.hidden) return;
+    const revision = lastQueueState?.queueRevision;
+    if (!force && Number.isInteger(revision) && renderedQueue?.snapshot.queue_revision === revision) {
+        if (queueMetadataDirty) renderQueue(renderedQueue.snapshot);
+        return;
+    }
     queueLoading = true;
     try {
         const response = await fetch("/api/player/queue", {
@@ -1879,53 +2033,96 @@ async function refreshQueue() {
         });
         if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
         const data = await response.json();
-        queueList.replaceChildren();
-        queueMessage.textContent = data.paths.length
-            ? `${data.paths.length} треков · ${data.shuffle_enabled ? "случайный порядок" : "по порядку"}`
-            : "Очередь пуста. Запустите песню из библиотеки или плейлиста.";
-        data.paths.forEach((path, index) => {
-            const meta = metadataMap.get(fileKey(path));
-            const row = document.createElement("li");
-            row.className = "queue-item";
-            row.classList.toggle("is-current", index === data.index);
-            row.classList.toggle("is-past", data.index !== null && index < data.index);
-            if (index === data.index) row.setAttribute("aria-current", "true");
-            const info = document.createElement("div");
-            const title = document.createElement("span");
-            title.className = "queue-title"; title.dataset.userText = "true";
-            title.textContent = meta?.title || fileName(path);
-            const artist = document.createElement("span");
-            artist.className = "queue-artist"; artist.dataset.userText = "true";
-            artist.textContent = meta?.artist || window.i18n.t("Исполнитель не указан");
-            info.append(title, artist);
-            const cover = document.createElement('span');
-            cover.className = 'queue-cover song-art';
-            cover.setAttribute('aria-hidden', 'true');
-            setSongCover(cover, meta?.cover_url);
-            row.append(cover, info);
-            queueList.append(row);
-        });
+        if (queuePanel.hidden || document.hidden || window.__mainVisible === false) return;
+        if (data.queue_revision < lastQueueState?.queueRevision) return;
+        renderQueue(data);
     } catch (error) {
+        renderedQueue = null;
+        queueJumpButton.disabled = true;
         queueMessage.textContent = "Не удалось получить очередь: " + error.message;
     } finally {
         queueLoading = false;
     }
 }
+
+function scrollToCurrentQueueTrack(animate = false) {
+    const row = queueList.children[renderedQueue?.snapshot.index];
+    if (!row) return;
+    const top = row.offsetTop - (queueList.clientHeight - row.offsetHeight) / 2;
+    const behavior = animate && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto";
+    queueList.scrollTo({ top, behavior });
+}
+
+function renderQueue(snapshot) {
+    const { paths, index, shuffle_enabled: shuffled } = snapshot;
+    const previousScrollTop = queueList.scrollTop;
+    const keys = new Set();
+    const fragment = document.createDocumentFragment();
+    const unknownArtist = window.i18n.t("Исполнитель не указан");
+    paths.forEach((path, position) => {
+        const key = fileKey(path);
+        keys.add(key);
+        const meta = metadataMap.get(key);
+        const row = document.createElement("li");
+        row.className = "queue-item";
+        row.classList.toggle("is-current", position === index);
+        row.classList.toggle("is-past", index !== null && position < index);
+        if (position === index) row.setAttribute("aria-current", "true");
+        const info = document.createElement("div");
+        const title = document.createElement("span");
+        title.className = "queue-title";
+        title.dataset.userText = "true";
+        title.textContent = meta?.title || fileName(path);
+        const artist = document.createElement("span");
+        artist.className = "queue-artist";
+        artist.dataset.userText = "true";
+        artist.textContent = meta?.artist || unknownArtist;
+        info.append(title, artist);
+        const cover = document.createElement("span");
+        cover.className = "queue-cover song-art";
+        cover.setAttribute("aria-hidden", "true");
+        setSongCover(cover, meta?.cover_url);
+        row.append(cover, info);
+        fragment.append(row);
+    });
+    queueList.replaceChildren(fragment);
+    queueMessage.textContent = paths.length
+        ? `${paths.length} треков · ${shuffled ? "случайный порядок" : "по порядку"}`
+        : "Очередь пуста. Запустите песню из библиотеки или плейлиста.";
+    renderedQueue = { snapshot, keys };
+    queueMetadataDirty = false;
+    queueJumpButton.disabled = !queueList.children[index];
+    queueList.tabIndex = paths.length ? 0 : -1;
+    if (queueScrollOnOpen) {
+        queueScrollOnOpen = false;
+        scrollToCurrentQueueTrack();
+    } else {
+        queueList.scrollTop = previousScrollTop;
+    }
+}
+
 // Closing is cancellable: re-opening never inherits a stale hidden callback.
 let queueAnimation = null, queueCloseGeneration = 0, queueClosing = false;
+let queueOpener = queueButton;
 function closeQueue(immediate = false) {
     if (queuePanel.hidden) return;
+    if (queueClosing && immediate !== true) return;
     const generation = ++queueCloseGeneration;
     queueAnimation?.cancel(); queueAnimation = null;
     queueClosing = true;
     const finish = () => {
         if (generation !== queueCloseGeneration) return;
+        const shouldRestoreFocus = queuePanel.contains(document.activeElement);
         queuePanel.hidden = true; queueBackdrop.hidden = true;
         queueClosing = false; queueAnimation?.cancel(); queueAnimation = null;
         queuePanel.classList.remove('is-closing');
         queueBackdrop.classList.remove('is-closing');
-        queueButton.setAttribute('aria-expanded', 'false');
-        if (!playerBar.hidden) queueButton.focus({preventScroll:true});
+        queueOpener.setAttribute('aria-expanded', 'false');
+        if (!playerBar.hidden && shouldRestoreFocus) {
+            const fallback = activeScreen === 'playing' ? document.getElementById('now-queue-chip') : queueButton;
+            const target = queueOpener.offsetWidth && !queueOpener.closest('[inert]') ? queueOpener : fallback;
+            target?.focus({preventScroll:true});
+        }
     };
     if (immediate === true || matchMedia('(prefers-reduced-motion: reduce)').matches) {finish(); return;}
     queuePanel.classList.add('is-closing'); queueBackdrop.classList.add('is-closing');
@@ -1935,23 +2132,36 @@ function closeQueue(immediate = false) {
     ], {duration:200,easing:'ease-in',fill:'forwards'});
     queueAnimation.finished.then(finish).catch(()=>{});
 }
-function openQueue() {
+function openQueue(opener = queueButton) {
     ++queueCloseGeneration; queueAnimation?.cancel(); queueAnimation = null;
     queueClosing = false;
+    queueScrollOnOpen = true;
     queuePanel.classList.remove('is-closing'); queueBackdrop.classList.remove('is-closing');
     queuePanel.hidden = false; queueBackdrop.hidden = false;
-    queueButton.setAttribute('aria-expanded','true');
-    closeQueueButton.focus({preventScroll:true}); void refreshQueue();
+    queueOpener.setAttribute('aria-expanded', 'false');
+    queueOpener = opener;
+    queueOpener.setAttribute('aria-expanded', 'true');
+    closeQueueButton.focus({preventScroll:true}); void refreshQueue(true);
 }
 queueButton.addEventListener('click', () => {
     if (!queuePanel.hidden && !queueClosing) closeQueue(); else openQueue();
 });
 closeQueueButton.addEventListener("click", closeQueue);
+queueJumpButton.addEventListener("click", () => scrollToCurrentQueueTrack(true));
 queueBackdrop.addEventListener("click", closeQueue);
 document.addEventListener("keydown", (event) => {
     if (queuePanel.hidden) return;
     if (event.key === "Escape") { event.preventDefault(); closeQueue(); }
-    if (event.key === "Tab") { event.preventDefault(); closeQueueButton.focus(); }
+    if (event.key === "Tab") {
+        event.preventDefault();
+        const stops = [closeQueueButton, queueJumpButton, queueList]
+            .filter(element => !element.disabled && element.tabIndex >= 0);
+        const current = stops.indexOf(document.activeElement);
+        const next = event.shiftKey
+            ? (current <= 0 ? stops.length - 1 : current - 1)
+            : (current + 1) % stops.length;
+        stops[next].focus({ preventScroll: true });
+    }
 });
 
 // Короткие сообщения приложения: показываем в центре и затем скрываем.
@@ -2128,7 +2338,10 @@ function setSongCover(container, url) {
     const safeUrl = safeTrackCoverURL(url);
     if (container.dataset.coverUrl === safeUrl) return;
     container.dataset.coverUrl = safeUrl;
-    container.replaceChildren(document.createTextNode("♫"));
+    const note = document.createElement('span');
+    note.className = 'cover-note';
+    note.setAttribute('aria-hidden', 'true');
+    container.replaceChildren(note);
     container.classList.remove("has-image");
     if (!safeUrl) return;
     const image = document.createElement("img");
@@ -2151,7 +2364,7 @@ function setSongCover(container, url) {
 
 // 12. Видимость нижнего плеера: нет песни — нет панели и занятого места.
 // Пауза сохраняет file_path, Стоп очищает его на сервере.
-function setPlayerVisible(visible) {
+function setPlayerVisible(visible, focusHeading = false) {
     if (playerBar.hidden === !visible) return;
     const focusWasInPlayer = playerBar.contains(document.activeElement);
     const focusWasInQueue = queuePanel.contains(document.activeElement);
@@ -2160,25 +2373,61 @@ function setPlayerVisible(visible) {
     appShell.classList.toggle("player-hidden", !visible);
     if (!visible) {
         revealPlayingOnPoll = false;
-        if (activeScreen === "playing") showScreen("music");
+        const restoreFocus = focusHeading || focusWasInPlayer || focusWasInQueue
+            ? () => screenTitle.focus({ preventScroll: true }) : undefined;
+        if (screenReveal?.name === 'playing' || (!screenReveal && activeScreen === 'playing')) {
+            showScreen('music', restoreFocus);
+        } else {
+            restoreFocus?.();
+        }
         if (!queuePanel.hidden) closeQueue();
         closeTrackMenu(false);
-        if (focusWasInPlayer || focusWasInQueue) screenTitle.focus({ preventScroll: true });
     }
 }
 
-// 13. Настройки акцента. Предпросмотр отделён от записи на диск.
+// Keep one write per setting in flight. A newer selection takes precedence.
+function createSettingsWriter(write, restore) {
+    let confirmed, pending, running;
+    async function flush() {
+        try {
+            while (pending) {
+                const { value, message } = pending;
+                pending = null;
+                try {
+                    await write(value);
+                    confirmed = value;
+                } catch (error) {
+                    if (!pending) {
+                        restore(confirmed);
+                        message.textContent = "Не удалось сохранить настройки: " + error.message;
+                    }
+                }
+            }
+        } finally {
+            running = null;
+        }
+    }
+    return {
+        setSaved(value) { confirmed = value; },
+        save(value, message) {
+            message.textContent = "";
+            pending = { value, message };
+            running ??= Promise.resolve().then(flush);
+        },
+        wait() { return running; },
+    };
+}
+
+// 13. Настройки акцента.
 const accentPicker = document.getElementById("accent-picker");
 const accentCurrent = document.getElementById("accent-current");
 const settingsMessage = document.getElementById("settings-message");
-const saveAccentButton = document.getElementById("save-accent-button");
 const resetAccentButton = document.getElementById("reset-accent-button");
 const accentPresets = [...document.querySelectorAll("[data-accent]")];
 let settingsInitStarted = false;
 let settingsReady = false;
-let settingsSaving = false;
-let savedAccent = "#c9c9d1";
-let currentAccent = savedAccent;
+let currentAccent = "#c9c9d1";
+const accentWriter = createSettingsWriter(value => window.pywebview.api.save_settings(value), applyAccent);
 
 // WCAG-яркость нужна, чтобы на жёлтой кнопке был тёмный, а не белый текст.
 function colorLuminance(rgb) {
@@ -2199,6 +2448,7 @@ function applyAccent(hex) {
     const root = document.documentElement.style;
     root.setProperty("--accent-strong", currentAccent);
     root.setProperty("--accent", `rgb(${textRgb.join(",")})`);
+    root.setProperty("--accent-rgb", rgb.join(","));
     root.setProperty("--accent-soft", `rgba(${rgb.join(",")}, .14)`);
     root.setProperty("--accent-surface", `rgba(${rgb.join(",")}, .22)`);
     root.setProperty("--accent-border", `rgba(${textRgb.join(",")}, .45)`);
@@ -2207,25 +2457,24 @@ function applyAccent(hex) {
     accentCurrent.textContent = currentAccent.toUpperCase();
     window.playerVisuals?.themeChanged();
     accentPresets.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.accent === currentAccent)));
+    document.dispatchEvent(new Event("accent-changed"));
 }
 
 // При ошибке чтения не разрешаем случайно перезаписать повреждённый JSON.
 function updateSettingsControls() {
-    const disabled = !settingsReady || settingsSaving;
+    const disabled = !settingsReady;
     accentPicker.disabled = disabled;
     resetAccentButton.disabled = disabled;
     accentPresets.forEach((button) => { button.disabled = disabled; });
-    saveAccentButton.disabled = disabled || currentAccent === savedAccent;
     updateAppearanceControls();
     window.playerVisuals?.updateControls();
     window.themeControls?.updateControls();
 }
 
-function previewAccent(hex) {
+function selectAccent(hex) {
+    if (!settingsReady) return;
     applyAccent(hex);
-    settingsMessage.textContent = currentAccent === savedAccent
-        ? "Этот цвет сохранён." : "Предпросмотр. Чтобы запомнить цвет, нажмите «Сохранить цвет».";
-    updateSettingsControls();
+    accentWriter.save(currentAccent, settingsMessage);
 }
 
 // Настройки загружаем только после готовности моста PyWebView.
@@ -2237,45 +2486,26 @@ async function initializeSettings() {
         if (!data || data.version !== 1 || !/^#[0-9a-f]{6}$/i.test(data.accent || "")) {
             throw new Error("Некорректные настройки цвета.");
         }
-        savedAccent = data.accent.toLowerCase();
-        applyAccent(savedAccent);
+        accentWriter.setSaved(data.accent);
+        applyAccent(data.accent);
         applyStoredAppearance(data);
         settingsReady = true;
         window.visualSettingsSnapshot = data;
         window.dispatchEvent(new CustomEvent("visual-settings-loaded", { detail: data }));
-        settingsMessage.textContent = "Цвет загружен. Выбор сохраняется после перезапуска.";
     } catch (error) {
-        settingsMessage.textContent = "Не удалось загрузить настройки: " + error.message;
+        document.getElementById("settings-load-error").textContent = "Не удалось загрузить настройки: " + error.message;
     } finally {
         updateSettingsControls();
     }
 }
 
-// Записываем только проверенный HEX-цвет; библиотека и плейлисты не меняются.
-async function saveAccent() {
-    if (!settingsReady || settingsSaving || currentAccent === savedAccent) return;
-    settingsSaving = true;
-    updateSettingsControls();
-    try {
-        const data = await window.pywebview.api.save_settings(currentAccent);
-        savedAccent = data.accent.toLowerCase();
-        applyAccent(savedAccent);
-        settingsMessage.textContent = "Цвет сохранён. Он останется после перезапуска.";
-    } catch (error) {
-        settingsMessage.textContent = "Не удалось сохранить цвет: " + error.message + " Предпросмотр не сохранён.";
-    } finally {
-        settingsSaving = false;
-        updateSettingsControls();
-    }
-}
-
-accentPresets.forEach((button) => {
+accentPresets.forEach(button => {
     button.style.setProperty("--swatch", button.dataset.accent);
-    button.addEventListener("click", () => previewAccent(button.dataset.accent));
+    button.addEventListener("click", () => selectAccent(button.dataset.accent));
 });
-accentPicker.addEventListener("input", () => previewAccent(accentPicker.value));
-resetAccentButton.addEventListener("click", () => previewAccent("#c9c9d1"));
-saveAccentButton.addEventListener("click", saveAccent);
+accentPicker.addEventListener("input", () => applyAccent(accentPicker.value));
+accentPicker.addEventListener("change", () => selectAccent(accentPicker.value));
+resetAccentButton.addEventListener("click", () => selectAccent("#c9c9d1"));
 window.addEventListener("pywebviewready", initializeSettings);
 if (window.pywebview && window.pywebview.api) void initializeSettings();
 
@@ -2373,16 +2603,24 @@ function updatePlayingPresentation(meta, title, state) {
     document.getElementById("large-track-title").title = title;
     renderArtistLinks(document.getElementById("large-track-artist"), meta?.artist,
         window.i18n.t("Исполнитель не указан"));
-    document.getElementById("large-track-state").textContent = stateLabels[state] || "";
+    const album = document.getElementById("large-track-album");
+    const albumName = typeof meta?.album === "string" ? meta.album.trim() : "";
+    if (album.textContent !== albumName) album.textContent = albumName;
+    album.hidden = !albumName;
+    const stateLabel = document.getElementById("large-track-state");
+    const status = state === "playing" ? "" : stateLabels[state] || "";
+    if (window.i18n.source(stateLabel) !== status) stateLabel.textContent = status;
     window.playerVisuals?.trackChanged(meta, state);
 }
 playerCover.addEventListener("click", () => { if (currentTrackPath) showScreen("playing"); });
 document.getElementById("back-to-tracks").addEventListener("click", () => {
     const kind = playbackLibraryContext?.kind;
     restorePlaybackLibraryContext();
-    showScreen(kind === 'online' ? 'online' : kind === 'artist' ? 'artist' : 'music');
-    document.querySelector('.workspace').scrollTop = playbackLibraryContext?.scrollTop || 0;
-    screenTitle.focus({ preventScroll: true });
+    const scrollTop = playbackLibraryContext?.scrollTop || 0;
+    showScreen(kind === 'online' ? 'online' : kind === 'artist' ? 'artist' : 'music', () => {
+        document.querySelector('.workspace').scrollTop = scrollTop;
+        screenTitle.focus({ preventScroll: true });
+    });
 });
 
 // Summary uses textContent for user data; no interpolation into HTML.
@@ -2406,17 +2644,17 @@ document.getElementById('playlist-summary-edit').addEventListener('click', () =>
     if (activePlaylistId) openPlaylistEditor(activePlaylistId);
 });
 
-// 16. Форма карточек и обои. Предпросмотр не пишет JSON; кнопки сохранения пишут.
+// 16. Форма карточек и обои.
 const playlistShape = document.getElementById("playlist-shape");
-const saveShapeButton = document.getElementById("save-shape-button");
 const shapeMessage = document.getElementById("shape-message");
 const wallpaperLayer = document.getElementById("wallpaper-layer");
 const wallpaperDim = document.getElementById("wallpaper-dim");
 const wallpaperBlur = document.getElementById("wallpaper-blur");
 const wallpaperMessage = document.getElementById("wallpaper-message");
-let savedShape = "square";
+const shapeWriter = createSettingsWriter(value => window.pywebview.api.save_playlist_shape(value), applyPlaylistShape);
+const wallpaperWriter = createSettingsWriter(([dim, blur]) => window.pywebview.api.save_wallpaper_effects(dim, blur), applyWallpaperEffects);
 let wallpaperFile = null;
-let savedDim = 65, savedBlur = 0;
+let wallpaperBusy = false;
 let wallpaperLoadRevision = 0;
 
 // Настройки предыдущей версии без новых полей остаются совместимыми.
@@ -2429,57 +2667,57 @@ function applyStoredAppearance(data) {
         !Number.isInteger(dim) || dim < 0 || dim > 90 || !Number.isInteger(blur) || blur < 0 || blur > 30) {
         throw new Error("Некорректные настройки оформления.");
     }
-    savedShape = shape;
-    playlistShape.value = shape;
-    applyPlaylistShape();
+    shapeWriter.setSaved(shape);
+    applyPlaylistShape(shape);
     applyStoredWallpaper(data);
-    shapeMessage.textContent = "Форма загружена.";
 }
-function applyPlaylistShape() {
-    document.documentElement.dataset.playlistShape = playlistShape.value;
+function applyPlaylistShape(shape) {
+    playlistShape.value = shape;
+    document.documentElement.dataset.playlistShape = shape;
 }
 function updateAppearanceControls() {
-    const disabled = !settingsReady || settingsSaving;
-    playlistShape.disabled = disabled;
-    saveShapeButton.disabled = disabled || playlistShape.value === savedShape;
+    playlistShape.disabled = !settingsReady;
+    const disabled = !settingsReady || wallpaperBusy;
     document.getElementById("choose-wallpaper").disabled = disabled;
     document.getElementById("reset-wallpaper").disabled = disabled || !wallpaperFile;
-    wallpaperDim.disabled = disabled || !wallpaperFile;
-    wallpaperBlur.disabled = disabled || !wallpaperFile;
-    document.getElementById("save-wallpaper").disabled = disabled || !wallpaperFile ||
-        (Number(wallpaperDim.value) === savedDim && Number(wallpaperBlur.value) === savedBlur);
+    wallpaperDim.disabled = wallpaperBlur.disabled = disabled || !wallpaperFile;
+}
+function applyWallpaperEffects([dim, blur]) {
+    wallpaperDim.value = String(dim);
+    wallpaperBlur.value = String(blur);
+    previewWallpaperEffects();
 }
 function previewWallpaperEffects() {
     document.documentElement.style.setProperty("--wallpaper-dim", Number(wallpaperDim.value) / 100);
     document.documentElement.style.setProperty("--wallpaper-blur", wallpaperBlur.value + "px");
     document.getElementById("wallpaper-dim-value").value = wallpaperDim.value + "%";
     document.getElementById("wallpaper-blur-value").value = wallpaperBlur.value + " px";
+    window.dispatchEvent(new Event("wallpaper-effects-changed"));
 }
 
 // Сперва загружаем копию, потом показываем. Запоздалая загрузка старых обоев игнорируется.
 function applyStoredWallpaper(data) {
     wallpaperFile = data.wallpaper ?? null;
-    savedDim = data.wallpaper_dim ?? 65;
-    savedBlur = data.wallpaper_blur ?? 0;
-    wallpaperDim.value = String(savedDim);
-    wallpaperBlur.value = String(savedBlur);
-    previewWallpaperEffects();
+    const effects = [data.wallpaper_dim ?? 65, data.wallpaper_blur ?? 0];
+    wallpaperWriter.setSaved(effects);
+    applyWallpaperEffects(effects);
     const revision = ++wallpaperLoadRevision;
     // Visual preferences must not detach/reload an already displayed GIF or video.
     if (wallpaperFile && wallpaperLayer.dataset.file === wallpaperFile && !wallpaperLayer.hidden) {
         window.dispatchEvent(new Event("wallpaper-rendered"));
         return;
     }
+    wallpaperMessage.textContent = "";
     wallpaperLayer.dataset.file = wallpaperFile || '';
     wallpaperLayer.hidden = true;
     wallpaperLayer.style.backgroundImage = "none";
     document.documentElement.classList.remove("has-wallpaper");
-    if (!wallpaperFile) {window.dispatchEvent(new CustomEvent('wallpaper-media',{detail:{url:null}})); wallpaperMessage.textContent = "Обои не выбраны. Используется обычный тёмный фон."; return; }
+    if (!wallpaperFile) {window.dispatchEvent(new CustomEvent('wallpaper-media',{detail:{url:null}})); return; }
     const url = "/api/assets/wallpapers/" + encodeURIComponent(wallpaperFile);
     if (/\.(mp4|webm)$/.test(wallpaperFile)) {
         wallpaperLayer.hidden=false;document.documentElement.classList.add('has-wallpaper');
         window.dispatchEvent(new CustomEvent('wallpaper-media',{detail:{url}}));
-        wallpaperMessage.textContent='Видеофон выбран. Звук отключён.';return;
+        return;
     }
     window.dispatchEvent(new CustomEvent('wallpaper-media',{detail:{url:null}}));
     const image = new Image();
@@ -2488,7 +2726,6 @@ function applyStoredWallpaper(data) {
         wallpaperLayer.style.backgroundImage = `url("${url}")`;
         wallpaperLayer.hidden = false;
         document.documentElement.classList.add("has-wallpaper");
-        wallpaperMessage.textContent = "Копия обоев загружена. Эффекты можно менять ниже.";
         window.dispatchEvent(new Event("wallpaper-rendered"));
     };
     image.onerror = () => {
@@ -2498,49 +2735,43 @@ function applyStoredWallpaper(data) {
     image.src = url;
 }
 
-// Блокировка исключает одновременное сохранение цвета, формы и обоев из интерфейса.
-async function appearanceMutation(action, onSuccess, messageElement) {
-    if (!settingsReady || settingsSaving) return;
-    settingsSaving = true;
-    updateSettingsControls();
-    try { onSuccess(await action()); }
-    catch (error) { messageElement.textContent = "Не удалось сохранить: " + error.message; }
-    finally { settingsSaving = false; updateSettingsControls(); }
+// Wallpaper changes and slider writes share one file/effects snapshot.
+async function changeWallpaper(action, apply) {
+    if (!settingsReady || wallpaperBusy) return;
+    wallpaperBusy = true;
+    updateAppearanceControls();
+    try {
+        await wallpaperWriter.wait();
+        apply(await action());
+    } catch (error) {
+        wallpaperMessage.textContent = "Не удалось сохранить настройки: " + error.message;
+    } finally {
+        wallpaperBusy = false;
+        updateAppearanceControls();
+    }
 }
-playlistShape.addEventListener("change", () => {
-    applyPlaylistShape();
-    shapeMessage.textContent = playlistShape.value === savedShape ? "Эта форма сохранена." : "Предпросмотр. Нажмите «Сохранить форму».";
-    updateAppearanceControls();
-    window.playerVisuals?.updateControls();
-});
-saveShapeButton.addEventListener("click", () => appearanceMutation(
-    () => window.pywebview.api.save_playlist_shape(playlistShape.value),
-    data => { savedShape = data.playlist_shape; shapeMessage.textContent = "Форма сохранена."; }, shapeMessage
-));
-[wallpaperDim, wallpaperBlur].forEach(control => control.addEventListener("input", () => {
-    previewWallpaperEffects();
-    wallpaperMessage.textContent = "Предпросмотр. Чтобы запомнить эффекты, нажмите «Сохранить эффекты».";
-    updateAppearanceControls();
-    window.playerVisuals?.updateControls();
-}));
-document.getElementById("choose-wallpaper").addEventListener("click", () => appearanceMutation(
-    () => window.pywebview.api.choose_wallpaper(),
-    response => { if (response.changed) applyStoredWallpaper(response.settings); else wallpaperMessage.textContent = "Выбор изображения отменён. Обои не изменены."; }, wallpaperMessage
-));
-document.getElementById("save-wallpaper").addEventListener("click", () => appearanceMutation(
-    () => window.pywebview.api.save_wallpaper_effects(Number(wallpaperDim.value), Number(wallpaperBlur.value)),
-    data => { savedDim = data.wallpaper_dim; savedBlur = data.wallpaper_blur; wallpaperMessage.textContent = "Эффекты обоев сохранены."; }, wallpaperMessage
-));
-document.getElementById("reset-wallpaper").addEventListener("click", () => appearanceMutation(
-    () => window.pywebview.api.reset_wallpaper(),
-    data => { applyStoredWallpaper(data); wallpaperMessage.textContent = "Обои и эффекты сброшены. Исходное изображение не изменено."; }, wallpaperMessage
-));
 
-// Match the initial Home button even before the first navigation.
-addFilesButton.classList.toggle('home-add-button', activeScreen === 'home');
+playlistShape.addEventListener("change", () => {
+    applyPlaylistShape(playlistShape.value);
+    shapeWriter.save(playlistShape.value, shapeMessage);
+});
+for (const control of [wallpaperDim, wallpaperBlur]) {
+    control.addEventListener("input", previewWallpaperEffects);
+    control.addEventListener("change", () => {
+        wallpaperWriter.save([Number(wallpaperDim.value), Number(wallpaperBlur.value)], wallpaperMessage);
+    });
+}
+document.getElementById("choose-wallpaper").addEventListener("click", () => changeWallpaper(
+    () => window.pywebview.api.choose_wallpaper(),
+    response => { if (response.changed) applyStoredWallpaper(response.settings); }
+));
+document.getElementById("reset-wallpaper").addEventListener("click", () => changeWallpaper(
+    () => window.pywebview.api.reset_wallpaper(), applyStoredWallpaper
+));
 
 document.addEventListener('language-changed', () => {
     if (libraryReady) renderLibrary();
+    queueMetadataDirty = true;
     if (!queuePanel.hidden) void refreshQueue();
     const dialog=document.getElementById('track-details-dialog');
     if (dialog.open && dialog.dataset.path) showTrackDetails(dialog.dataset.path);

@@ -35,6 +35,7 @@
         updateLabel();
         const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!reduced && innerWidth > 560 && from !== to) {
+            root.style.setProperty('--sidebar-width', `${from}px`);
             const started = performance.now();
             const step = now => {
                 const progress = Math.min(1, (now - started) / 240);
