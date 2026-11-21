@@ -24,6 +24,7 @@ Slynor распространяется под GNU General Public License вер
 | [PyAV](https://pyav.org/) | 18.1.0 | BSD-3-Clause |
 | [pystray](https://github.com/moses-palmer/pystray) | 0.19.5 | LGPL-3.0 |
 | [httpx](https://www.python-httpx.org/) | 0.28.1 | BSD-3-Clause |
+| [aiogram](https://github.com/aiogram/aiogram) (Telegram-клиент) | 3.33.0 | MIT |
 | [socksio](https://github.com/sethmlarson/socksio) | 1.0.0 | MIT |
 | [typing-extensions](https://github.com/python/typing_extensions) | 4.16.0 | PSF-2.0 |
 
