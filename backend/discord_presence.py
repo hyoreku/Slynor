@@ -14,8 +14,10 @@ logger = logging.getLogger("ownplayer.discord")
 # Public Application ID of the Slynor registration in the Discord Developer Portal.
 DISCORD_APPLICATION_ID = "1573407288759296051"
 _ACTIVE_STATES = {"playing", "paused"}
+_POLL_INTERVAL = .35
 _UPDATE_INTERVAL = 5.0
-_RECONNECT_INTERVAL = 10.0
+_RECONNECT_INTERVAL = 2.0
+_METADATA_RETRY_INTERVAL = 2.0
 _PRIVATE_TEXT = re.compile(r"://|\b(?:file|online):|[a-z]:[\\/]|\\\\|(?:^|\s)/\S", re.IGNORECASE)
 
 
@@ -94,6 +96,7 @@ class DiscordPresence:
         self._metadata_retry = 0.0
         self._next_connect = 0.0
         self._next_update = 0.0
+        self._retry_update = 0.0
         self._thread = Thread(target=self._run, name="discord-presence", daemon=True)
 
     def start(self):
@@ -130,20 +133,21 @@ class DiscordPresence:
 
     def _cover(self, metadata, duration):
         known = public_cover_url(metadata.get("public_cover_url"))
-        if known and known not in self._rejected_covers:
-            return known
         if self._artwork is None:
-            return None
+            return known if known not in self._rejected_covers else None
         extras = {key: metadata[key] for key in ("source", "permalink_url", "isrc") if metadata.get(key)}
         extras["allow_apple"] = True
+        if known and known not in self._rejected_covers:
+            extras["preferred_url"] = known
         arguments = (metadata.get("title"), metadata.get("artist"), metadata.get("album"),
                      duration or metadata.get("duration_ms"))
         found = public_cover_url(self._artwork.lookup(*arguments, **extras))
         if found and found not in self._rejected_covers:
             return found
-        if found and "permalink_url" in extras:
+        if found and ("permalink_url" in extras or "preferred_url" in extras):
             # The public preview can be rejected even when the underlying song has other artwork.
-            extras.pop("permalink_url")
+            extras.pop("permalink_url", None)
+            extras.pop("preferred_url", None)
             found = public_cover_url(self._artwork.lookup(*arguments, **extras))
         return found if found not in self._rejected_covers else None
 
@@ -151,12 +155,18 @@ class DiscordPresence:
         if application_id != self._session_id:
             self._disconnect(clear=True)
             self._session_id = application_id
-            self._next_connect = self._next_update = 0.0
+            self._next_connect = self._next_update = self._retry_update = 0.0
         if application_id is None:
             self._track, self._track_metadata = None, {}
             return
 
         snapshot = self._playback()
+        session = (snapshot["file_path"], snapshot.get("playback_generation"))
+        if (snapshot["state"] in {"opening", "buffering"} and self._published
+                and self._published[0][:2] == session):
+            # VLC may buffer briefly while seeking or resuming the same track.
+            self._rpc.poll()
+            return
         path = snapshot["file_path"] if snapshot["state"] in _ACTIVE_STATES else None
         if not path:
             if self._published is not None:
@@ -174,21 +184,16 @@ class DiscordPresence:
             self._rpc = self._connect(application_id)
         else:
             return
-        session = (path, snapshot.get("playback_generation"))
-        state = snapshot["state"]
-        urgent = (
-            self._published is None
-            or self._published[0][:2] != session
-            or self._published[0][2] != state
-        )
-        if now < self._next_update and not urgent:
+        if now < self._retry_update:
             return
         if path != self._track:
             self._track, self._track_metadata, self._metadata_retry = path, {}, 0.0
             self._rejected_covers.clear()
-        if not self._track_metadata and now >= self._metadata_retry:
-            self._metadata_retry = now + _RECONNECT_INTERVAL
-            self._track_metadata = dict(self._metadata(path) or {})
+        if now >= self._metadata_retry and not self._track_metadata.get("public_cover_url"):
+            self._metadata_retry = now + _METADATA_RETRY_INTERVAL
+            metadata = self._metadata(path)
+            if metadata:
+                self._track_metadata = dict(metadata)
 
         # Refresh position after opening the pipe or reading tags. A quick stop
         # and replay has a new generation even if both snapshots say playing.
@@ -201,21 +206,35 @@ class DiscordPresence:
         logo = self._artwork.logo() if self._artwork is not None else None
         if logo == self._rejected_logo:
             logo = None
-        identity = (*session, snapshot["state"], snapshot["rate"])
+        identity = (*session, snapshot["state"], snapshot["rate"], snapshot.get("seek_revision", 0))
         wall_time = time.time()
+        removed_logo = None
         while True:
             activity = listening_activity(snapshot, {**metadata, "public_cover_url": cover}, wall_time, logo)
-            if self._published and self._published[0] == identity and _same_activity(self._published[1], activity):
-                return
+            if self._published and self._published[0] == identity:
+                previous = self._published[1]
+                same_display = all(previous.get(key) == activity.get(key) for key in ("details", "state", "assets"))
+                if same_display and (now < self._next_update or _same_activity(previous, activity)):
+                    if removed_logo:
+                        self._rejected_logo = removed_logo
+                    return
             if self._configured_id() != application_id:
                 return
             try:
                 self._rpc.set_activity(activity)
+                if removed_logo:
+                    self._rejected_logo = removed_logo
                 break
-            except DiscordRpcRejected:
-                if cover:
+            except DiscordRpcRejected as error:
+                if error.rate_limited:
+                    self._retry_update = time.monotonic() + _UPDATE_INTERVAL
+                    return
+                if cover and logo:
+                    removed_logo, logo = logo, None
+                elif cover:
                     self._rejected_covers.add(cover)
                     cover = self._cover(metadata, snapshot["duration_ms"])
+                    logo, removed_logo = removed_logo, None
                 elif logo:
                     self._rejected_logo, logo = logo, None
                 else:
@@ -239,6 +258,6 @@ class DiscordPresence:
                     self._disconnect(clear=True)
                     self._next_connect = time.monotonic() + _RECONNECT_INTERVAL
                 if not self._stopping.is_set():
-                    self._wake.wait(1.0 if application_id else None)
+                    self._wake.wait(_POLL_INTERVAL if application_id else None)
         finally:
             self._disconnect(clear=True)

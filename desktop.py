@@ -525,7 +525,7 @@ class DesktopApi:
         if sys.platform != "win32":
             return
         from backend.main import app
-        from backend.current_track_metadata import resolve_current_track_metadata
+        from backend.current_track_metadata import cache_metadata, resolve_current_track_metadata
         from backend.metadata import read_track_metadata
 
         engine = getattr(app.state, "audio_engine", None)
@@ -536,6 +536,7 @@ class DesktopApi:
             metadata = resolve_current_track_metadata(path, app.state.online.metadata)
             if metadata is None and not path.startswith("online:"):
                 metadata = read_track_metadata(path)
+                cache_metadata(metadata)
             if metadata and not metadata.get("public_cover_url"):
                 return {**metadata, "public_cover_url": app.state.online.cover_origin(metadata.get("cover_url"))}
             return metadata

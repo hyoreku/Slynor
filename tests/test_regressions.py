@@ -212,6 +212,7 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertEqual(paused, {
             'state': 'paused', 'filename': 'first.wav', 'file_path': self.paths[0],
             'playback_generation': opening['playback_generation'],
+            'seek_revision': opening['seek_revision'] + 1,
             'time_ms': 90000, 'duration_ms': 180000, 'can_seek': True,
             'rate': 0.8, 'speed_mode': 'slowed', 'playback_error': None,
         })
@@ -240,6 +241,15 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertEqual(idle['time_ms'], 0)
         self.assertEqual(idle['duration_ms'], 0)
         self.assertFalse(idle['can_seek'])
+
+    def test_seek_snapshot_uses_target_until_vlc_moves(self):
+        self.start()
+        before = self.engine.get_playback_snapshot()
+        with patch.object(self.native, 'set_time', return_value=None):
+            self.engine.seek(62000)
+            after = self.engine.get_playback_snapshot()
+        self.assertEqual(after['seek_revision'], before['seek_revision'] + 1)
+        self.assertEqual(after['time_ms'], 62000)
 
 class SettingsRegressionTests(unittest.TestCase):
     def setUp(self):

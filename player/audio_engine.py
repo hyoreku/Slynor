@@ -46,6 +46,8 @@ class AudioEngine:
         self._playback_error = None
         self._auto_advance_enabled = False
         self._generation = 0
+        self._seek_revision = 0
+        self._seek_target = None
         self._closed = False
 
         self._events = SimpleQueue()
@@ -118,6 +120,7 @@ class AudioEngine:
             self._auto_advance_enabled = False
             self._generation += 1
             generation = self._generation
+            self._seek_target = None
 
             for event_type in (vlc.EventType.MediaPlayerEndReached,
                                vlc.EventType.MediaPlayerPlaying,
@@ -367,6 +370,7 @@ class AudioEngine:
         with self._lock:
             self._auto_advance_enabled = False
             self._generation += 1
+            self._seek_target = None
             self._playback_error = None
             self._player.stop()
             self._current_filename = None
@@ -412,6 +416,12 @@ class AudioEngine:
 
             time_ms = max(0, self._player.get_time())
             duration_ms = max(0, self._player.get_length())
+            if self._seek_target is not None:
+                target_ms, requested_at = self._seek_target
+                if abs(time_ms - target_ms) <= 250 or perf_counter() - requested_at >= .75:
+                    self._seek_target = None
+                else:
+                    time_ms = target_ms
 
             can_seek = (
                 native_state in (
@@ -444,6 +454,7 @@ class AudioEngine:
                     else None
                 ),
                 "playback_generation": self._generation,
+                "seek_revision": self._seek_revision,
                 "time_ms": time_ms,
                 "duration_ms": duration_ms,
                 "can_seek": can_seek,
@@ -584,7 +595,11 @@ class AudioEngine:
                 )
 
             target_ms = min(position_ms, duration_ms - 1)
-            self._player.set_time(target_ms)
+            result = self._player.set_time(target_ms)
+            if result == -1:
+                raise RuntimeError("VLC не смог перемотать трек.")
+            self._seek_revision += 1
+            self._seek_target = target_ms, perf_counter()
 
             return target_ms
 

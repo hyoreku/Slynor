@@ -74,6 +74,10 @@ class _WindowsPipe:
 class DiscordRpcRejected(OSError):
     """Discord responded with an RPC error on a live connection."""
 
+    def __init__(self, message, *, rate_limited=False):
+        super().__init__(message)
+        self.rate_limited = rate_limited
+
 
 class DiscordRpc:
     def __init__(self, application_id, open_pipe=_WindowsPipe):
@@ -113,7 +117,11 @@ class DiscordRpc:
         while time.monotonic() < deadline:
             payload = self._receive(deadline)
             if payload.get("evt") == "ERROR" and (nonce is None or payload.get("nonce") == nonce):
-                raise DiscordRpcRejected("Discord rejected the RPC request")
+                data = payload.get("data")
+                limited = isinstance(data, dict) and (
+                    data.get("code") == 429 or "rate limit" in str(data.get("message", "")).casefold()
+                )
+                raise DiscordRpcRejected("Discord rejected the RPC request", rate_limited=limited)
             if matches(payload):
                 return
         raise TimeoutError("Discord RPC response timed out")

@@ -173,39 +173,88 @@ class PresenceTests(unittest.TestCase):
         self.tick(6)
         self.rpc.set_activity.assert_called_once()
         self.snapshot["time_ms"] += 30000
-        self.tick(7)
+        self.snapshot["seek_revision"] = 1
+        self.tick(6.2)
         self.assertEqual(self.rpc.set_activity.call_count, 2)
         self.snapshot["rate"] = 1.5
-        self.tick(8)
-        self.assertEqual(self.rpc.set_activity.call_count, 2)
-        self.tick(12)
+        self.tick(6.5)
         self.assertEqual(self.rpc.set_activity.call_count, 3)
         self.snapshot["state"] = "paused"
-        self.tick(13)
+        self.tick(7)
         paused = self.rpc.set_activity.call_args.args[0]
         self.assertIn("На паузе", paused["state"])
         self.assertNotIn("timestamps", paused)
-        self.tick(14)
+        self.tick(7.4)
         self.assertEqual(self.rpc.set_activity.call_count, 4)
+        self.snapshot.update(time_ms=53000, seek_revision=2)
+        self.tick(7.8)
+        self.assertIn("На паузе · 00:53", self.rpc.set_activity.call_args.args[0]["state"])
+        self.assertEqual(self.rpc.set_activity.call_count, 5)
         self.snapshot["state"] = "playing"
-        self.tick(15)
+        self.tick(8)
         self.assertIn("timestamps", self.rpc.set_activity.call_args.args[0])
         self.snapshot["state"] = "idle"
         self.tick(16)
         self.rpc.set_activity.assert_called_with(None)
         self.connect.assert_called_once_with(DISCORD_APPLICATION_ID)
 
+    def test_seek_updates_timestamps_during_the_normal_update_interval(self):
+        self.enable()
+        self.tick()
+        self.snapshot.update(time_ms=80000, seek_revision=1)
+        self.tick(.4)
+        self.assertEqual(self.rpc.set_activity.call_args.args[0]["timestamps"], {"start": 920, "end": 1061})
+
+    def test_buffering_same_track_keeps_activity(self):
+        self.enable()
+        self.tick()
+        self.snapshot.update(state="buffering")
+        self.tick(.4)
+        self.rpc.set_activity.assert_called_once()
+        self.snapshot.update(state="playing", time_ms=90000, seek_revision=1)
+        self.tick(.8)
+        self.assertEqual(self.rpc.set_activity.call_count, 2)
+
     def test_external_artwork_rejection_falls_back_to_logo(self):
         self.enable()
         self.metadata.return_value = {"title": "Track", "public_cover_url": "https://i.scdn.co/image/id"}
-        self.rpc.set_activity.side_effect = [DiscordRpcRejected("bad image"), None, None]
+        self.artwork.lookup.side_effect = [self.metadata.return_value["public_cover_url"], None, None]
+        self.rpc.set_activity.side_effect = [DiscordRpcRejected("bad image"), DiscordRpcRejected("bad image"), None, None]
         self.tick()
-        first, fallback = [call.args[0] for call in self.rpc.set_activity.call_args_list]
+        first, no_logo, fallback = [call.args[0] for call in self.rpc.set_activity.call_args_list]
         self.assertIn("small_image", first["assets"])
+        self.assertNotIn("small_image", no_logo["assets"])
         self.assertEqual(fallback["assets"]["large_image"], LOGO_ID)
         self.snapshot["state"] = "paused"
         self.tick(1)
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], LOGO_ID)
+
+    def test_rejected_logo_does_not_discard_valid_cover(self):
+        self.enable()
+        url = "https://i.scdn.co/image/id"
+        self.artwork.lookup.return_value = url
+        self.rpc.set_activity.side_effect = [DiscordRpcRejected("bad logo"), None, None]
+        self.tick()
+        self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"], {
+            "large_image": url, "large_text": "Обложка трека",
+        })
+        self.snapshot.update(state="paused")
+        self.tick(.4)
+        self.assertNotIn("small_image", self.rpc.set_activity.call_args.args[0]["assets"])
+
+    def test_rate_limit_retries_with_the_latest_position_and_cover(self):
+        self.enable()
+        cover = "https://i.scdn.co/image/id"
+        self.artwork.lookup.return_value = cover
+        self.rpc.set_activity.side_effect = [DiscordRpcRejected("rate limit", rate_limited=True), None]
+        self.tick()
+        self.snapshot.update(time_ms=80000, seek_revision=1)
+        self.tick(.4)
+        self.rpc.set_activity.assert_called_once()
+        self.tick(5)
+        sent = self.rpc.set_activity.call_args.args[0]
+        self.assertEqual(sent["assets"]["large_image"], cover)
+        self.assertEqual(sent["timestamps"]["start"], 925)
 
     def test_stop_and_same_track_replay_publish_before_throttle_expires(self):
         self.enable()
@@ -245,7 +294,7 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], LOGO_ID)
         url = "https://archive.org/download/mbid-11111111-1111-1111-1111-111111111111/front.jpg"
         self.artwork.lookup.return_value = url
-        self.tick(5)
+        self.tick(.4)
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], url)
 
     def test_rejected_provider_picture_uses_alternative_artwork(self):
@@ -256,8 +305,9 @@ class PresenceTests(unittest.TestCase):
             "public_cover_url": "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
         }
         alternate = "https://archive.org/download/mbid-11111111-1111-1111-1111-111111111111/front.jpg"
-        self.artwork.lookup.side_effect = [self.metadata.return_value["public_cover_url"], alternate]
-        self.rpc.set_activity.side_effect = [DiscordRpcRejected("bad image"), None]
+        self.artwork.lookup.side_effect = [self.metadata.return_value["public_cover_url"],
+                                           self.metadata.return_value["public_cover_url"], alternate]
+        self.rpc.set_activity.side_effect = [DiscordRpcRejected("bad image"), DiscordRpcRejected("bad image"), None]
         self.tick()
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], alternate)
 

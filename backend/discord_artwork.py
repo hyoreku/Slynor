@@ -191,15 +191,20 @@ class DiscordArtwork:
                 self._logo_until = time() + ttl
                 self._logo_running = False
 
-    def lookup(self, title, artist, album, duration_ms, *, source=None, permalink_url=None, isrc=None, allow_apple=False):
+    def lookup(self, title, artist, album, duration_ms, *, source=None, permalink_url=None, isrc=None,
+               allow_apple=False, preferred_url=None):
         title, artist, album = map(_query_text, (title, artist, album))
+        preferred_url = public_cover_url(preferred_url)
         page = track_page(permalink_url, source)
         isrc = recording_code(isrc)
-        if not (title and artist) and not page and not isrc:
+        if not (title and artist) and not page and not isrc and not preferred_url:
             return None
         milliseconds = duration_ms if type(duration_ms) is int and duration_ms > 0 else 0
-        key = sha256(json.dumps([3, _normalized(title), _normalized(artist), _normalized(album),
-                                 round(milliseconds / 1000), page, isrc, allow_apple], ensure_ascii=False).encode()).hexdigest()
+        cache_key = [3, _normalized(title), _normalized(artist), _normalized(album),
+                     round(milliseconds / 1000), page, isrc, allow_apple]
+        if preferred_url:
+            cache_key.append(preferred_url)
+        key = sha256(json.dumps(cache_key, ensure_ascii=False).encode()).hexdigest()
         with self._lock:
             cached = self._cache.get(key)
             if cached and cached[0] > time():
@@ -208,7 +213,7 @@ class DiscordArtwork:
             if not self._running and monotonic() >= self._search_after:
                 self._running = True
                 Thread(target=self._resolve, args=(key, title, artist, album or "", milliseconds,
-                                                   source if page else None, page, isrc, allow_apple),
+                                                   source if page else None, page, isrc, allow_apple, preferred_url),
                        name="discord-cover", daemon=True).start()
         return None
 
@@ -228,7 +233,8 @@ class DiscordArtwork:
         except (OSError, sqlite3.Error):
             return None
 
-    def _resolve(self, key, title, artist, album, milliseconds, source, page, isrc, allow_apple):
+    def _resolve(self, key, title, artist, album, milliseconds, source, page, isrc, allow_apple,
+                 preferred_url):
         result = (time() + 90, None)
         try:
             cached = self._cached(key)
@@ -239,7 +245,8 @@ class DiscordArtwork:
                     self._search_after = monotonic() + 1.1
                 proxy = self._network.resolve() if self._network is not None else None
                 cover = self._search(title, artist, album, milliseconds, source=source, page=page,
-                                     isrc=isrc, proxy=proxy, allow_apple=allow_apple)
+                                     isrc=isrc, proxy=proxy, allow_apple=allow_apple,
+                                     preferred_url=preferred_url)
                 result = (time() + (30 * 86400 if cover else 12 * 3600), cover)
                 self._cached(key, result)
         except (httpx.HTTPError, ValueError, TypeError, AttributeError, OSError):
@@ -301,10 +308,18 @@ class DiscordArtwork:
         return None
 
     @classmethod
-    def _search(cls, title, artist, album, milliseconds, *, source=None, page=None, isrc=None, proxy=None, allow_apple=False):
+    def _search(cls, title, artist, album, milliseconds, *, source=None, page=None, isrc=None,
+                proxy=None, allow_apple=False, preferred_url=None):
         with httpx.Client(headers={"User-Agent": _USER_AGENT}, timeout=3,
                           follow_redirects=False, trust_env=False, proxy=proxy) as client:
             provider_failed = False
+            if preferred_url:
+                try:
+                    cover = cls._image_at(client, preferred_url, public_cover_url, monotonic() + 3)
+                    if cover:
+                        return cover
+                except httpx.HTTPError:
+                    provider_failed = True
             if page:
                 try:
                     cover = youtube_thumbnail(page) if source == "youtube" else None

@@ -14,6 +14,7 @@ class PlaybackSnapshot(TypedDict):
     filename: str | None
     file_path: str | None
     playback_generation: int
+    seek_revision: int
     time_ms: int
     duration_ms: int
     can_seek: bool

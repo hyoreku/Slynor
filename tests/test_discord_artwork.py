@@ -71,6 +71,22 @@ class DiscordArtworkTests(unittest.TestCase):
             self.assertIsNone(restarted._cached("old"))
             self.assertIsNone(restarted._cached("private"))
 
+    def test_stale_published_cover_falls_back_to_verified_artwork(self):
+        def server(request):
+            if request.url.host == "i.scdn.co":
+                return httpx.Response(404)
+            if request.url.host == "musicbrainz.org":
+                return httpx.Response(200, json={"recordings": [self.recording()]})
+            if request.url.host == "coverartarchive.org":
+                return httpx.Response(307, headers={"Location": ARTWORK})
+            return httpx.Response(200, headers={"Content-Type": "image/jpeg"})
+
+        client = httpx.Client(transport=httpx.MockTransport(server))
+        with patch("backend.discord_artwork.httpx.Client", return_value=client):
+            self.assertEqual(DiscordArtwork._search(
+                "Мой ненаглядный", "IOWA & Acid Minerale", "Песня", 190000,
+                preferred_url="https://i.scdn.co/image/expired"), ARTWORK)
+
     def test_album_cover_when_release_status_is_omitted_and_head_is_blocked(self):
         def server(request):
             if request.url.host == "musicbrainz.org":
