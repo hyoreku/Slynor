@@ -135,6 +135,7 @@ class DiscordPresence:
         if self._artwork is None:
             return None
         extras = {key: metadata[key] for key in ("source", "permalink_url", "isrc") if metadata.get(key)}
+        extras["allow_apple"] = True
         arguments = (metadata.get("title"), metadata.get("artist"), metadata.get("album"),
                      duration or metadata.get("duration_ms"))
         found = public_cover_url(self._artwork.lookup(*arguments, **extras))

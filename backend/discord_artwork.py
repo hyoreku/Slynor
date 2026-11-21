@@ -18,6 +18,7 @@ from backend.provider_worker import validate_track_url
 _MBID = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
 _USER_AGENT = "Slynor/0.1 (https://github.com/hyoreku/Slynor)"
 _MUSICBRAINZ = "https://musicbrainz.org/ws/2/recording/"
+_APPLE_SEARCH = "https://itunes.apple.com/search"
 _MAX_CACHE = 2048
 _NOT_STUDIO = re.compile(r"\b(?:live|remix|instrumental|demo|karaoke|cover|acoustic)\b", re.I)
 _COVER_HOSTS = {
@@ -56,7 +57,9 @@ def public_cover_url(value):
         host = url.hostname or ""
         if (url.scheme == "https" and url.username is None and url.password is None
                 and url.port in (None, 443) and url.path not in ("", "/")
-                and (host in _COVER_HOSTS or host.endswith(".sndcdn.com"))):
+                and (host in _COVER_HOSTS or host.endswith(".sndcdn.com")
+                     or (re.fullmatch(r"is[0-9]+-ssl\.mzstatic\.com", host)
+                         and url.path.startswith("/image/thumb/Music")))):
             # The public path is enough. The query can hold temporary credentials.
             return urlunsplit(("https", host, url.path, "", ""))
     except ValueError:
@@ -128,7 +131,8 @@ def _releases(search, title, artist, album, duration_ms, *, isrc=None, release_g
             continue
         for release in (recording.get("releases") or [])[:20]:
             release_id = release.get("id", "")
-            if release.get("status") != "Official" or not re.fullmatch(_MBID, release_id):
+            status = release.get("status")
+            if status not in (None, "Official") or not re.fullmatch(_MBID, release_id):
                 continue
             group = release.get("release-group") or {}
             exact_album = bool(album) and _normalized(album) in {
@@ -140,11 +144,11 @@ def _releases(search, title, artist, album, duration_ms, *, isrc=None, release_g
                 continue
             date = release.get("date") or group.get("first-release-date") or "9999"
             group_id = group.get("id") or ""
-            candidates.append((not exact_isrc, not exact_album, difference, date, release_id,
+            candidates.append((not exact_isrc, not exact_album, status != "Official", difference, date, release_id,
                                group_id if re.fullmatch(_MBID, group_id) else ""))
     if not release_groups:
-        return list(dict.fromkeys(row[4] for row in sorted(candidates)))[:3]
-    return list(dict.fromkeys(row[4:] for row in sorted(candidates)))[:3]
+        return list(dict.fromkeys(row[-2] for row in sorted(candidates)))[:3]
+    return list(dict.fromkeys(row[-2:] for row in sorted(candidates)))[:3]
 
 
 class DiscordArtwork:
@@ -187,15 +191,15 @@ class DiscordArtwork:
                 self._logo_until = time() + ttl
                 self._logo_running = False
 
-    def lookup(self, title, artist, album, duration_ms, *, source=None, permalink_url=None, isrc=None):
+    def lookup(self, title, artist, album, duration_ms, *, source=None, permalink_url=None, isrc=None, allow_apple=False):
         title, artist, album = map(_query_text, (title, artist, album))
         page = track_page(permalink_url, source)
         isrc = recording_code(isrc)
         if not (title and artist) and not page and not isrc:
             return None
         milliseconds = duration_ms if type(duration_ms) is int and duration_ms > 0 else 0
-        key = sha256(json.dumps([2, _normalized(title), _normalized(artist), _normalized(album),
-                                 round(milliseconds / 1000), page, isrc], ensure_ascii=False).encode()).hexdigest()
+        key = sha256(json.dumps([3, _normalized(title), _normalized(artist), _normalized(album),
+                                 round(milliseconds / 1000), page, isrc, allow_apple], ensure_ascii=False).encode()).hexdigest()
         with self._lock:
             cached = self._cache.get(key)
             if cached and cached[0] > time():
@@ -204,7 +208,7 @@ class DiscordArtwork:
             if not self._running and monotonic() >= self._search_after:
                 self._running = True
                 Thread(target=self._resolve, args=(key, title, artist, album or "", milliseconds,
-                                                   source if page else None, page, isrc),
+                                                   source if page else None, page, isrc, allow_apple),
                        name="discord-cover", daemon=True).start()
         return None
 
@@ -224,7 +228,7 @@ class DiscordArtwork:
         except (OSError, sqlite3.Error):
             return None
 
-    def _resolve(self, key, title, artist, album, milliseconds, source, page, isrc):
+    def _resolve(self, key, title, artist, album, milliseconds, source, page, isrc, allow_apple):
         result = (time() + 90, None)
         try:
             cached = self._cached(key)
@@ -235,7 +239,7 @@ class DiscordArtwork:
                     self._search_after = monotonic() + 1.1
                 proxy = self._network.resolve() if self._network is not None else None
                 cover = self._search(title, artist, album, milliseconds, source=source, page=page,
-                                     isrc=isrc, proxy=proxy)
+                                     isrc=isrc, proxy=proxy, allow_apple=allow_apple)
                 result = (time() + (30 * 86400 if cover else 12 * 3600), cover)
                 self._cached(key, result)
         except (httpx.HTTPError, ValueError, TypeError, AttributeError, OSError):
@@ -255,6 +259,10 @@ class DiscordArtwork:
             if remaining <= 0:
                 raise httpx.TimeoutException("Artwork lookup timed out")
             response = client.head(url, timeout=min(3, remaining))
+            if response.status_code in (403, 405):
+                # Some image hosts reject HEAD. Inspect GET headers without reading the image.
+                with client.stream("GET", url, headers={"Range": "bytes=0-0"}, timeout=min(3, remaining)) as get:
+                    response = get
             if response.status_code in (404, 410):
                 return None
             if response.is_redirect:
@@ -269,7 +277,31 @@ class DiscordArtwork:
         return None
 
     @classmethod
-    def _search(cls, title, artist, album, milliseconds, *, source=None, page=None, isrc=None, proxy=None):
+    def _apple_artwork(cls, client, title, artist, album, milliseconds):
+        response = client.get(_APPLE_SEARCH, params={"term": f"{artist} {title}", "entity": "song", "limit": 15})
+        candidates = []
+        for item in response.raise_for_status().json().get("results", [])[:15]:
+            if (_normalized(item.get("trackName")) != _normalized(title)
+                    or _normalized(item.get("artistName")) != _normalized(artist)):
+                continue
+            length = item.get("trackTimeMillis")
+            if milliseconds and (type(length) is not int or abs(length - milliseconds) > 5000):
+                continue
+            url = public_cover_url(item.get("artworkUrl100"))
+            if url:
+                candidates.append((_normalized(item.get("collectionName")) != _normalized(album),
+                                   abs(length - milliseconds) if milliseconds else 0, url))
+        deadline = monotonic() + 4
+        for _, _, url in sorted(set(candidates))[:3]:
+            try:
+                if cover := cls._image_at(client, url, public_cover_url, deadline):
+                    return cover
+            except httpx.HTTPError:
+                continue
+        return None
+
+    @classmethod
+    def _search(cls, title, artist, album, milliseconds, *, source=None, page=None, isrc=None, proxy=None, allow_apple=False):
         with httpx.Client(headers={"User-Agent": _USER_AGENT}, timeout=3,
                           follow_redirects=False, trust_env=False, proxy=proxy) as client:
             provider_failed = False
@@ -292,18 +324,30 @@ class DiscordArtwork:
                 query = f"(isrc:{isrc} OR ({query}))" if query else f"isrc:{isrc}"
             if query:
                 deadline = monotonic() + 8
-                search = client.get(_MUSICBRAINZ, params={
-                    "query": f"({query}) AND status:official", "fmt": "json", "limit": 12,
-                })
-                for release_id, group_id in _releases(search.raise_for_status().json(), title, artist, album,
-                                                      milliseconds, isrc=isrc, release_groups=True):
-                    urls = [f"https://coverartarchive.org/release/{release_id}/front-250"]
-                    if group_id:
-                        urls.append(f"https://coverartarchive.org/release-group/{group_id}/front-250")
-                    for url in urls:
-                        cover = cls._image_at(client, url, archive_cover_url, deadline)
-                        if cover:
-                            return cover
+                try:
+                    search = client.get(_MUSICBRAINZ, params={
+                        "query": f"({query}) AND status:official", "fmt": "json", "limit": 12,
+                    })
+                    for release_id, group_id in _releases(search.raise_for_status().json(), title, artist, album,
+                                                          milliseconds, isrc=isrc, release_groups=True):
+                        urls = [f"https://coverartarchive.org/release/{release_id}/front-250"]
+                        if group_id:
+                            urls.append(f"https://coverartarchive.org/release-group/{group_id}/front-250")
+                        for url in urls:
+                            try:
+                                if cover := cls._image_at(client, url, archive_cover_url, deadline):
+                                    return cover
+                            except httpx.HTTPError:
+                                provider_failed = True
+                except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                    provider_failed = True
+
+            if allow_apple and title and artist:
+                try:
+                    if cover := cls._apple_artwork(client, title, artist, album, milliseconds):
+                        return cover
+                except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                    provider_failed = True
             if provider_failed:
                 raise httpx.RequestError("Track thumbnail provider unavailable")
         return None

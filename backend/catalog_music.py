@@ -185,7 +185,7 @@ class CatalogueLibrary(InternetLibrary):
   if not ref.startswith('online:catalog:'):return super().start_download(ref,confirmed,audio_format)
   with self.lock:track=deepcopy(self.catalogue.get(ref))
   if not track:raise ProviderError('Запись устарела. Повторите поиск.')
-  track['public_cover_url']=public_cover_url(self.cover_origin(track.get('cover_url')))
+  track['public_cover_url']=public_cover_url(track.get('public_cover_url')) or public_cover_url(self.cover_origin(track.get('cover_url')))
   cache_ref=ref if audio_format=='original' else ref+'|mp3'
   cached=self.downloaded.get(cache_ref)
   if not cached and audio_format=='mp3':

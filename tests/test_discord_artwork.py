@@ -71,6 +71,38 @@ class DiscordArtworkTests(unittest.TestCase):
             self.assertIsNone(restarted._cached("old"))
             self.assertIsNone(restarted._cached("private"))
 
+    def test_album_cover_when_release_status_is_omitted_and_head_is_blocked(self):
+        def server(request):
+            if request.url.host == "musicbrainz.org":
+                release = {"id": RELEASE, "title": "Песня"}
+                return httpx.Response(200, json={"recordings": [self.recording(releases=[release])]})
+            if request.url.host == "coverartarchive.org":
+                return httpx.Response(307, headers={"Location": ARTWORK})
+            if request.method == "HEAD":
+                return httpx.Response(405)
+            self.assertEqual(request.headers["Range"], "bytes=0-0")
+            return httpx.Response(206, headers={"Content-Type": "image/jpeg"})
+
+        client = httpx.Client(transport=httpx.MockTransport(server))
+        with patch("backend.discord_artwork.httpx.Client", return_value=client):
+            self.assertEqual(DiscordArtwork._search("Мой ненаглядный", "IOWA & Acid Minerale", "Песня", 190000), ARTWORK)
+
+    def test_apple_cover_fallback_after_musicbrainz_failure(self):
+        cover = "https://is1-ssl.mzstatic.com/image/thumb/MusicTest/cover/100x100bb.jpg"
+        def server(request):
+            if request.url.host == "musicbrainz.org":
+                return httpx.Response(503)
+            if request.url.host == "itunes.apple.com":
+                result = {"trackName": "Песня", "artistName": "Маяк", "trackTimeMillis": 190000,
+                          "artworkUrl100": cover + "?token=discarded"}
+                return httpx.Response(200, json={"results": [{**result, "trackTimeMillis": 250000}, result]})
+            self.assertEqual(str(request.url), cover)
+            return httpx.Response(200, headers={"Content-Type": "image/jpeg"})
+
+        client = httpx.Client(transport=httpx.MockTransport(server))
+        with patch("backend.discord_artwork.httpx.Client", return_value=client):
+            self.assertEqual(DiscordArtwork._search("Песня", "Маяк", "", 190000, allow_apple=True), cover)
+
     def test_download_without_cached_image_uses_its_youtube_page(self):
         def server(request):
             self.assertEqual(str(request.url), YOUTUBE_IMAGE)

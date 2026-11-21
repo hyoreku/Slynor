@@ -241,7 +241,7 @@ class PresenceTests(unittest.TestCase):
         self.enable()
         self.metadata.return_value = {"title": "Трек", "artist": "Артист", "album": "Альбом"}
         self.tick()
-        self.artwork.lookup.assert_called_once_with("Трек", "Артист", "Альбом", 140000)
+        self.artwork.lookup.assert_called_once_with("Трек", "Артист", "Альбом", 140000, allow_apple=True)
         self.assertEqual(self.rpc.set_activity.call_args.args[0]["assets"]["large_image"], LOGO_ID)
         url = "https://archive.org/download/mbid-11111111-1111-1111-1111-111111111111/front.jpg"
         self.artwork.lookup.return_value = url
