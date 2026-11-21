@@ -31,6 +31,7 @@ class AudioEngine:
         self._native_eq = None
         self._current_filename = None
         self.stream_resolver = None
+        self.playback_changed = None
         self._current_stream_url = None
         self._output_device = ""
         self._startup = None
@@ -176,6 +177,7 @@ class AudioEngine:
         self._queue = list(ordered_paths)
         self._queue_index = index
         self._queue_revision += 1
+        self._notify_playback_changed()
 
         return filename
 
@@ -238,6 +240,7 @@ class AudioEngine:
         filename = self._play_file(self._queue[index])
         self._queue_index = index
         self._queue_revision += 1
+        self._notify_playback_changed()
         return filename
 
     # Автоматический переход и повтор списка; для shuffle создаём новый цикл.
@@ -285,6 +288,10 @@ class AudioEngine:
             return self._play_queue_index(previous_index)
 
     # Фоновая обработка завершения VLC. Не вызываем VLC из его собственного callback.
+    def _notify_playback_changed(self):
+        if self.playback_changed is not None:
+            self.playback_changed()
+
     def _process_events(self):
         while True:
             item = self._events.get()
@@ -312,6 +319,7 @@ class AudioEngine:
                     except Exception as error:
                         self._playback_error = str(error)
                         logger.exception("Ошибка скорости нового трека")
+                    self._notify_playback_changed()
                     continue
                 if kind == "error":
                     self._auto_advance_enabled = False
@@ -351,6 +359,7 @@ class AudioEngine:
                 )
 
             self._player.set_pause(1)
+            self._notify_playback_changed()
 
     # Продолжение только после паузы.
     def resume(self):
@@ -364,6 +373,7 @@ class AudioEngine:
                 )
 
             self._player.set_pause(0)
+            self._notify_playback_changed()
 
     # Стоп снимает текущую песню и очередь. Пауза их не меняет.
     def stop(self):
@@ -379,6 +389,7 @@ class AudioEngine:
             self._queue = []
             self._queue_index = None
             self._queue_revision += 1
+            self._notify_playback_changed()
             # Выбор shuffle и громкость сохраняем для следующего запуска.
 
     def report_stream_error(self, expected_url, message):
@@ -600,6 +611,7 @@ class AudioEngine:
                 raise RuntimeError("VLC не смог перемотать трек.")
             self._seek_revision += 1
             self._seek_target = target_ms, perf_counter()
+            self._notify_playback_changed()
 
             return target_ms
 

@@ -3,9 +3,10 @@ import os
 import struct
 import tempfile
 import unittest
+from threading import Event
 from unittest.mock import Mock, patch
 
-from backend.discord_presence import DISCORD_APPLICATION_ID, DiscordPresence, listening_activity
+from backend.discord_presence import DISCORD_APPLICATION_ID, DiscordPresence, LatestTrackMetadata, listening_activity
 from backend.discord_rpc import DiscordRpc, DiscordRpcRejected
 from test_regressions import DesktopApi
 
@@ -251,10 +252,33 @@ class PresenceTests(unittest.TestCase):
         self.snapshot.update(time_ms=80000, seek_revision=1)
         self.tick(.4)
         self.rpc.set_activity.assert_called_once()
-        self.tick(5)
+        self.tick(1)
         sent = self.rpc.set_activity.call_args.args[0]
         self.assertEqual(sent["assets"]["large_image"], cover)
-        self.assertEqual(sent["timestamps"]["start"], 925)
+        self.assertEqual(sent["timestamps"]["start"], 921)
+
+    def test_new_opening_track_replaces_previous_playing_activity(self):
+        self.enable()
+        self.tick()
+        self.metadata.return_value = None
+        self.snapshot.update(file_path=r"C:\Music\latest.flac", filename="Latest", state="opening",
+                             playback_generation=4, time_ms=0)
+        self.tick(.1)
+        sent = self.rpc.set_activity.call_args.args[0]
+        self.assertEqual(sent["details"], "Latest")
+        self.assertNotIn("timestamps", sent)
+
+    def test_rejected_picture_does_not_retry_after_switch(self):
+        self.enable()
+        self.artwork.lookup.return_value = "https://i.scdn.co/image/id"
+
+        def switch_on_rejection(_activity):
+            self.snapshot.update(file_path=r"C:\Music\latest.flac", filename="Latest", playback_generation=4)
+            raise DiscordRpcRejected("bad image")
+
+        self.rpc.set_activity.side_effect = switch_on_rejection
+        self.tick()
+        self.rpc.set_activity.assert_called_once()
 
     def test_stop_and_same_track_replay_publish_before_throttle_expires(self):
         self.enable()
@@ -356,6 +380,33 @@ class PresenceTests(unittest.TestCase):
         self.assertIsNone(clear.args[0])
         second_rpc.close.assert_called_once()
 
+
+
+class LatestMetadataTests(unittest.TestCase):
+    def test_slow_previous_read_is_skipped_and_pending_reads_are_coalesced(self):
+        started, release, ready = Event(), Event(), Event()
+        paths = []
+
+        def read(path):
+            paths.append(path)
+            if path == "first":
+                started.set()
+                self.assertTrue(release.wait(2))
+            return {"title": path}
+
+        reader = LatestTrackMetadata(read, ready.set)
+        try:
+            self.assertIsNone(reader.lookup("first"))
+            self.assertTrue(started.wait(2))
+            self.assertIsNone(reader.lookup("second"))
+            self.assertIsNone(reader.lookup("latest"))
+            release.set()
+            self.assertTrue(ready.wait(2))
+            self.assertEqual(reader.lookup("latest"), {"title": "latest"})
+            self.assertEqual(paths, ["first", "latest"])
+        finally:
+            release.set()
+            reader.close()
 
 class DesktopSettingsTests(unittest.TestCase):
     def test_opt_in_and_legacy_settings(self):

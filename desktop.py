@@ -543,6 +543,7 @@ class DesktopApi:
 
         artwork = app.state.track_artwork
         self._discord_presence = DiscordPresence(engine.get_playback_snapshot, track_metadata, artwork=artwork)
+        engine.playback_changed = self._discord_presence.refresh
         self._discord_presence.start()
         try:
             settings = self.load_settings()

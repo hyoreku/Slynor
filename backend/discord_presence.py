@@ -14,7 +14,7 @@ logger = logging.getLogger("ownplayer.discord")
 # Public Application ID of the Slynor registration in the Discord Developer Portal.
 DISCORD_APPLICATION_ID = "1573407288759296051"
 _ACTIVE_STATES = {"playing", "paused"}
-_POLL_INTERVAL = .35
+_POLL_INTERVAL = .12
 _UPDATE_INTERVAL = 5.0
 _RECONNECT_INTERVAL = 2.0
 _METADATA_RETRY_INTERVAL = 2.0
@@ -36,7 +36,8 @@ def _elapsed(milliseconds):
 
 
 def listening_activity(snapshot: PlaybackSnapshot, metadata: dict, now: float, logo=None):
-    activity = {"type": 2, "details": _presence_text(metadata.get("title")) or "Slynor"}
+    title = metadata.get("title") or snapshot.get("filename")
+    activity = {"type": 2, "details": _presence_text(title) or "Slynor"}
     cover = public_cover_url(metadata.get("public_cover_url"))
     if cover:
         activity["assets"] = {"large_image": cover, "large_text": "Обложка трека"}
@@ -56,7 +57,7 @@ def listening_activity(snapshot: PlaybackSnapshot, metadata: dict, now: float, l
     artist = _presence_text(metadata.get("artist"))
     if artist:
         activity["state"] = artist
-    if 0 <= position < duration and math.isfinite(rate) and rate > 0:
+    if snapshot["state"] == "playing" and 0 <= position < duration and math.isfinite(rate) and rate > 0:
         activity["timestamps"] = {
             "start": int(now - position / (1000 * rate)),
             "end": math.ceil(now + (duration - position) / (1000 * rate)),
@@ -74,6 +75,60 @@ def _same_activity(previous, current):
         and old.keys() == new.keys()
         and all(abs(old[key] - new[key]) < 2 for key in old)
     )
+
+
+class LatestTrackMetadata:
+    """Keep tag reads off the IPC thread and coalesce pending paths."""
+
+    def __init__(self, read, ready):
+        self._read = read
+        self._ready = ready
+        self._lock = Lock()
+        self._wake = Event()
+        self._path = None
+        self._request = None
+        self._data = None
+        self._retry = 0
+        self._closed = False
+        Thread(target=self._run, name="discord-track-tags", daemon=True).start()
+
+    def lookup(self, path):
+        with self._lock:
+            if self._path != path:
+                self._path, self._data, self._retry = path, None, 0
+            if self._request != path and time.monotonic() >= self._retry:
+                self._request = path
+                self._wake.set()
+            return self._data
+
+    def close(self):
+        with self._lock:
+            self._closed = True
+        self._wake.set()
+
+    def _run(self):
+        while self._wake.wait():
+            with self._lock:
+                self._wake.clear()
+                if self._closed:
+                    return
+                path = self._request
+            if path is None:
+                continue
+            data = None
+            try:
+                data = self._read(path)
+            except Exception as error:
+                logger.debug("Discord track metadata unavailable (%s)", type(error).__name__)
+            with self._lock:
+                if self._closed:
+                    return
+                if path != self._request:
+                    continue
+                self._data = data
+                self._request = None
+                self._retry = time.monotonic() + _METADATA_RETRY_INTERVAL
+            self._ready()
 
 
 class DiscordPresence:
@@ -97,10 +152,16 @@ class DiscordPresence:
         self._next_connect = 0.0
         self._next_update = 0.0
         self._retry_update = 0.0
+        self._rate_backoff = 1.0
+        self._metadata_reader = None
         self._thread = Thread(target=self._run, name="discord-presence", daemon=True)
 
     def start(self):
+        self._metadata_reader = LatestTrackMetadata(self._metadata, self.refresh)
         self._thread.start()
+
+    def refresh(self):
+        self._wake.set()
 
     def configure(self, enabled):
         with self._lock:
@@ -115,6 +176,8 @@ class DiscordPresence:
 
     def close(self):
         self._stopping.set()
+        if self._metadata_reader is not None:
+            self._metadata_reader.close()
         self._wake.set()
         self._thread.join(timeout=4)
 
@@ -156,18 +219,22 @@ class DiscordPresence:
             self._disconnect(clear=True)
             self._session_id = application_id
             self._next_connect = self._next_update = self._retry_update = 0.0
+            self._rate_backoff = 1.0
         if application_id is None:
             self._track, self._track_metadata = None, {}
             return
 
         snapshot = self._playback()
         session = (snapshot["file_path"], snapshot.get("playback_generation"))
-        if (snapshot["state"] in {"opening", "buffering"} and self._published
-                and self._published[0][:2] == session):
-            # VLC may buffer briefly while seeking or resuming the same track.
-            self._rpc.poll()
-            return
-        path = snapshot["file_path"] if snapshot["state"] in _ACTIVE_STATES else None
+        states = _ACTIVE_STATES
+        if self._published:
+            if (snapshot["state"] in {"opening", "buffering"} and self._published[0][:2] == session
+                    and self._published[0][2] in _ACTIVE_STATES):
+                # Keep the clock for the same track when VLC buffers during a seek.
+                self._rpc.poll()
+                return
+            states = _ACTIVE_STATES | {"opening", "buffering"}
+        path = snapshot["file_path"] if snapshot["state"] in states else None
         if not path:
             if self._published is not None:
                 try:
@@ -189,28 +256,37 @@ class DiscordPresence:
         if path != self._track:
             self._track, self._track_metadata, self._metadata_retry = path, {}, 0.0
             self._rejected_covers.clear()
-        if now >= self._metadata_retry and not self._track_metadata.get("public_cover_url"):
-            self._metadata_retry = now + _METADATA_RETRY_INTERVAL
-            metadata = self._metadata(path)
+        if not self._track_metadata.get("public_cover_url") and (
+                self._metadata_reader is not None or now >= self._metadata_retry):
+            if self._metadata_reader is None:
+                self._metadata_retry = now + _METADATA_RETRY_INTERVAL
+                metadata = self._metadata(path)
+            else:
+                metadata = self._metadata_reader.lookup(path)
             if metadata:
                 self._track_metadata = dict(metadata)
 
         # Refresh position after opening the pipe or reading tags. A quick stop
         # and replay has a new generation even if both snapshots say playing.
         snapshot = self._playback()
-        if (self._configured_id() != application_id or snapshot["state"] not in _ACTIVE_STATES
+        if (self._configured_id() != application_id or snapshot["state"] not in states
                 or (snapshot["file_path"], snapshot.get("playback_generation")) != session):
+            self.refresh()
             return
         metadata = self._track_metadata
         cover = self._cover(metadata, snapshot["duration_ms"])
         logo = self._artwork.logo() if self._artwork is not None else None
         if logo == self._rejected_logo:
             logo = None
-        identity = (*session, snapshot["state"], snapshot["rate"], snapshot.get("seek_revision", 0))
-        wall_time = time.time()
         removed_logo = None
         while True:
-            activity = listening_activity(snapshot, {**metadata, "public_cover_url": cover}, wall_time, logo)
+            snapshot = self._playback()
+            if (self._configured_id() != application_id or snapshot["state"] not in states
+                    or (snapshot["file_path"], snapshot.get("playback_generation")) != session):
+                self.refresh()
+                return
+            identity = (*session, snapshot["state"], snapshot["rate"], snapshot.get("seek_revision", 0))
+            activity = listening_activity(snapshot, {**metadata, "public_cover_url": cover}, time.time(), logo)
             if self._published and self._published[0] == identity:
                 previous = self._published[1]
                 same_display = all(previous.get(key) == activity.get(key) for key in ("details", "state", "assets"))
@@ -218,16 +294,16 @@ class DiscordPresence:
                     if removed_logo:
                         self._rejected_logo = removed_logo
                     return
-            if self._configured_id() != application_id:
-                return
             try:
                 self._rpc.set_activity(activity)
+                self._rate_backoff = 1.0
                 if removed_logo:
                     self._rejected_logo = removed_logo
                 break
             except DiscordRpcRejected as error:
                 if error.rate_limited:
-                    self._retry_update = time.monotonic() + _UPDATE_INTERVAL
+                    self._retry_update = time.monotonic() + (error.retry_after or self._rate_backoff)
+                    self._rate_backoff = min(5.0, self._rate_backoff * 2)
                     return
                 if cover and logo:
                     removed_logo, logo = logo, None

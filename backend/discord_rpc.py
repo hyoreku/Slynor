@@ -1,6 +1,7 @@
 """Direct Rich Presence over Discord Desktop's documented local RPC protocol."""
 
 import json
+import math
 import os
 import struct
 import time
@@ -74,9 +75,10 @@ class _WindowsPipe:
 class DiscordRpcRejected(OSError):
     """Discord responded with an RPC error on a live connection."""
 
-    def __init__(self, message, *, rate_limited=False):
+    def __init__(self, message, *, rate_limited=False, retry_after=None):
         super().__init__(message)
         self.rate_limited = rate_limited
+        self.retry_after = retry_after
 
 
 class DiscordRpc:
@@ -118,10 +120,12 @@ class DiscordRpc:
             payload = self._receive(deadline)
             if payload.get("evt") == "ERROR" and (nonce is None or payload.get("nonce") == nonce):
                 data = payload.get("data")
-                limited = isinstance(data, dict) and (
-                    data.get("code") == 429 or "rate limit" in str(data.get("message", "")).casefold()
-                )
-                raise DiscordRpcRejected("Discord rejected the RPC request", rate_limited=limited)
+                data = data if isinstance(data, dict) else {}
+                message = str(data.get("message", "")).casefold()
+                delay = data.get("retry_after")
+                delay = delay if type(delay) in (float, int) and 0 < delay <= 3600 and math.isfinite(delay) else None
+                limited = bool(delay or data.get("code") == 429 or "rate limit" in message or "too many" in message)
+                raise DiscordRpcRejected("Discord rejected the RPC request", rate_limited=limited, retry_after=delay)
             if matches(payload):
                 return
         raise TimeoutError("Discord RPC response timed out")
