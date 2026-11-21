@@ -11,7 +11,7 @@
 - Достаточно места для PyInstaller и двух отдельных приватных окружений.
 - Для подписания необязательны сертификат Code Signing в хранилище пользователя и Windows SDK Signing Tools. Без подписи возможны предупреждения SmartScreen.
 
-`INSTALL.ps1` можно использовать для разработки, но для нового `BUILD.cmd` он больше не запускается автоматически. Сам сборщик создаёт `.buildenv` и устанавливает туда `requirements-build.txt`.
+`INSTALL.ps1` можно использовать для разработки, но для нового `BUILD.cmd` он больше не запускается автоматически. Сам сборщик создаёт `.buildenv` и устанавливает туда зависимости из `requirements/validated/build-win-py313.txt`.
 
 ## 2. Входные redistributable
 
@@ -49,7 +49,7 @@ C:\SlynorDeps\native\
 Распаковать проект в новую папку, например `C:\SlynorBuild`. В PowerShell из корня проекта:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILD_WINDOWS.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\windows\BUILD_WINDOWS.ps1 `
   -PythonPath 'C:\Path\Python313\python.exe' `
   -NativeBundle 'C:\SlynorDeps\native' `
   -EmbedZip 'C:\SlynorDeps\python-3.13.x-embed-amd64.zip' `
@@ -62,7 +62,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILD_WINDOWS.ps1 `
 
 ## 4. Что делает сборщик
 
-1. Создаёт чистый GUI build-env, собирает по `Slynor.spec`.
+1. Создаёт чистый GUI build-env, собирает по `packaging/windows/Slynor.spec`.
 2. Проверяет SHA-256 embeddable ZIP, разворачивает **отдельные приватные runtime** `.providers` и `.search`, устанавливает зависимости в их `Lib/site-packages` только на машине сборки.
 3. Устанавливает относительный `python313._pth`; Python не регистрируется в системе. Не копирует venv и абсолютные пути компьютера разработчика.
 4. Копирует нативные компоненты и лицензии в папку приложения.

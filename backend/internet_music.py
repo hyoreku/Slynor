@@ -245,7 +245,7 @@ class InternetLibrary(OnlineLibrary):
                             except ProviderError:continue
                         return rows
                     stages.append((engine,parse))
-            if source in ('hitmo','muzbomb') and not worker_available('search'):raise ProviderError('Установите requirements-search.txt (Python 3.12–3.14).')
+            if source in ('hitmo','muzbomb') and not worker_available('search'):raise ProviderError('Установите requirements/base/search.txt (Python 3.12–3.14).')
             if source in ('auto','archive'):stages.append(('Internet Archive',lambda:self._archive(key,query)))
             search_started=monotonic()
             for name,run in stages:

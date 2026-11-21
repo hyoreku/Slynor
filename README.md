@@ -143,10 +143,10 @@ py -3.13 -m venv .venv
 
 ## Сборка установщика
 
-`BUILD_WINDOWS.ps1` собирает переносимую папку и установщик:
+`packaging/windows/BUILD_WINDOWS.ps1` собирает переносимую папку и установщик:
 
 ```powershell
-.\BUILD_WINDOWS.ps1 -NativeBundle <путь> -EmbedZip <путь> -EmbedSha256 <хеш>
+.\packaging\windows\BUILD_WINDOWS.ps1 -NativeBundle <путь> -EmbedZip <путь> -EmbedSha256 <хеш>
 ```
 
 Скрипту нужны Python 3.13 x64, Inno Setup 6, нативный бандл VLC/FFmpeg
@@ -166,7 +166,7 @@ py -3.13 -m venv .venv
 | `service/` | Music Service: задания «поиск → скачивание → доставка», SQLite, ассеты |
 | `player/` | LibVLC-движок: очередь, громкость, эквалайзер, спектр |
 | `frontend/` | HTML, CSS, JavaScript и графика интерфейса |
-| `packaging/`, `Slynor.spec`, `BUILD_WINDOWS.ps1` | Сборка portable-версии и установщика |
+| `packaging/` | Сборка portable-версии и установщика |
 | `requirements/` | Раздельные наборы зависимостей и их статус |
 | `tests/`, `tools/` | Тесты, диагностика и служебные скрипты |
 | `docs/` | Документация, карты кода, скриншоты и исторические отчёты этапов |

@@ -125,7 +125,7 @@ SoundCloud, совпадение записи, разрешение правоо
 
 ```powershell
 py -3.13 -m venv .providers
-.\.providers\Scripts\python.exe -m pip install -r requirements-download.txt
+.\.providers\Scripts\python.exe -m pip install -r requirements/base/provider.txt
 $env:OWNPLAYER_PROVIDER_PYTHON = (Resolve-Path .\.providers\Scripts\python.exe).Path
 .\.venv\Scripts\python.exe start.py
 ```
@@ -155,7 +155,7 @@ $env:OWNPLAYER_FFMPEG = 'C:\путь\к\ffmpeg.exe'
 
 Старые SoundCloud API-ключи по-прежнему относятся к прежнему официальному
 потоковому адаптеру и импорту. **ВК не подключена**. Требования для msoc остаются
-в `requirements-search.txt`; это независимый необязательный резерв.
+в `requirements/base/search.txt`; это независимый необязательный резерв.
 
 ## Приёмка и следующий шаг
 

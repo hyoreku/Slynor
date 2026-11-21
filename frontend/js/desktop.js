@@ -1,7 +1,7 @@
 (() => {
  const message=document.getElementById('desktop-settings-message');
  const diagnosticsMessage=document.getElementById('diagnostics-message');
- void fetch('/api/online/provider-status',{signal:AbortSignal.timeout(5000)}).then(r=>r.json()).then(d=>{document.getElementById('provider-dependencies').textContent='Загрузчики: spotDL '+(d.spotdl||'не установлен')+', SCDL '+(d.scdl||'не установлен')+'. FFmpeg '+(d.ffmpeg?'найден.':'не найден. См. requirements-download.txt и инструкцию этапа 14.');}).catch(()=>{document.getElementById('provider-dependencies').textContent='Не удалось проверить загрузчики.';});
+ void fetch('/api/online/provider-status',{signal:AbortSignal.timeout(5000)}).then(r=>r.json()).then(d=>{document.getElementById('provider-dependencies').textContent='Загрузчики: spotDL '+(d.spotdl||'не установлен')+', SCDL '+(d.scdl||'не установлен')+'. FFmpeg '+(d.ffmpeg?'найден.':'не найден. См. requirements/base/provider.txt и инструкцию этапа 14.');}).catch(()=>{document.getElementById('provider-dependencies').textContent='Не удалось проверить загрузчики.';});
  const close=document.getElementById('close-to-tray');let saved=true;
  async function command(action){
   const response=await fetch('/api/desktop/'+action,{method:'POST',signal:AbortSignal.timeout(5000)});

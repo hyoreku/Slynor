@@ -20,7 +20,7 @@ Internet Archive работает без ключей. Парсеры msoc — �
 **для Python 3.12–3.14** (для них запускать pip тем же интерпретатором):
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-search.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements/base/search.txt
 ```
 
 Без msoc приложение продолжает работать: пропускает его в автопоиске.

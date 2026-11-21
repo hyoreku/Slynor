@@ -3,7 +3,7 @@
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
-root = Path(SPECPATH)
+root = Path(SPECPATH).resolve().parents[1]
 datas = [(str(root / 'frontend'), 'frontend')]
 for name in ('__init__.py', 'provider_worker.py', 'msoc_worker.py', 'proxy_worker.py'):
     datas.append((str(root / 'backend' / name), 'backend'))

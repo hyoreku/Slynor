@@ -16,8 +16,8 @@ Python в pyvenv.cfg: 3.13.15; чистый clone воспроизвёл наб�
 
 Исходная `.venv` содержит msoc и сборочные пакеты. Она не служит шаблоном GUI.
 spotDL и msoc остаются в разных процессах/окружениях. Не соединять requirements в одну установку.
-Старые корневые requirements сохранены для совместимости; INSTALL.ps1/BUILD_WINDOWS.ps1 пока используют именно их и не обеспечивают полную фиксацию.
-UPDATE_NETWORK.cmd обновляет зависимости вне constraints; не использовать его для проверки воспроизводимости.
+Прямые зависимости находятся в `base/`. Корневой `requirements.txt` подключает `requirements/base/gui.txt` и сохраняет совместимость с прежними командами установки.
+`packaging/windows/UPDATE_NETWORK.cmd` обновляет зависимости вне constraints; не использовать его для проверки воспроизводимости.
 
 В НОВОМ clone на Windows после backup проверить доступность wheel, восстановить каждую группу через
 `python -m pip install -r requirements/gui.txt` (соответственно другие группы), затем `pip check`, импорты,
@@ -25,9 +25,9 @@ UPDATE_NETWORK.cmd обновляет зависимости вне constraints;
 Не ставить этот набор поверх единственного рабочего окружения.
 
 Полный разрешённый набор сохранён в `requirements/validated/` с SHA-256 артефактов, версиями
-Python/pip и маркерами Windows. `INSTALL.ps1` и `BUILD_WINDOWS.ps1` ставят зависимости только
+Python/pip и маркерами Windows. `INSTALL.ps1` и `packaging/windows/BUILD_WINDOWS.ps1` ставят зависимости только
 из этих файлов с `--require-hashes`; при отсутствии lock-файла скрипт останавливается.
-`prepare_portable.py` сборочные зависимости не устанавливает.
+`tools/prepare_portable.py` устанавливает зависимости приватных воркеров из `base/provider.txt` и `base/search.txt`.
 
 Все четыре группы проверены на Windows 11 x64 (CPython 3.13.15, pip 26.2.1): [validated](validated/README.md).
 Свежие venv воспроизвели observed constraints без расхождений; офлайн-установка с `--require-hashes`,

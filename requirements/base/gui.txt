@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pywebview
+python-vlc
+mutagen
+Pillow>=10.4,<13
+
+# FFT и декодирование локальных аудиосэмплов (FFmpeg входит в wheel PyAV).
+numpy>=1.26,<3
+av>=14,<19
+
+# Tray and official SoundCloud HTTP integration.
+pystray>=0.19,<0.20
+httpx[socks]>=0.28.1,<1

@@ -43,7 +43,7 @@ credentials просмотрены отдельно; исключение при
 ## Сборка, backup и восстановление
 
 [BUILD_PORTABLE_STAGE23](docs/BUILD_PORTABLE_STAGE23.md) — сохранённый рецепт, не проверенный выпуск.
-Не запускать BUILD.cmd/BUILD_WINDOWS.ps1 в исходной рабочей папке: они очищают старый dist и .buildenv.
+Не запускать BUILD.cmd или packaging/windows/BUILD_WINDOWS.ps1 в исходной рабочей папке: они очищают старый dist и .buildenv.
 Нативные bundle, лицензии и SHA-256 предоставляются отдельно, а не берутся из venv разработчика.
 Чистая Windows и реальные аудиоисточники проверяются отдельно от Linux/Chromium.
 

@@ -1,13 +1,13 @@
 # Подготовка Windows-дистрибутива и подписи
 
-В этом архиве **нет готового подписанного EXE/установщика**. Исправленный рецепт и проверочный сценарий подготовлены, но не выполнялись на Windows. Актуальные шаги: `README_REBUILD_RU.md` в корне проекта. Нужны нативная сборка и приёмка; нельзя считать исходный скрипт проверенным дистрибутивом.
+В этом архиве **нет готового подписанного EXE/установщика**. Исправленный рецепт и проверочный сценарий подготовлены, но не выполнялись на Windows. Актуальные шаги — в [руководстве по portable-сборке](BUILD_PORTABLE_STAGE23.md). Нужны нативная сборка и приёмка; нельзя считать исходный скрипт проверенным дистрибутивом.
 
 ## Сборка
 
 На Windows x64:
 1. Запустите INSTALL.ps1 из исходников; проверьте запуск приложения.
 2. Установите Inno Setup 6 с официального сайта https://jrsoftware.org/isinfo.php (нужен ISCC.exe).
-3. Выполните `powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILD_WINDOWS.ps1`.
+3. Выполните `powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\windows\BUILD_WINDOWS.ps1`.
 4. Результат: `dist\Slynor\` (PyInstaller onedir) и `dist\installer\Slynor-Setup.exe` (Inno Setup). **Без сертификата это неподписанная сборка**, скрипт об этом предупреждает.
 
 Worker-процессы запускаются только отдельным Python из `.providers` / `.search`, а не GUI-EXE. Входной скрипт поддерживает `--check-runtime` и `--smoke-test` без открытия GUI. Обычный путь загрузчиков — установленное отдельное окружение `.providers` рядом с EXE. `backend/provider_worker.py` и msoc_worker.py включаются как ресурсы для запуска внешним Python. Frontend — внутри `_internal/frontend`. Путь ffmpeg берётся из runtime_paths.json рядом с EXE, настройки/музыка остаются в LOCALAPPDATA\OwnPlayerMusic.
@@ -29,7 +29,7 @@ BUILD_WINDOWS.ps1 перед упаковкой запускает `tools/build_
 2. Укажите публичный отпечаток своего сертификата:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILD_WINDOWS.ps1 -SignThumbprint 'ОТПЕЧАТОК_40_HEX'
+powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\windows\BUILD_WINDOWS.ps1 -SignThumbprint 'ОТПЕЧАТОК_40_HEX'
 ```
 
 Скрипт проверяет срок, наличие приватного ключа, EKU Code Signing; подписывает приложение **до упаковки**, затем установщик. SHA-256, RFC3161 timestamp, `signtool verify /pa` и Get-AuthenticodeSignature. При неуспешной проверке останавливается. Самоподписанный сертификат не предлагается как замена доверенной публичной подписи; подпись не гарантирует отсутствие предупреждения SmartScreen у нового приложения.

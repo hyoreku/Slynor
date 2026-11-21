@@ -41,7 +41,7 @@ if __name__=='__main__':
     try:
         data=json.loads(sys.stdin.read(2048))
         result={'tracks':asyncio.run(search(data['engine'],data['query']))}
-    except ModuleNotFoundError: result={'tracks':[],'error':'Не установлен requirements-search.txt (Python 3.12–3.14).'}
+    except ModuleNotFoundError: result={'tracks':[],'error':'Не установлен requirements/base/search.txt (Python 3.12–3.14).'}
     except TimeoutError: result={'tracks':[],'error':'Источник не ответил за 7 секунд.'}
     except Exception: result={'tracks':[],'error':'Источник недоступен или изменил формат страницы.'}
     sys.stdout.write(json.dumps(result,ensure_ascii=False))

@@ -44,7 +44,7 @@ class CatalogueLibrary(InternetLibrary):
   try:
    child=subprocess.run([self.provider_python,'-m','backend.provider_worker'],cwd=Path(__file__).resolve().parent.parent,input=b'{"operation":"status"}',stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=4,**({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {}))
    return json.loads(child.stdout.decode('utf-8'))
-  except (OSError,ValueError,RuntimeError,subprocess.TimeoutExpired):return {'spotdl':None,'scdl':None,'ffmpeg':False,'error':'Проверьте OWNPLAYER_PROVIDER_PYTHON и requirements-download.txt.'}
+  except (OSError,ValueError,RuntimeError,subprocess.TimeoutExpired):return {'spotdl':None,'scdl':None,'ffmpeg':False,'error':'Проверьте OWNPLAYER_PROVIDER_PYTHON и requirements/base/provider.txt.'}
  def _run_provider(self,key,payload,timeout):
   env={k:v for k,v in os.environ.items() if k.upper() in ('PATH','SYSTEMROOT','WINDIR','TEMP','TMP','HOME','USERPROFILE','LOCALAPPDATA','LANG','OWNPLAYER_FFMPEG','OWNPLAYER_DENO','OWNPLAYER_SPOTIFY_CLIENT_ID','OWNPLAYER_SPOTIFY_CLIENT_SECRET')};env['PYTHONIOENCODING']='utf-8';env['PYTHONUTF8']='1';env.update(self.network.worker_env())
   # Log to a file in a temporary directory, not an unbounded pipe buffer.
@@ -222,7 +222,7 @@ class CatalogueLibrary(InternetLibrary):
      if self._cancelled(key):return
      dest=publish_download(file,parent,track);self.downloaded[cache_ref]=str(dest.resolve());self._write_download_index();self._patch(key,status='done',path=str(dest.resolve()),bytes=dest.stat().st_size,audio_format=audio_format,tags_status=tag_status)
   except ProviderError as error:self._patch(key,status='failed',error=str(error))
-  except Exception:self._patch(key,status='failed',error='Не удалось запустить загрузчик. Установите requirements-download.txt и FFmpeg.')
+  except Exception:self._patch(key,status='failed',error='Не удалось запустить загрузчик. Установите requirements/base/provider.txt и FFmpeg.')
 
  def cached_cover_url(self,url):
   url=cover_url(url)

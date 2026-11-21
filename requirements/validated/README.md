@@ -14,7 +14,7 @@ CPython 3.13.15 x64, pip 26.2.1.
 полностью: недостающих, лишних пакетов и расхождений версий нет.
 
 `INSTALL.ps1` ставит GUI, provider и search только из этих файлов с `--require-hashes`,
-`BUILD_WINDOWS.ps1` — сборочное окружение из `build-win-py313.txt`. Если файла нет,
+`packaging/windows/BUILD_WINDOWS.ps1` — сборочное окружение из `build-win-py313.txt`. Если файла нет,
 скрипт останавливается.
 
 ## Как установить офлайн

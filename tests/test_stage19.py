@@ -20,8 +20,8 @@ class BrandingTests(unittest.TestCase):
   self.assertIn('class="brand-name">Slynor</span>',text);self.assertIn('SLYNOR',text)
  def test_api_title(self):self.assertEqual(app.title,'Slynor API')
  def test_build_names_and_installer_identity(self):
-  build=(ROOT/'BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig');iss=(ROOT/'packaging/Slynor.iss').read_text(encoding='utf-8')
-  self.assertIn("'Slynor.spec'",build);self.assertIn("name='Slynor'",(ROOT/'Slynor.spec').read_text(encoding='utf-8'));self.assertIn('packaging\\Slynor.iss',build)
+  build=(ROOT/'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig');iss=(ROOT/'packaging/Slynor.iss').read_text(encoding='utf-8')
+  self.assertIn("'packaging/windows/Slynor.spec'",build);self.assertIn("name='Slynor'",(ROOT/'packaging/windows/Slynor.spec').read_text(encoding='utf-8'));self.assertIn('packaging\\Slynor.iss',build)
   self.assertIn('AppId={{93CA6C34-26B8-4058-8A93-61D7DE129233}',iss)
   self.assertIn('Slynor.exe',iss);self.assertNotIn('OwnPlayerMusic.exe',iss)
  def test_launcher_prefers_sources_and_never_old_executable(self):

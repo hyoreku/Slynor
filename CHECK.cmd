@@ -14,8 +14,8 @@ if not exist ".venv\Scripts\python.exe" (
 ".venv\Scripts\python.exe" start.py --check-runtime
 set "CHECK_RESULT=!ERRORLEVEL!"
 :report
-if exist "%LOCALAPPDATA%\OwnPlayerMusic\logs\runtime-check.json" type "%LOCALAPPDATA%\OwnPlayerMusic\logs\runtime-check.json"
+if exist "%LOCALAPPDATA%\Slynor\logs\runtime-check.json" type "%LOCALAPPDATA%\Slynor\logs\runtime-check.json"
 echo.
-echo See %%LOCALAPPDATA%%\OwnPlayerMusic\logs for reports and startup.log.
+echo See %%LOCALAPPDATA%%\Slynor\logs for reports and startup.log.
 pause
 exit /b %CHECK_RESULT%

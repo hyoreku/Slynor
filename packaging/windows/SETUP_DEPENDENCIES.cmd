@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 echo ============================================================
 echo Slynor - setup for the EXISTING Python project
  echo ============================================================
@@ -26,7 +26,7 @@ if not exist "INSTALL.ps1" (
 )
 choice /C YN /N /M "Continue with dependency installation? [Y/N]: "
 if errorlevel 2 exit /b 0
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\INSTALL.ps1"
 set "RESULT=%ERRORLEVEL%"
 echo.
 if not "%RESULT%"=="0" (

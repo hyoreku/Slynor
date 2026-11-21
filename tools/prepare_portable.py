@@ -60,7 +60,7 @@ def prepare(root, output, native, embed, expected_hash):
         if destination.exists():
             shutil.rmtree(destination)
         shutil.copytree(native / name, destination)
-    for folder, requirements in (('.providers', 'requirements-download.txt'), ('.search', 'requirements-search.txt')):
+    for folder, requirements in (('.providers', 'requirements/base/provider.txt'), ('.search', 'requirements/base/search.txt')):
         runtime = output / folder
         if runtime.exists():
             shutil.rmtree(runtime)

@@ -77,7 +77,7 @@ try {
         $check = Start-Process -FilePath (Join-Path $PSScriptRoot 'Slynor.exe') -ArgumentList '--check-runtime' -PassThru
         if (-not $check.WaitForExit(60000)) { $check.Kill(); throw 'Packaged runtime check timed out after 60 seconds.' }
         $check.Refresh()
-        if ($check.ExitCode -ne 0) { throw 'Packaged runtime check failed. See %LOCALAPPDATA%\OwnPlayerMusic\logs\runtime-check.json.' }
+        if ($check.ExitCode -ne 0) { throw 'Packaged runtime check failed. See %LOCALAPPDATA%\Slynor\logs\runtime-check.json.' }
     } else {
         Run-Native '.\.venv\Scripts\python.exe' @('-c', "import webview,fastapi,httpx,mutagen,av,numpy,PIL,pystray,vlc; i=vlc.Instance('--no-video'); assert i is not None; i.release(); print('GUI dependencies and LibVLC OK')")
     }

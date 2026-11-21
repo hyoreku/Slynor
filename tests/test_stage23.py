@@ -311,7 +311,7 @@ class PrivateRuntimeTests(unittest.TestCase):
         installer=(root/'packaging/Slynor.iss').read_text(encoding='utf-8')
         for forbidden in ('INSTALL.ps1','powershell','winget','pip install'):
             self.assertNotIn(forbidden,installer)
-        self.assertIn('Slynor-Portable.zip',(root/'BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig'))
+        self.assertIn('Slynor-Portable.zip',(root/'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig'))
 
 
 class QueueAPITests(unittest.TestCase):

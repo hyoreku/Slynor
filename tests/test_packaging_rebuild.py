@@ -27,10 +27,10 @@ class BuildContractTests(unittest.TestCase):
         self.assertIn('use_colors=False', text)
 
     def test_spec_is_the_only_packaging_recipe(self):
-        text = (ROOT / 'BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
-        self.assertIn("'--clean','Slynor.spec'", text)
+        text = (ROOT / 'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn("'--clean','packaging/windows/Slynor.spec'", text)
         self.assertNotIn("'--add-data'", text)
-        spec = (ROOT / 'Slynor.spec').read_text(encoding='utf-8')
+        spec = (ROOT / 'packaging/windows/Slynor.spec').read_text(encoding='utf-8')
         self.assertIn("collect_submodules('backend')", spec)
         self.assertIn("collect_submodules('player')", spec)
         self.assertIn("'backend.main'", spec)
@@ -38,24 +38,24 @@ class BuildContractTests(unittest.TestCase):
         self.assertIn('upx=False', spec)
 
     def test_installer_follows_checks(self):
-        text = (ROOT / 'BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
+        text = (ROOT / 'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
         self.assertLess(text.index("Check-Packaged '--smoke-test'"), text.index("Run $iscc @('packaging"))
         self.assertIn('WaitForExit(90000)', text)
         self.assertIn('data.frozen', text)
 
     def test_isolated_requirements(self):
-        self.assertNotIn('msoc', (ROOT / 'requirements.txt').read_text(encoding='utf-8'))
-        self.assertNotIn('requirements-search.txt', (ROOT / 'requirements-build.txt').read_text(encoding='utf-8'))
+        self.assertNotIn('msoc', (ROOT / 'requirements/base/gui.txt').read_text(encoding='utf-8'))
+        self.assertEqual((ROOT / 'requirements/base/build.txt').read_text(encoding='utf-8').splitlines()[0], '-r gui.txt')
         text = (ROOT / 'INSTALL.ps1').read_text(encoding='utf-8-sig')
         self.assertNotIn("'requirements.txt','-r','requirements-search.txt'", text)
         installer = (ROOT / 'packaging/Slynor.iss').read_text(encoding='utf-8')
         self.assertNotIn('INSTALL.ps1', installer)
         self.assertNotIn('powershell.exe', installer)
-        self.assertIn('prepare_portable.py', (ROOT / 'BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig'))
+        self.assertIn('prepare_portable.py', (ROOT / 'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig'))
 
     def test_scripts_install_only_validated_hash_locked_sets(self):
         install = (ROOT / 'INSTALL.ps1').read_text(encoding='utf-8-sig')
-        build = (ROOT / 'BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
+        build = (ROOT / 'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
         for group in ('gui', 'provider', 'search'):
             lock = f'requirements/validated/{group}-win-py313.txt'
             self.assertTrue((ROOT / lock).is_file(), lock)

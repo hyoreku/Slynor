@@ -144,6 +144,6 @@ class AssetsTests(unittest.TestCase):
   with Image.open(ROOT/'frontend/assets/icons/app.ico') as icon:self.assertIn((256,256),icon.ico.sizes())
   self.assertNotEqual((ROOT/'frontend/assets/logo.png').read_bytes(),(ROOT/'frontend/assets/icons/tray.png').read_bytes())
  def test_build_recreates_app_icon_not_tray(self):
-  text=(ROOT/"BUILD_WINDOWS.ps1").read_text(encoding='utf-8-sig');self.assertIn("tools\\build_app_icon.py",text);self.assertLess(text.index("tools\\build_app_icon.py"),text.index("PyInstaller','--noconfirm"))
+  text=(ROOT/"packaging/windows/BUILD_WINDOWS.ps1").read_text(encoding='utf-8-sig');self.assertIn("tools\\build_app_icon.py",text);self.assertLess(text.index("tools\\build_app_icon.py"),text.index("PyInstaller','--noconfirm"))
  def test_no_obsolete_letter_fallback(self):
   text=(ROOT/'frontend/js/settings16.js').read_text(encoding='utf-8');self.assertNotIn("brand.textContent='S'",text);self.assertIn('mask', (ROOT/'frontend/css/modern22.css').read_text(encoding='utf-8'))

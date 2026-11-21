@@ -1,7 +1,8 @@
 param([string]$SignThumbprint = '', [string]$TimestampUrl = 'http://timestamp.digicert.com', [string]$PythonPath = '', [string]$NativeBundle = $env:OWNPLAYER_BUILD_NATIVE, [string]$EmbedZip = $env:OWNPLAYER_BUILD_EMBED, [string]$EmbedSha256 = $env:OWNPLAYER_BUILD_EMBED_SHA256)
 $ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
-$logDirectory = Join-Path $PSScriptRoot 'build-logs'
+$projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+Set-Location -LiteralPath $projectRoot
+$logDirectory = Join-Path $projectRoot 'build-logs'
 New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 $transcript = Join-Path $logDirectory ('build-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
 Start-Transcript -Path $transcript | Out-Null
@@ -15,7 +16,7 @@ function Check-Packaged([string]$Mode) {
     New-Item -ItemType Directory -Path $temporary | Out-Null
     try {
         $env:LOCALAPPDATA = $temporary
-        $process = Start-Process -FilePath (Join-Path $PSScriptRoot 'dist\Slynor\Slynor.exe') -ArgumentList $Mode -WorkingDirectory (Join-Path $PSScriptRoot 'dist\Slynor') -PassThru
+        $process = Start-Process -FilePath (Join-Path $projectRoot 'dist\Slynor\Slynor.exe') -ArgumentList $Mode -WorkingDirectory (Join-Path $projectRoot 'dist\Slynor') -PassThru
         if (-not $process.WaitForExit(90000)) { $process.Kill(); throw "Packaged $Mode timed out after 90 seconds." }
         $process.Refresh()
         if ($process.ExitCode -ne 0) { throw "Packaged $Mode failed ($($process.ExitCode)). See build-logs." }
@@ -69,7 +70,7 @@ try {
     }
     # Never mix msoc/spotDL dependencies into the frozen GUI build environment.
     Run $python @('-m','venv','--clear','.buildenv')
-    $buildPython = Join-Path $PSScriptRoot '.buildenv\Scripts\python.exe'
+    $buildPython = Join-Path $projectRoot '.buildenv\Scripts\python.exe'
     Run $buildPython @('-m','pip','install','--upgrade','pip')
     Run $buildPython @('-m','pip','install','--require-hashes','-r',$buildLock)
     Run $buildPython @('-m','pip','check')
@@ -77,7 +78,7 @@ try {
     Run $buildPython @('tools\build_app_icon.py')
     if (Test-Path 'dist\Slynor') { Remove-Item 'dist\Slynor' -Recurse -Force }
     if (Test-Path 'dist\installer') { Remove-Item 'dist\installer' -Recurse -Force }
-    Run $buildPython @('-m','PyInstaller','--noconfirm','--clean','Slynor.spec')
+    Run $buildPython @('-m','PyInstaller','--noconfirm','--clean','packaging/windows/Slynor.spec')
     # Build-time staging only. The installed application never invokes pip/winget.
     Run $buildPython @('tools\prepare_portable.py','--output','dist\Slynor','--native',$NativeBundle,'--embed',$EmbedZip,'--embed-sha256',$EmbedSha256)
     Check-Packaged '--check-runtime'
