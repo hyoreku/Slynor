@@ -3,8 +3,8 @@ from pathlib import Path
 import json
 import tempfile
 import unittest
-import APPLY_PATCH_A as core
-import APPLY_PATCH_B as patcher
+from tools.legacy_patches import APPLY_PATCH_A as core
+from tools.legacy_patches import APPLY_PATCH_B as patcher
 
 
 class PatchBTests(unittest.TestCase):

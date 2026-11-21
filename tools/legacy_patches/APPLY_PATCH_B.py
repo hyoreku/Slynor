@@ -3,7 +3,10 @@ import argparse
 import json
 from pathlib import Path
 import re
-import APPLY_PATCH_A as core
+if __package__:
+    from . import APPLY_PATCH_A as core
+else:
+    import APPLY_PATCH_A as core
 
 
 def apply(project, payload, manifest, check_only=False):

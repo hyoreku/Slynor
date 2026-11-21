@@ -3,7 +3,7 @@ from hashlib import sha256
 from pathlib import Path
 import tempfile
 import unittest
-import APPLY_PATCH_A as patcher
+from tools.legacy_patches import APPLY_PATCH_A as patcher
 
 
 class PatchApplyTests(unittest.TestCase):
