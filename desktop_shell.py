@@ -3,10 +3,11 @@ import json
 import os
 from pathlib import Path
 from threading import RLock, Thread, Event
+from types import SimpleNamespace
 from queue import Queue, Empty, Full
 from time import monotonic
 import logging
-from window_geometry import position, round_mini_window
+from window_geometry import configure_mini_window, MINI_COMPACT_SIZE, MINI_EXPANDED_SIZE, position
 from backend.diagnostics import dump_stacks
 from urllib.request import Request, build_opener, ProxyHandler
 # Loopback controls must not inherit a Windows/HTTP_PROXY route.
@@ -135,10 +136,22 @@ class DesktopShell:
             self.return_mode='fullscreen' if getattr(self.window,'fullscreen',False) else self.main_mode
         if mini is None:
             try:
-                x, y = position(360, 112, self.api.load_settings().get('mini_position'), top=True)
+                resize_mini = None
+
+                def set_mini_compact(compact):
+                    if type(compact) is not bool:
+                        raise ValueError('Ожидается состояние миниплеера.')
+                    if resize_mini is None or self.mini is not mini or not self.mini_visible:
+                        return False
+                    resize_mini(compact)
+                    return True
+
+                width, height = MINI_EXPANDED_SIZE
+                x, y = position(width, height, self.api.load_settings().get('mini_position'), top=True)
                 mini=webview.create_window('Slynor · Миниплеер',
-                    url='http://127.0.0.1:8765/mini',width=360,height=112,
-                    min_size=(320,108),on_top=True,frameless=True,shadow=False,easy_drag=False,
+                    url='http://127.0.0.1:8765/mini',width=width,height=height,
+                    min_size=MINI_COMPACT_SIZE,on_top=True,frameless=True,shadow=False,easy_drag=False,
+                    js_api=SimpleNamespace(set_mini_compact=set_mini_compact),
                     hidden=os.name=='nt',background_color='#15151a',x=x,y=y)
                 def closed(*args):
                     with self.lock:
@@ -159,11 +172,11 @@ class DesktopShell:
                     exiting=self.exiting
                     if not exiting:self.mini=mini
                 if exiting:mini.destroy();return
+                try:
+                    resize_mini = configure_mini_window(mini)
+                except Exception:
+                    logging.getLogger('ownplayer').exception('Could not configure the mini-player window')
                 if os.name == 'nt':
-                    try:
-                        round_mini_window(mini)
-                    except Exception:
-                        logging.getLogger('ownplayer').exception('Could not set the mini-player window shape')
                     mini.show()
             finally:
                 with self.lock:self.creating_mini=False

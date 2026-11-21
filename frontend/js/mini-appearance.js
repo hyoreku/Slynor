@@ -1,8 +1,5 @@
 (() => {
-    const layer = document.createElement('div');
-    layer.id = 'mini-background';
-    layer.setAttribute('aria-hidden', 'true');
-    document.body.prepend(layer);
+    const layer = document.getElementById('mini-background');
     const image = new Image();
     const video = document.createElement('video');
     video.muted = true;
@@ -22,7 +19,8 @@
 
     function syncMedia() {
         if (!current) return;
-        const visible = !nativeHidden && !document.hidden && lastState?.window_visibility?.mini !== false;
+        const compact = document.documentElement.dataset.miniCompact === 'true';
+        const visible = !compact && !nativeHidden && !document.hidden && lastState?.window_visibility?.mini !== false;
         const moving = visible && !reduced.matches;
         const mode = current.mini_background;
         const url = mode === 'wallpaper' && current.wallpaper ? '/api/assets/wallpapers/' + current.wallpaper : '';
@@ -100,5 +98,6 @@
     new MutationObserver(readPalette).observe(cover, { attributes: true, attributeFilter: ['data-url'] });
     window.addEventListener('native-window-state', event => { nativeHidden = Boolean(event.detail?.minimized); syncMedia(); });
     document.addEventListener('visibilitychange', syncMedia);
+    document.addEventListener('mini-layout-change', syncMedia);
     reduced.addEventListener('change', syncMedia);
 })();

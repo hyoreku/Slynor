@@ -6,7 +6,7 @@ import tempfile
 import time
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from test_regressions import AudioEngine
 from test_stage12_shell_api import Window, Event
 from desktop_shell import DesktopShell
@@ -23,7 +23,15 @@ class NativeModeTests(unittest.TestCase):
   with patch('desktop_shell.webview.create_window',return_value=mini,create=True) as create:self.shell.show_mini()
   return create.call_args.kwargs
  def test_compact_size(self):
-  args=self.mini();self.assertEqual((args['width'],args['height']),(360,112));self.assertEqual(args['min_size'],(320,108));self.assertFalse(args['shadow'])
+  args=self.mini();self.assertEqual((args['width'],args['height']),(360,112));self.assertEqual(args['min_size'],(120,46));self.assertFalse(args['shadow'])
+ def test_resize_bridge_targets_visible_mini_only(self):
+  resize=Mock()
+  with patch('desktop_shell.configure_mini_window',return_value=resize):
+   native=self.mini()['js_api']
+  self.assertTrue(native.set_mini_compact(True));resize.assert_called_once_with(True)
+  with self.assertRaises(ValueError):native.set_mini_compact('compact')
+  self.shell.show_main()
+  self.assertFalse(native.set_mini_compact(False));resize.assert_called_once()
  def test_maximized_restored_not_normalized(self):
   self.window.maximize=lambda:self.window.calls.append('maximize');self.shell.main_mode='maximized';self.mini();self.shell.show_main()
   self.assertIn('maximize',self.window.calls);self.assertNotIn('restore',self.window.calls)
@@ -41,7 +49,7 @@ class MiniWindowRegionTests(unittest.TestCase):
         import clr
         clr.AddReference('System.Windows.Forms')
         from System.Windows.Forms import Form, FormBorderStyle
-        from window_geometry import round_mini_window
+        from window_geometry import configure_mini_window
 
         form = Form()
         self.addCleanup(form.Dispose)
@@ -55,18 +63,27 @@ class MiniWindowRegionTests(unittest.TestCase):
         gdi.DeleteObject.argtypes = [wintypes.HANDLE]
         gdi.PtInRegion.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_int]
         user.GetWindowRgn.argtypes = [wintypes.HWND, wintypes.HANDLE]
+        user.GetDpiForWindow.argtypes = [wintypes.HWND]
+        scale = user.GetDpiForWindow(handle) / 96
         region = gdi.CreateRectRgn(0, 0, 1, 1)
         self.assertTrue(region)
         self.addCleanup(gdi.DeleteObject, region)
 
-        round_mini_window(types.SimpleNamespace(native=form))
+        resize = configure_mini_window(types.SimpleNamespace(native=form))
         self.assertNotEqual(user.GetWindowRgn(handle, region), 0)
         self.assertFalse(gdi.PtInRegion(region, 0, 0))
         self.assertTrue(gdi.PtInRegion(region, 1, 55))
-        self.assertFalse(gdi.PtInRegion(region, 395, 55))
-        form.Width = 400
+        resize(True)
+        self.assertEqual((form.Width, form.Height), (round(120 * scale), round(46 * scale)))
         self.assertNotEqual(user.GetWindowRgn(handle, region), 0)
-        self.assertTrue(gdi.PtInRegion(region, 395, 55))
+        self.assertFalse(gdi.PtInRegion(region, 1, round(6 * scale)))
+        self.assertTrue(gdi.PtInRegion(region, 1, form.Height // 2))
+        self.assertFalse(gdi.PtInRegion(region, form.Width, form.Height // 2))
+        resize(False)
+        self.assertEqual((form.Width, form.Height), (round(360 * scale), round(112 * scale)))
+        self.assertNotEqual(user.GetWindowRgn(handle, region), 0)
+        self.assertTrue(gdi.PtInRegion(region, form.Width - 2, form.Height // 2))
+        self.assertFalse(form.Visible)
 
 
 class CatalogueTests(unittest.TestCase):

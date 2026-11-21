@@ -3,7 +3,7 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const wave = window.createWaveRenderer(ctx);
-    const panel = document.getElementById('mini-background');
+    const panel = document.getElementById('mini-panel');
     const cover = document.getElementById('mini-cover');
     let waveStyle, albumPalette, paletteUrl;
     function updatePalette() {
@@ -21,7 +21,9 @@
     const bands = new Float32Array(48);
     const target = new Float32Array(48);
     let session, mode, color, highlight, timer, controller, raf;
-    let width, height, contour, edge = [];
+    let width, height, radius, edge = [];
+    let compact = document.documentElement.dataset.miniCompact === 'true';
+    let theme;
 
     function clear() {
         ctx.resetTransform();
@@ -38,12 +40,13 @@
         bands.fill(0);
         target.fill(0);
         clear();
-        canvas.hidden = true;
+        canvas.hidden = !compact;
+        if (compact) paint(false);
     }
 
-    function perimeter({x, y, width, height, radius}) {
-        const left = x + radius, right = x + width - radius;
-        const top = y + radius, bottom = y + height - radius;
+    function perimeter() {
+        const left = radius, right = width - radius;
+        const top = radius, bottom = height - radius;
         const horizontal = right - left, vertical = bottom - top, corner = Math.PI * radius / 2;
         const sides = [
             [left, top, 0, -1, horizontal], [right, top, 1, 0, vertical],
@@ -66,18 +69,14 @@
 
     function frame() {
         const nextWidth = canvas.clientWidth, nextHeight = canvas.clientHeight;
-        if (nextWidth < 24 || nextHeight < 24) return false;
+        if (!nextWidth || !nextHeight) return false;
         if (nextWidth !== width || nextHeight !== height) {
             width = nextWidth;
             height = nextHeight;
-            const canvasBox = canvas.getBoundingClientRect();
-            const box = panel.getBoundingClientRect();
-            const style = getComputedStyle(panel);
-            const inset = parseFloat(style.getPropertyValue('--mini-frame-edge'));
-            contour = { x: box.left - canvasBox.left + inset, y: box.top - canvasBox.top + inset,
-                width: box.width - 2 * inset, height: box.height - 2 * inset,
-                radius: Math.max(1, parseFloat(style.borderTopLeftRadius) - inset) };
-            edge = perimeter(contour);
+            if (!compact) {
+                radius = parseFloat(getComputedStyle(panel).borderTopLeftRadius);
+                edge = perimeter();
+            }
         }
         const scale = Math.min(2, devicePixelRatio || 1);
         const w = Math.round(width * scale), h = Math.round(height * scale);
@@ -99,8 +98,8 @@
         ctx.beginPath();
         edge.forEach(([x, y, nx, ny], index) => {
             const distance = offset + amplitude(index) * travel;
-            if (index === 0) ctx.moveTo(x + nx * distance, y + ny * distance);
-            else ctx.lineTo(x + nx * distance, y + ny * distance);
+            if (index === 0) ctx.moveTo(x - nx * distance, y - ny * distance);
+            else ctx.lineTo(x - nx * distance, y - ny * distance);
         });
         ctx.closePath();
         ctx.strokeStyle = stroke;
@@ -109,23 +108,21 @@
     }
 
     function drawPerimeter() {
-        const {x, y, width: panelWidth, height: panelHeight, radius} = contour;
         let bassEnergy = 0;
         for (let index = 0; index < 8; index++) bassEnergy += bands[index];
         const bass = Math.sqrt(bassEnergy / 8);
         const tone = index => albumPalette?.[index] ? `rgb(${albumPalette[index].join(',')})` : color;
         ctx.save();
         ctx.beginPath();
-        ctx.rect(0, 0, width, height);
-        ctx.roundRect(x, y, panelWidth, panelHeight, radius);
-        ctx.clip('evenodd');
+        ctx.roundRect(0, 0, width, height, radius);
+        ctx.clip();
         ctx.lineJoin = ctx.lineCap = 'round';
         ctx.lineWidth = 1.3;
         if (mode === 'wave') {
-            ctx.translate(x + panelWidth / 2, y + panelHeight / 2);
-            wave.draw({ width: panelWidth, height: panelHeight, radius, reach: 5.2,
+            ctx.translate(width / 2, height / 2);
+            wave.draw({ width, height, radius, reach: 5.2,
                 bands, time: reduced.matches ? 0 : performance.now(), style: waveStyle,
-                palette: albumPalette, fallback: [color, highlight], compact: true });
+                palette: albumPalette, fallback: [color, highlight], mini: true });
         } else {
             if (mode === 'rays') outline(.7, bass * .7, tone(0), .7);
             const spacing = mode === 'rays' ? 3 : 2;
@@ -136,7 +133,7 @@
                     const length = Math.min(5, amplitude(i) * 4.5 + bass * 1.2) * scale;
                     if (length < .35) continue;
                     ctx.moveTo(px, py);
-                    ctx.lineTo(px + nx * length, py + ny * length);
+                    ctx.lineTo(px - nx * length, py - ny * length);
                 }
                 ctx.strokeStyle = stroke;
                 ctx.globalAlpha = opacity;
@@ -149,6 +146,25 @@
         ctx.restore();
     }
 
+    function drawCompact(audible) {
+        const count = 12;
+        const spacing = width / count;
+        ctx.fillStyle = 'currentColor';
+        ctx.beginPath();
+        for (let i = 0; i < count; i++) {
+            const energy = audible ? Math.sqrt(bands[i * 4]) : 0;
+            const bar = 2 + energy * (height - 4) * (1 - i / (count + 2));
+            ctx.roundRect((i + .5) * spacing - .75, (height - bar) / 2, 1.5, bar, .75);
+        }
+        ctx.fill();
+    }
+
+    function paint(audible) {
+        if (!frame()) return;
+        if (compact) drawCompact(audible);
+        else if (audible) drawPerimeter();
+    }
+
     function draw() {
         raf = null;
         if (!session) return;
@@ -158,7 +174,7 @@
             if (bands[i] < .001) bands[i] = 0;
             audible ||= bands[i] > 0;
         }
-        if (frame() && audible) drawPerimeter();
+        paint(audible);
         if (audible && !reduced.matches) raf = requestAnimationFrame(draw);
     }
 
@@ -203,9 +219,12 @@
             const nextMode = appearance?.visualizer_mode;
             const path = state?.file_path;
             waveStyle = appearance?.wave_style;
+            const themeChanged = appearance && appearance.theme !== theme;
+            if (themeChanged) theme = appearance.theme;
             if (document.hidden || state?.window_visibility?.mini === false || state?.state !== 'playing'
                     || !path || path.startsWith('online:') || !modes.has(nextMode)) {
                 if (session) stop();
+                else if (compact && themeChanged) paint(false);
                 return;
             }
             color = appearance.accent || '#c9c9d1';
@@ -219,5 +238,12 @@
             void read(session);
         },
     };
+    document.addEventListener('mini-layout-change', () => {
+        compact = document.documentElement.dataset.miniCompact === 'true';
+        width = undefined;
+        canvas.hidden = !session && !compact;
+        paint(bands.some(value => value > 0));
+    });
     document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+    if (compact) stop();
 })();

@@ -7,7 +7,7 @@ const cover='/api/assets/track-covers/'+'a'.repeat(64)+'.jpg';
 const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+id,artist:'Artist',source:'soundcloud',access:['playable','preview','blocked'][i],duration_ms:180000,cover_url:'https://i1.sndcdn.com/art.jpg',permalink_url:'https://soundcloud.com/artist/song'}));
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath(),headless:true,args:['--no-sandbox']});
- const context=await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'no-preference'});
+ const context=await browser.newContext({viewport:{width:1280,height:800},deviceScaleFactor:1.25,reducedMotion:'no-preference'});
  let state={state:'playing',filename:'one.wav',file_path:local[0],volume:50,time_ms:2000,duration_ms:180000,can_seek:true,queue_size:3,queue_index:0,rate:1,speed_mode:'standard'};
  let eq={enabled:false,preamp:0,bands:Array(10).fill(0),speed_mode:'standard'};const calls=[];const errors=[];
  let queueUpload=[],queueCommits=[];
@@ -146,6 +146,15 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  const mini = await context.newPage();
  mini.on('pageerror', error => errors.push(error.message));
  await mini.setViewportSize({width:360,height:112});
+ const miniSizes = [];
+ await mini.exposeFunction('resizeMini', async compact => {
+   miniSizes.push(compact);
+   await mini.setViewportSize(compact ? {width:120,height:46} : {width:360,height:112});
+   return true;
+ });
+ await mini.addInitScript(() => addEventListener('pywebviewready', () => {
+   window.pywebview.api.set_mini_compact = window.resizeMini;
+ }));
  state = {...state,file_path:local[0],state:'playing',appearance:{...settings,
      mini_background:'classic',visualizer_mode:'bars',wave_style:'surf',dim:50,blur:0}};
  await mini.goto('http://127.0.0.1:8765/mini');
@@ -154,18 +163,36 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
    await mini.waitForFunction(mode => {
      const canvas = document.querySelector('#mini-spectrum[data-mode="' + mode + '"]:not([hidden])');
      if (!canvas) return false;
-     const panel = document.querySelector('#mini-background').getBoundingClientRect();
+     const panel = document.querySelector('#mini-panel');
+     const box = panel.getBoundingClientRect();
      const ctx = canvas.getContext('2d');
      const scale = canvas.width / canvas.clientWidth;
      const alpha = (x,y,w,h) => ctx.getImageData(x*scale,y*scale,w*scale,h*scale).data.filter((_,i)=>i%4===3);
-     const middle = alpha(panel.left+30,panel.top+15,panel.width-60,panel.height-30);
-     return panel.left===0 && panel.top===0 && panel.width===canvas.clientWidth
-         && alpha(20,0,panel.width-40,6).some(a=>a>40)
-         && alpha(0,20,6,panel.height-40).some(a=>a>40)
-         && !middle.some(a=>a);
+     return canvas.parentElement===panel && box.width===canvas.clientWidth
+         && getComputedStyle(document.body).backgroundColor==='rgba(0, 0, 0, 0)'
+         && alpha(20,0,box.width-40,2).some(a=>a>40)
+         && alpha(0,20,2,box.height-40).some(a=>a>40)
+         && !alpha(0,0,3,3).some(a=>a)
+         && !alpha(15,7,box.width-30,box.height-14).some(a=>a);
    }, mode);
-   check(true, mode + ' stays on the window edge without a background gutter');
+   check(true, mode + ' follows the panel contour and leaves the center and corners clear');
  }
+ await mini.locator('html[data-mini-compact="true"]').waitFor();
+ check(miniSizes[0]===true && mini.viewportSize().width===120, 'idle shrinks the native viewport');
+ check(await mini.locator('#mini-cover img').isVisible() && await mini.locator('#mini-title').isHidden(), 'compact shows the same cover and hides controls and text');
+ await mini.waitForFunction(() => {
+   const canvas = document.querySelector('#mini-spectrum');
+   return canvas.clientWidth===54 && canvas.getContext('2d').getImageData(0,5,canvas.width,3).data.some(a=>a);
+ });
+ check(true, 'compact plays the spectrum beside the cover');
+ await mini.mouse.move(26,23);
+ await mini.locator('html[data-mini-compact="false"]').waitFor();
+ check(miniSizes.at(-1)===false && mini.viewportSize().width===360, 'hover restores the native viewport');
+ await mini.mouse.move(400,150);
+ await mini.locator('html[data-mini-compact="true"]').waitFor();
+ await mini.locator('#mini-unfold').press('Enter');
+ await mini.locator('html[data-mini-compact="false"]').waitFor();
+ check(await mini.locator('#mini-hide').evaluate(el=>el===document.activeElement), 'keyboard expansion moves focus into controls');
  state.state = 'paused';
  await mini.locator('#mini-spectrum').waitFor({state:'hidden'});
  check(errors.length===0,'no browser JS errors: '+errors.join(';'));

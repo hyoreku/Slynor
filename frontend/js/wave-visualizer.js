@@ -37,7 +37,7 @@
         const xs = new Float32Array(count), ys = new Float32Array(count);
         let geometry, gradient, colors, previousFrame, echo = 0;
         return {
-            draw({ width, height, radius, reach, bands, time, style, palette, fallback, compact = false }) {
+            draw({ width, height, radius, reach, bands, time, style, palette, fallback, mini = false }) {
                 if (width < 2 || height < 2 || reach < 1) return;
                 const shape = shapes[style] || shapes.surf;
                 const key = [width, height, radius].join('/');
@@ -81,7 +81,7 @@
                         const angle = i * tau / count;
                         const lobe = Math.pow(.5 + .5 * Math.sin(angle * shape.lobes - phase + offset), shape.power);
                         const detail = Math.sqrt(bands[Math.round(2 + Math.abs(Math.cos(2.1 * angle)) * (bands.length - 3))]);
-                        const falloff = compact ? 1 : 1 - .38 * Math.abs(ny);
+                        const falloff = mini ? -1 : 1 - .38 * Math.abs(ny);
                         const distance = reach * falloff * Math.min(1, base + spread * (.12 + .72 * lobe + .16 * detail) * strength);
                         xs[i] = x + nx * distance;
                         ys[i] = y + ny * distance;
@@ -97,7 +97,8 @@
                 function fill(color, opacity) {
                     ctx.fillStyle = color;
                     ctx.globalAlpha = opacity;
-                    ctx.fill();
+                    if (mini) ctx.roundRect(-width / 2, -height / 2, width, height, radius);
+                    ctx.fill(mini ? 'evenodd' : 'nonzero');
                 }
                 ctx.save();
                 ctx.lineJoin = 'round';
@@ -109,10 +110,10 @@
                 fill(gradient.light, .40 + .40 * drive);
                 trace(style === 'surf' ? .39 : .29, -.54, .025);
                 ctx.strokeStyle = gradient.crest;
-                ctx.lineWidth = compact ? 1.35 : 2.5;
+                ctx.lineWidth = mini ? 1.35 : 2.5;
                 ctx.globalAlpha = .63 + .31 * drive;
                 ctx.stroke();
-                if (shape.sparks && !compact) {
+                if (shape.sparks && !mini) {
                     ctx.fillStyle = gradient.crest;
                     ctx.globalAlpha = drive * .62;
                     for (let i = 0; i < count; i += 11) {
