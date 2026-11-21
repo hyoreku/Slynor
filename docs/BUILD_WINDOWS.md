@@ -8,7 +8,7 @@ Setup и portable собираются в [Windows packages](../.github/workflow
 
 Worker-процессы запускаются только отдельным Python из `.providers` / `.search`, а не GUI-EXE. Входной скрипт поддерживает `--check-runtime` и `--smoke-test` без открытия GUI. Обычный путь загрузчиков — установленное отдельное окружение `.providers` рядом с EXE. `backend/provider_worker.py` и msoc_worker.py включаются как ресурсы для запуска внешним Python. Frontend — внутри `_internal/frontend`. Путь ffmpeg берётся из runtime_paths.json рядом с EXE, настройки/музыка остаются в LOCALAPPDATA\OwnPlayerMusic.
 
-Установщик копирует собранные файлы в `%LOCALAPPDATA%\Programs\Slynor`. Python, VLC, FFmpeg, Deno и WebView2 входят в пакет. Музыка и плейлисты хранятся в `%LOCALAPPDATA%\OwnPlayerMusic`.
+Установщик копирует собранные файлы в `%LOCALAPPDATA%\Programs\Slynor`. Python, VLC, FFmpeg и Deno входят в пакет. Облегчённая сборка использует системный WebView2. Музыка и плейлисты хранятся в `%LOCALAPPDATA%\OwnPlayerMusic`.
 
 ## Значок приложения и трей
 

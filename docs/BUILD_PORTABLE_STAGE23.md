@@ -1,6 +1,8 @@
-# Сборка автономного Slynor для Windows x64
+# Сборка Slynor для Windows x64
 
 Workflow [Windows packages](../.github/workflows/windows-package.yml) собирает Setup и portable на Windows x64. После успешного запуска оба файла и их SHA-256 доступны в артефакте `Slynor-Windows-x64`. Сборка в Actions неподписанная. Ручная сборка поддерживает подпись.
+
+Облегчённая сборка использует установленный Microsoft Edge WebView2 Runtime. Для неё передайте `-UseSystemWebView2` скриптам `GET_BUILD_INPUTS.ps1` и `BUILD_WINDOWS.ps1`. Установщик и portable сообщат, если WebView2 нужно установить. Без этого флага скрипты собирают автономный пакет с WebView2 Fixed Runtime. [Загрузки Microsoft WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download)
 
 ## 1. Компьютер сборки
 
@@ -21,7 +23,7 @@ Workflow [Windows packages](../.github/workflows/windows-package.yml) собир
 - VLC x64 из https://www.videolan.org/vlc/ — полный переносимый комплект, включая библиотеки, плагины, данные и лицензии.
 - FFmpeg/ffprobe x64 — согласованный Windows-комплект из источника сборок, указанного на https://ffmpeg.org/download.html. Для shared build нужны и DLL, не только два EXE.
 - Deno x64 из https://deno.com/ / официальных выпусков.
-- WebView2 **Fixed Version Runtime x64** из https://developer.microsoft.com/microsoft-edge/webview2/ — распакованный полный комплект, не Evergreen bootstrapper. `msedgewebview2.exe` должен лежать непосредственно в папке `webview2`.
+- Для автономной сборки подготовьте распакованный **WebView2 Fixed Version Runtime x64**. Файл `msedgewebview2.exe` должен лежать непосредственно в папке `webview2`. [Microsoft WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)
 - Тексты лицензий всех этих компонентов и Python-зависимостей, уведомления/другие материалы, необходимые выбранными лицензиями. Наличие папки `licenses` не заменяет юридическую проверку LGPL/GPL и других условий.
 
 Структура подготовленной папки (внутри каждой — **все** необходимые файлы):

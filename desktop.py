@@ -751,6 +751,11 @@ class DesktopApi:
 
 # Запуск окна PyWebView и Python-моста.
 def main(debug=False):
+    if os.name == 'nt':
+        from backend.startup_runtime import require_webview2
+        fixed_webview = require_webview2()
+        if fixed_webview is not None:
+            webview.settings['WEBVIEW2_RUNTIME_PATH'] = str(fixed_webview)
     desktop_api = DesktopApi()
 
     from window_geometry import position
@@ -787,7 +792,7 @@ def main(debug=False):
 
     try:
         desktop_api._start_discord_presence()
-        webview.start(debug=debug)
+        webview.start(debug=debug, gui='edgechromium' if os.name == 'nt' else None)
     finally:
         if desktop_api._discord_presence is not None:
             desktop_api._discord_presence.close()

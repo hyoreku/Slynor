@@ -38,7 +38,7 @@ jobs:
               choco install innosetup --yes --no-progress
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          $inputs = .\packaging\windows\GET_BUILD_INPUTS.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'slynor-inputs')
+          $inputs = .\packaging\windows\GET_BUILD_INPUTS.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'slynor-inputs') -UseSystemWebView2
           foreach ($key in $inputs.Keys) { "$key=$($inputs[$key])" >> $env:GITHUB_OUTPUT }
 
       - name: Build and smoke-test packages
@@ -46,7 +46,19 @@ jobs:
           OWNPLAYER_BUILD_NATIVE: ${{ steps.inputs.outputs.native }}
           OWNPLAYER_BUILD_EMBED: ${{ steps.inputs.outputs.embed }}
           OWNPLAYER_BUILD_EMBED_SHA256: ${{ steps.inputs.outputs.embed_sha256 }}
-        run: .\packaging\windows\BUILD_WINDOWS.ps1 -PythonPath (Get-Command python.exe).Source
+        run: .\packaging\windows\BUILD_WINDOWS.ps1 -PythonPath (Get-Command python.exe).Source -UseSystemWebView2
+
+      - name: Install and check the slim Setup
+        run: |
+          $install = Join-Path $env:RUNNER_TEMP 'Slynor test install'
+          $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $install + '"'))
+          $setup = Start-Process -FilePath .\dist\installer\Slynor-Setup.exe -ArgumentList $setupArgs -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Setup exited with code $($setup.ExitCode)" }
+          if (Test-Path (Join-Path $install 'webview2')) { throw 'Setup installed bundled WebView2' }
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'slynor-installed-check'
+          $check = Start-Process -FilePath (Join-Path $install 'Slynor.exe') -ArgumentList '--smoke-test' -PassThru
+          if (-not $check.WaitForExit(90000)) { $check.Kill(); throw 'Installed Slynor timed out' }
+          if ($check.ExitCode -ne 0) { throw "Installed Slynor failed its smoke test ($($check.ExitCode))" }
 
       - name: Upload Setup and portable
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

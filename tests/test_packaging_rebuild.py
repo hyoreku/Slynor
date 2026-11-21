@@ -39,7 +39,7 @@ class BuildContractTests(unittest.TestCase):
 
     def test_installer_follows_checks(self):
         text = (ROOT / 'packaging/windows/BUILD_WINDOWS.ps1').read_text(encoding='utf-8-sig')
-        self.assertLess(text.index("Check-Packaged '--smoke-test'"), text.index("Run $iscc @('packaging"))
+        self.assertLess(text.index("Check-Packaged '--smoke-test'"), text.index('Run $iscc $installerArgs'))
         self.assertIn('WaitForExit(90000)', text)
         self.assertIn('data.frozen', text)
 

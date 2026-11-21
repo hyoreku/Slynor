@@ -1,4 +1,4 @@
-param([string]$SignThumbprint = '', [string]$TimestampUrl = 'http://timestamp.digicert.com', [string]$PythonPath = '', [string]$NativeBundle = $env:OWNPLAYER_BUILD_NATIVE, [string]$EmbedZip = $env:OWNPLAYER_BUILD_EMBED, [string]$EmbedSha256 = $env:OWNPLAYER_BUILD_EMBED_SHA256)
+param([string]$SignThumbprint = '', [string]$TimestampUrl = 'http://timestamp.digicert.com', [string]$PythonPath = '', [string]$NativeBundle = $env:OWNPLAYER_BUILD_NATIVE, [string]$EmbedZip = $env:OWNPLAYER_BUILD_EMBED, [string]$EmbedSha256 = $env:OWNPLAYER_BUILD_EMBED_SHA256, [switch]$UseSystemWebView2)
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location -LiteralPath $projectRoot
@@ -67,7 +67,9 @@ try {
     }
     if (-not $python -or -not (Test-Path $python)) { throw 'Python 3.13 x64 not found. Run INSTALL.ps1 first or pass -PythonPath.' }
     Run $python @('-c', "import struct,sys; assert struct.calcsize('P')==8 and sys.version_info[:2]==(3,13), 'Python 3.13 x64 required'")
-    Run $python @('tools\prepare_portable.py','--check-inputs','--native',$NativeBundle,'--embed',$EmbedZip,'--embed-sha256',$EmbedSha256)
+    $runtimeArgs = @('--native',$NativeBundle,'--embed',$EmbedZip,'--embed-sha256',$EmbedSha256)
+    if ($UseSystemWebView2) { $runtimeArgs += '--system-webview2' }
+    Run $python (@('tools\prepare_portable.py','--check-inputs') + $runtimeArgs)
     $buildLock = 'requirements/validated/build-win-py313.txt'
     if (-not (Test-Path -LiteralPath $buildLock)) { throw "Validated build set is missing: $buildLock. Restore it from Git before building." }
     $signtool = $null
@@ -94,7 +96,8 @@ try {
     if (Test-Path 'dist\installer') { Remove-Item 'dist\installer' -Recurse -Force }
     Run $buildPython @('-m','PyInstaller','--noconfirm','--clean','packaging/windows/Slynor.spec')
     # Build-time staging only. The installed application never invokes pip/winget.
-    Run $buildPython @('tools\prepare_portable.py','--output','dist\Slynor','--native',$NativeBundle,'--embed',$EmbedZip,'--embed-sha256',$EmbedSha256)
+    Run $buildPython (@('tools\prepare_portable.py','--output','dist\Slynor') + $runtimeArgs)
+    if ($UseSystemWebView2 -and (Test-Path 'dist\Slynor\webview2')) { throw 'Unexpected bundled WebView2' }
     Check-Packaged '--check-runtime'
     Check-Packaged '--smoke-test'
     function Sign([string]$Path) {
@@ -115,9 +118,12 @@ try {
         if (Test-Path -LiteralPath $portableCheck) { Remove-Item -LiteralPath $portableCheck -Recurse -Force }
         if (Test-Path -LiteralPath $pendingZip) { Remove-Item -LiteralPath $pendingZip -Force }
     }
-    Run $iscc @('packaging\Slynor.iss')
+    $installerArgs = @('packaging\Slynor.iss')
+    if ($UseSystemWebView2) { $installerArgs += '/DSystemWebView2' }
+    Run $iscc $installerArgs
     if (-not (Test-Path 'dist\installer\Slynor-Setup.exe')) { throw 'Installer output missing.' }
     if ($SignThumbprint) { Sign 'dist\installer\Slynor-Setup.exe' } else { Write-Warning 'UNSIGNED build: SmartScreen warnings are possible.' }
+    Get-Item 'dist\installer\Slynor-Setup.exe','dist\Slynor-Portable.zip' | ForEach-Object { Write-Host "$($_.Name): $($_.Length) bytes" }
     Get-FileHash 'dist\Slynor\Slynor.exe','dist\installer\Slynor-Setup.exe','dist\Slynor-Portable.zip' -Algorithm SHA256 | Format-List | Out-File -Encoding UTF8 (Join-Path $logDirectory 'SHA256.txt')
     Write-Host 'Build and packaged API checks passed. Installer created.' -ForegroundColor Green
     Write-Host 'Visible GUI/audio and clean-PC installation still require Windows acceptance testing.'

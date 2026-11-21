@@ -9,10 +9,34 @@ import sys
 
 _streams = []
 _dll_directories = []
+WEBVIEW2_DOWNLOAD = 'https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download'
+WEBVIEW2_MIN_MAJOR = 111
+
+
+class WebView2Unavailable(RuntimeError):
+    pass
 
 
 def application_dir():
     return Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent
+
+
+def require_webview2():
+    """Return the fixed Runtime folder, or validate the registered Evergreen Runtime."""
+    fixed = application_dir() / 'webview2'
+    if (fixed / 'msedgewebview2.exe').is_file():
+        return fixed
+    import winreg
+    path = r'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    for hive, view in ((winreg.HKEY_CURRENT_USER, 0), (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_32KEY)):
+        try:
+            with winreg.OpenKey(hive, path, 0, winreg.KEY_READ | view) as key:
+                version, _ = winreg.QueryValueEx(key, 'pv')
+                if int(str(version).split('.', 1)[0]) >= WEBVIEW2_MIN_MAJOR:
+                    return None
+        except (OSError, ValueError):
+            continue
+    raise WebView2Unavailable('Требуется актуальный Microsoft Edge WebView2 Runtime.')
 
 
 def log_dir():
@@ -88,7 +112,14 @@ def configure_paths():
 def show_failure():
     logging.getLogger('ownplayer').exception('Application startup failed')
     message = 'Slynor could not start. Details:\n' + str(log_dir() / 'startup.log')
-    if os.name == 'nt' and getattr(sys, 'frozen', False):
+    if os.name == 'nt' and isinstance(sys.exc_info()[1], WebView2Unavailable):
+        result = ctypes.windll.user32.MessageBoxW(
+            None, 'Требуется актуальный Microsoft Edge WebView2 Runtime. Открыть страницу загрузки Microsoft?',
+            'Slynor', 0x24)
+        if result == 6:
+            import webbrowser
+            webbrowser.open(WEBVIEW2_DOWNLOAD)
+    elif os.name == 'nt' and getattr(sys, 'frozen', False):
         ctypes.windll.user32.MessageBoxW(None, message, 'Slynor - startup error', 0x10)
     else:
         print(message, file=sys.stderr)

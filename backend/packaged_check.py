@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 import threading
 import time
 from urllib.request import build_opener, ProxyHandler
-from backend.startup_runtime import log_dir
+from backend.startup_runtime import log_dir, require_webview2
 
 
 @contextmanager
@@ -100,6 +100,7 @@ def run_check(smoke=False):
         check('import:' + module, lambda m=module: importlib.import_module(m))
     if os.name == 'nt':
         check('webview:winforms', lambda: importlib.import_module('webview.platforms.winforms'))
+        check('webview:runtime', require_webview2)
     def assets():
         root = Path(__file__).resolve().parent.parent
         for relative in ('frontend/index.html', 'frontend/mini.html', 'frontend/js/app.js',
@@ -141,7 +142,7 @@ def run_check(smoke=False):
         def native_bundle():
             base = application_dir()
             for relative in ('vlc/libvlc.dll', 'vlc/libvlccore.dll', 'ffmpeg/ffmpeg.exe',
-                             'ffmpeg/ffprobe.exe', 'deno/deno.exe', 'webview2/msedgewebview2.exe'):
+                             'ffmpeg/ffprobe.exe', 'deno/deno.exe'):
                 if not (base / relative).is_file():raise FileNotFoundError(relative)
             if not (base / 'vlc/plugins').is_dir():raise FileNotFoundError('vlc/plugins')
             result = subprocess.run([str(base / 'deno/deno.exe'), '--version'],

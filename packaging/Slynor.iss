@@ -21,3 +21,34 @@ Source: "..\dist\Slynor\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 Name: "{group}\Slynor"; Filename: "{app}\Slynor.exe"; WorkingDir: "{app}"
 [Run]
 Filename: "{app}\Slynor.exe"; Description: "Open Slynor"; Flags: postinstall nowait skipifsilent
+
+#ifdef SystemWebView2
+[Code]
+const
+  WebView2Key = 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+
+function RuntimeInstalled(Hive: Integer): Boolean;
+var
+  Version: String;
+  Dot: Integer;
+begin
+  Result := False;
+  if RegQueryStringValue(Hive, WebView2Key, 'pv', Version) then
+  begin
+    Dot := Pos('.', Version);
+    if Dot > 0 then
+      Result := StrToIntDef(Copy(Version, 1, Dot - 1), 0) >= 111;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  ErrorCode: Integer;
+begin
+  Result := RuntimeInstalled(HKCU) or RuntimeInstalled(HKLM32);
+  if not Result and (SuppressibleMsgBox(
+    'Slynor requires Microsoft Edge WebView2 Runtime. Open the Microsoft download page?',
+    mbInformation, MB_YESNO, IDNO) = IDYES) then
+    ShellExec('open', 'https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+#endif

@@ -34,7 +34,7 @@ def extract_embed(archive, target):
         'python313.zip\n.\nLib/site-packages\n../_internal\nimport site\n', encoding='ascii')
 
 
-def check_inputs(native, embed, expected_hash):
+def check_inputs(native, embed, expected_hash, system_webview2=False):
     native, embed = Path(native), Path(embed)
     require_file(embed)
     if len(expected_hash) != 64 or any(c not in '0123456789abcdefABCDEF' for c in expected_hash):
@@ -44,7 +44,9 @@ def check_inputs(native, embed, expected_hash):
     if actual.lower() != expected_hash.lower():
         raise ValueError('Embeddable ZIP hash mismatch')
     required = ('vlc/libvlc.dll', 'vlc/libvlccore.dll', 'ffmpeg/ffmpeg.exe',
-                'ffmpeg/ffprobe.exe', 'deno/deno.exe', 'webview2/msedgewebview2.exe')
+                'ffmpeg/ffprobe.exe', 'deno/deno.exe')
+    if not system_webview2:
+        required += ('webview2/msedgewebview2.exe',)
     for relative in required:
         require_file(native / relative)
     if not (native / 'vlc/plugins').is_dir() or not (native / 'licenses').is_dir():
@@ -56,7 +58,7 @@ def check_inputs(native, embed, expected_hash):
             raise ValueError('Private Python is missing ' + ', '.join(sorted(missing)))
 
 
-def prepare(root, output, native, embed, expected_hash):
+def prepare(root, output, native, embed, expected_hash, system_webview2=False):
     if os.name != 'nt' or sys.version_info[:2] != (3, 13):
         raise RuntimeError('Preparation requires Windows x64 and CPython 3.13')
     import struct
@@ -64,11 +66,13 @@ def prepare(root, output, native, embed, expected_hash):
         raise RuntimeError('x64 interpreter required')
     root, output, native, embed = (Path(p).resolve() for p in (root, output, native, embed))
     require_file(output / 'Slynor.exe')
-    check_inputs(native, embed, expected_hash)
+    check_inputs(native, embed, expected_hash, system_webview2)
     for name in ('vlc', 'ffmpeg', 'deno', 'webview2', 'licenses'):
         destination = output / name
         if destination.exists():
             shutil.rmtree(destination)
+        if name == 'webview2' and system_webview2:
+            continue
         shutil.copytree(native / name, destination)
     for folder, group in (('.providers', 'provider'), ('.search', 'search')):
         requirements = root / 'requirements' / 'validated' / f'{group}-win-py313.txt'
@@ -86,9 +90,12 @@ def prepare(root, output, native, embed, expected_hash):
                        cwd=output / '_internal', check=True, timeout=45)
     # Do not ship paths from the developer's workstation.
     (output / 'runtime_paths.json').unlink(missing_ok=True)
+    webview_note = ('Requires Microsoft Edge WebView2 Runtime: https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download\n'
+                    if system_webview2 else 'WebView2 Fixed Runtime is bundled.\n')
     (output / 'PORTABLE_README.txt').write_text(
         'Extract the entire Slynor folder and run Slynor.exe. Do not move the EXE alone.\n'
-        'Python, VLC, FFmpeg, Deno and WebView2 are private bundled components.\n'
+        'Python, VLC, FFmpeg and Deno are private bundled components.\n'
+        + webview_note +
         'User data: %LOCALAPPDATA%\\OwnPlayerMusic (compatible with existing versions).\n'
         'Online services require Internet access and may impose access restrictions.\n', encoding='utf-8')
     print('Private runtime staging complete; clean-Windows GUI/audio acceptance is still required.')
@@ -102,10 +109,11 @@ if __name__ == '__main__':
     parser.add_argument('--native', required=True)
     parser.add_argument('--embed', required=True)
     parser.add_argument('--embed-sha256', required=True)
+    parser.add_argument('--system-webview2', action='store_true')
     args = parser.parse_args()
     if args.check_inputs:
-        check_inputs(args.native, args.embed, args.embed_sha256)
+        check_inputs(args.native, args.embed, args.embed_sha256, args.system_webview2)
     elif not args.output:
         parser.error('--output is required when staging the package')
     else:
-        prepare(args.root, args.output, args.native, args.embed, args.embed_sha256)
+        prepare(args.root, args.output, args.native, args.embed, args.embed_sha256, args.system_webview2)

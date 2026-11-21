@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Destination)
+param([Parameter(Mandatory)][string]$Destination, [switch]$UseSystemWebView2)
 
 $ErrorActionPreference = 'Stop'
 $Destination = New-Item -ItemType Directory -Force -Path $Destination | Select-Object -ExpandProperty FullName
@@ -33,6 +33,7 @@ $sources = [ordered]@{
         Sha256 = '1bad3df802a4c21f6b271cf3cd640912056291e3915b86fa7577a18899f761b9'
     }
 }
+if ($UseSystemWebView2) { $sources.Remove('webview2') }
 
 function Download([string]$Url, [string]$Path) {
     & curl.exe --fail --silent --show-error --location --retry 3 --output $Path $Url
@@ -58,26 +59,28 @@ Expand-Archive -LiteralPath (Join-Path $Destination $sources.deno.Name) -Destina
 
 $vlcPath = Join-Path $native 'vlc'
 $ffmpegPath = Join-Path $native 'ffmpeg'
-$webviewPath = Join-Path $native 'webview2'
-New-Item -ItemType Directory -Force -Path $vlcPath, $ffmpegPath, $webviewPath | Out-Null
+New-Item -ItemType Directory -Force -Path $vlcPath, $ffmpegPath | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $Destination 'vlc-3.0.24') | Copy-Item -Destination $vlcPath -Recurse -Force
 $ffmpeg = Join-Path $Destination 'ffmpeg-8.0.1-essentials_build'
 Copy-Item -LiteralPath (Join-Path $ffmpeg 'bin\ffmpeg.exe'), (Join-Path $ffmpeg 'bin\ffprobe.exe') -Destination $ffmpegPath
 Copy-Item -LiteralPath (Join-Path $ffmpeg 'LICENSE') -Destination (Join-Path $licenses 'FFmpeg.txt')
 Download 'https://raw.githubusercontent.com/denoland/deno/v2.9.7/LICENSE.md' (Join-Path $licenses 'Deno.md')
 
-$cab = Join-Path $Destination $sources.webview2.Name
-$cabPath = Join-Path $Destination 'webview2-cab'
-New-Item -ItemType Directory -Force -Path $cabPath | Out-Null
-& expand.exe $cab '-F:*' $cabPath | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Could not extract WebView2' }
-$runtime = Get-ChildItem -LiteralPath $cabPath -Filter 'msedgewebview2.exe' -File -Recurse | Select-Object -First 1
-if (-not $runtime) { throw 'WebView2 runtime executable is missing' }
-$signature = Get-AuthenticodeSignature -LiteralPath $runtime.FullName
-if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
-    throw 'WebView2 executable signature is invalid'
+if (-not $UseSystemWebView2) {
+    $webviewPath = Join-Path $native 'webview2'
+    $cab = Join-Path $Destination $sources.webview2.Name
+    $cabPath = Join-Path $Destination 'webview2-cab'
+    New-Item -ItemType Directory -Force -Path $cabPath, $webviewPath | Out-Null
+    & expand.exe $cab '-F:*' $cabPath | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not extract WebView2' }
+    $runtime = Get-ChildItem -LiteralPath $cabPath -Filter 'msedgewebview2.exe' -File -Recurse | Select-Object -First 1
+    if (-not $runtime) { throw 'WebView2 runtime executable is missing' }
+    $signature = Get-AuthenticodeSignature -LiteralPath $runtime.FullName
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+        throw 'WebView2 executable signature is invalid'
+    }
+    Get-ChildItem -LiteralPath $runtime.DirectoryName | Copy-Item -Destination $webviewPath -Recurse -Force
 }
-Get-ChildItem -LiteralPath $runtime.DirectoryName | Copy-Item -Destination $webviewPath -Recurse -Force
 
 $sources | ConvertTo-Json -Depth 3 | Set-Content -Encoding utf8 (Join-Path $licenses 'WINDOWS-BUILD-INPUTS.json')
 @'
