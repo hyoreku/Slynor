@@ -51,7 +51,7 @@
 }
 
 :root:is([data-theme='dark'], :not([data-theme])) body { background: var(--background); }
-:root:is([data-theme='dark'], :not([data-theme])):not(.has-wallpaper) body::before {
+:root:is([data-theme='dark'], :not([data-theme])):not(.has-wallpaper) body:not([data-screen='playing'])::before {
     background:
         radial-gradient(ellipse 68% 63% at 69% -14%, color-mix(in srgb, var(--graphite-halo) 42%, transparent), transparent 75%),
         radial-gradient(ellipse 40% 50% at 100% 8%, #148c8429, transparent 82%);
