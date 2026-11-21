@@ -2,17 +2,16 @@
 import faulthandler
 import logging
 from logging.handlers import RotatingFileHandler
-import os
-from pathlib import Path
 import sys
 import threading
+
+from backend.startup_runtime import log_dir
 
 _stack_file=None
 
 def setup():
     global _stack_file
-    directory=Path(os.environ.get('LOCALAPPDATA',str(Path.home()))) / 'OwnPlayerMusic' / 'logs'
-    directory.mkdir(parents=True,exist_ok=True)
+    directory=log_dir()
     logger=logging.getLogger('ownplayer')
     if not logger.handlers:
         handler=RotatingFileHandler(directory/'app.log',maxBytes=2_000_000,backupCount=2,encoding='utf-8')

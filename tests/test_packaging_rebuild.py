@@ -137,9 +137,16 @@ prepare_runtime()
 assert sys.stdout is not None and not sys.stdout.isatty()
 assert sys.stderr is not None
 logging.getLogger('ownplayer').error('windowed-test-marker')
+from backend.diagnostics import setup, dump_stacks
+setup()
+dump_stacks()
 '''
         with tempfile.TemporaryDirectory() as tmp:
             result = subprocess.run([sys.executable, '-c', code], cwd=ROOT,
                 env={**os.environ, 'LOCALAPPDATA': tmp}, capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn('windowed-test-marker', (Path(tmp) / 'OwnPlayerMusic/logs/startup.log').read_text(encoding='utf-8'))
+            logs = Path(tmp) / 'Slynor' / 'logs'
+            self.assertIn('windowed-test-marker', (logs / 'startup.log').read_text(encoding='utf-8'))
+            self.assertTrue((logs / 'app.log').stat().st_size)
+            self.assertTrue((logs / 'stacks.log').stat().st_size)
+            self.assertFalse((Path(tmp) / 'OwnPlayerMusic' / 'logs').exists())

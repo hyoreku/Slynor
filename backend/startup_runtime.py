@@ -16,7 +16,7 @@ def application_dir():
 
 
 def log_dir():
-    directory = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'OwnPlayerMusic' / 'logs'
+    directory = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Slynor' / 'logs'
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 

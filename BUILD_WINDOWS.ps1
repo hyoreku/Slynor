@@ -20,14 +20,14 @@ function Check-Packaged([string]$Mode) {
         $process.Refresh()
         if ($process.ExitCode -ne 0) { throw "Packaged $Mode failed ($($process.ExitCode)). See build-logs." }
         $report = if ($Mode -eq '--smoke-test') { 'smoke-check.json' } else { 'runtime-check.json' }
-        $reportPath = Join-Path $temporary ('OwnPlayerMusic\logs\' + $report)
+        $reportPath = Join-Path $temporary ('Slynor\logs\' + $report)
         if (-not (Test-Path $reportPath)) { throw "Packaged $Mode produced no report." }
         $data = Get-Content -Raw -Encoding UTF8 $reportPath | ConvertFrom-Json
         if (-not $data.ok -or -not $data.frozen) { throw "Invalid or failed packaged $Mode report." }
         if ($Mode -eq '--smoke-test' -and -not $data.checks.'http:api-and-ui'.ok) { throw 'HTTP smoke test was not completed.' }
     } finally {
         $env:LOCALAPPDATA = $oldLocal
-        $logs = Join-Path $temporary 'OwnPlayerMusic\logs'
+        $logs = Join-Path $temporary 'Slynor\logs'
         if (Test-Path $logs) { Copy-Item (Join-Path $logs '*') $logDirectory -Force }
         if (Test-Path $temporary) { Remove-Item $temporary -Recurse -Force }
     }
