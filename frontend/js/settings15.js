@@ -111,6 +111,7 @@
             blur: Number(blur.value),
             mini_background: window.miniBackgroundMode,
             visualizer_mode: document.getElementById('visualizer-mode').value,
+            wave_style: document.getElementById('wave-style').value,
         });
     }
     async function sendAppearance() {

@@ -66,10 +66,12 @@
     const liquidToggle = document.getElementById('tester-cover-liquid');
     const experimentActive = document.getElementById('cover-experiment-active');
     const visualizerSelect = document.getElementById('visualizer-mode');
+    const waveStyle = document.getElementById('wave-style');
+    const waveStyleRow = document.getElementById('wave-style-row');
     const message = document.getElementById('visual-effects-message');
     const experimentMessage = document.getElementById('liquid-cover-message');
     const writer = createSettingsWriter(
-        ({ cover, style, mode }) => window.pywebview.api.save_visual_effects(cover, mode !== 'off', mode, style),
+        ({ cover, style, mode, shape }) => window.pywebview.api.save_visual_effects(cover, mode !== 'off', mode, style, shape),
         applySettings
     );
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -94,15 +96,17 @@
         const cover = data.cover_background ?? true;
         const style = data.cover_background_style ?? 'soft';
         const mode = data.visualizer_mode ?? (data.spectrum_enabled ? 'bars' : 'off');
-        const settings = { cover, style, mode };
+        const settings = { cover, style, mode, shape: data.wave_style ?? 'surf' };
         writer.setSaved(settings);
         applySettings(settings);
     }
-    function applySettings({ cover, style, mode }) {
+    function applySettings({ cover, style, mode, shape }) {
         coverToggle.checked = cover;
         liquidToggle.checked = style === 'liquid';
         visualizerSelect.value = mode;
         visualizerMode = mode;
+        waveStyle.value = shape;
+        waveStyleRow.hidden = mode !== 'wave';
         window.publishAppearance?.();
         syncBackgroundStyle();
         syncSpectrum();
@@ -120,12 +124,13 @@
     }
     function updateControls() {
         coverToggle.disabled = visualizerSelect.disabled = !settingsReady;
+        waveStyle.disabled = !settingsReady || visualizerMode !== 'wave';
         liquidToggle.disabled = !settingsReady || !window.testerModeEnabled;
         updateRanges();
     }
-    for (const control of [coverToggle, liquidToggle, visualizerSelect]) {
+    for (const control of [coverToggle, liquidToggle, visualizerSelect, waveStyle]) {
         control.addEventListener('change', () => {
-            const settings = { cover: coverToggle.checked, style: liquidToggle.checked ? 'liquid' : 'soft', mode: visualizerSelect.value };
+            const settings = { cover: coverToggle.checked, style: liquidToggle.checked ? 'liquid' : 'soft', mode: visualizerSelect.value, shape: waveStyle.value };
             applySettings(settings);
             message.textContent = experimentMessage.textContent = '';
             writer.save(settings, control === liquidToggle ? experimentMessage : message);
@@ -375,7 +380,7 @@
             lastDraw = now;
             if (compactSpectrum()) drawCompactBars();
             else if (visualizerMode === 'bars') drawBars();
-            else coverVisualizer.draw(visualizerMode, values, reducedMotion.matches ? 0 : now);
+            else coverVisualizer.draw(visualizerMode, values, reducedMotion.matches ? 0 : now, waveStyle.value);
         }
         if (!reducedMotion.matches && (moving || (fullscreenSpectrum() && visualState === 'playing'))) raf = requestAnimationFrame(draw);
     }
@@ -445,14 +450,23 @@
         if (changed) { trackPath = currentTrackPath; clearSpectrum(); }
         visualState = state;
         const url = safeTrackCoverURL(meta?.cover_url);
-        if (url !== coverUrl) { coverUrl = url; updateAtmosphere(); }
+        if (url !== coverUrl) {
+            coverUrl = url;
+            coverVisualizer.setPalette(null);
+            if (url) void window.coverPalette(url).then(colors => {
+                if (url !== coverUrl) return;
+                coverVisualizer.setPalette(colors);
+                animate();
+            });
+            updateAtmosphere();
+        }
         syncSpectrum(); syncDrift();
         window.equalizerPanel?.layout();
     }
     window.playerVisuals = {
         screenChanged, trackChanged, updateControls, updateRanges,
         playbackChanged(state) { visualState = state; syncSpectrum(); syncDrift(); },
-        stop() { visualState = 'idle'; trackPath = null; coverUrl = ''; wave.hidden = radialCanvas.hidden = compactCanvas.hidden = status.hidden = true; clearSpectrum(); coverRevision++; hideAtmosphere(); },
+        stop() { visualState = 'idle'; trackPath = null; coverUrl = ''; wave.hidden = radialCanvas.hidden = compactCanvas.hidden = status.hidden = true; clearSpectrum(); coverRevision++; coverVisualizer.setPalette(null); hideAtmosphere(); },
         connectionLost() { target.fill(0); animate(); },
         themeChanged() { syncVisualAccent(); updateRanges(); animate(); }
     };

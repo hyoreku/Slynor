@@ -2,6 +2,19 @@
     const canvas = document.getElementById('mini-spectrum');
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const wave = window.createWaveRenderer(ctx);
+    const cover = document.getElementById('mini-cover');
+    let waveStyle, albumPalette, paletteUrl;
+    function updatePalette() {
+        const url = cover.dataset.url || '';
+        if (paletteUrl === url) return;
+        paletteUrl = url;
+        albumPalette = null;
+        if (url) void window.coverPalette(url).then(colors => {
+            if (paletteUrl === url) albumPalette = colors;
+        });
+    }
+    new MutationObserver(updatePalette).observe(cover, { attributes: true, attributeFilter: ['data-url'] });
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     const modes = new Set(['bars', 'wave', 'rays']);
     const bands = new Float32Array(48);
@@ -103,8 +116,17 @@
             ctx.strokeStyle = color;
             ctx.stroke();
         } else if (mode === 'wave') {
-            outline(0, 4.3, color, .95);
-            outline(0, 2.4, highlight, .55);
+            const inset = 9;
+            ctx.save();
+            ctx.translate(width / 2, height / 2);
+            ctx.beginPath();
+            ctx.rect(-width / 2, -height / 2, width, height);
+            ctx.roundRect(inset - width / 2, inset - height / 2, width - 2 * inset, height - 2 * inset, 8);
+            ctx.clip('evenodd');
+            wave.draw({ width: width - 2 * inset, height: height - 2 * inset, radius: 8, reach: 8,
+                bands, time: reduced.matches ? 0 : performance.now(), style: waveStyle,
+                palette: albumPalette, fallback: [color, highlight], compact: true });
+            ctx.restore();
         } else {
             outline(0, 0, color, .85);
             outline(2.1, 2.6, highlight, .75);
@@ -165,6 +187,7 @@
             const appearance = state?.appearance;
             const nextMode = appearance?.visualizer_mode;
             const path = state?.file_path;
+            waveStyle = appearance?.wave_style;
             if (document.hidden || state?.window_visibility?.mini === false || state?.state !== 'playing'
                     || !path || path.startsWith('online:') || !modes.has(nextMode)) {
                 if (session) stop();

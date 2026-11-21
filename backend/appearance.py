@@ -11,6 +11,7 @@ class Appearance(BaseModel):
  dim:int=Field(default=65,ge=0,le=90)
  blur:int=Field(default=0,ge=0,le=30)
  visualizer_mode:Literal['off','bars','wave','rays']='off'
+ wave_style:Literal['surf','ion','ember']='surf'
  mini_background:Literal['classic','wallpaper','colors','liquid']='classic'
 _lock=RLock();_snapshot={**Appearance().model_dump(),'revision':0}
 def publish(data):

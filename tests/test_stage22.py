@@ -42,6 +42,7 @@ class VisualizerPreferenceTests(unittest.TestCase):
             settings = self.api.load_settings()
             self.assertEqual(settings["visualizer_mode"], "bars" if enabled else "off")
             self.assertEqual(settings["cover_background_style"], "soft")
+            self.assertEqual(settings["wave_style"], "surf")
             self.assertEqual(self.api._settings_path.read_text(encoding="utf-8"), legacy)
 
     def test_each_mode_survives_reload_and_preserves_other_preferences(self):
@@ -60,6 +61,18 @@ class VisualizerPreferenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.api.save_visual_effects(False, False, "unknown")
         self.assertEqual(self.api._settings_path.read_bytes(), before)
+
+    def test_wave_shape_persists_when_switching_visualizer_modes(self):
+        from backend.appearance import Appearance
+
+        for shape in ("surf", "ion", "ember"):
+            self.api.save_visual_effects(True, True, "wave", wave_style=shape)
+            self.api.save_visual_effects(True, True, "bars")
+            value = DesktopApi().load_settings()["wave_style"]
+            self.assertEqual(Appearance(wave_style=value).wave_style, shape)
+        with self.assertRaises(ValueError):
+            self.api.save_visual_effects(True, True, "wave", wave_style="unknown")
+        self.assertEqual(DesktopApi().load_settings()["wave_style"], "ember")
 
     def test_cover_style_and_mini_mode_are_independent(self):
         from backend.appearance import Appearance

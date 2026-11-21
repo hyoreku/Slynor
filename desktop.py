@@ -16,6 +16,7 @@ from backend.wallpaper_assets import import_wallpaper, discard_wallpaper, is_cov
 
 
 VISUALIZER_MODES = ("off", "bars", "wave", "rays")
+WAVE_STYLES = ("surf", "ion", "ember")
 COVER_BACKGROUND_STYLES = ("soft", "liquid")
 MINI_BACKGROUND_MODES = ("classic", "wallpaper", "colors", "liquid")
 
@@ -431,7 +432,7 @@ class DesktopApi:
         if not self._settings_path.exists():
             return {"version": 1, "accent": "#c9c9d1", "playlist_shape": "square",
                     "wallpaper": None, "wallpaper_dim": 65, "wallpaper_blur": 0,
-                    "cover_background": True, "cover_background_style": "soft", "spectrum_enabled": False, "visualizer_mode": "off", "theme": "dark", "language": "ru", "developer_mode": False, "tester_mode": False, "sidebar_auto_collapse": True, "close_to_tray": True, "mini_background":"classic", "mini_liquid": False, "audio_output":"", "playing_screen_enabled":True,
+                    "cover_background": True, "cover_background_style": "soft", "spectrum_enabled": False, "visualizer_mode": "off", "wave_style": "surf", "theme": "dark", "language": "ru", "developer_mode": False, "tester_mode": False, "sidebar_auto_collapse": True, "close_to_tray": True, "mini_background":"classic", "mini_liquid": False, "audio_output":"", "playing_screen_enabled":True,
                     "discord_presence_enabled": False}
         try:
             data = json.loads(self._settings_path.read_text(encoding="utf-8"))
@@ -486,6 +487,8 @@ class DesktopApi:
         data.setdefault("visualizer_mode", "bars" if data["spectrum_enabled"] else "off")
         if data["visualizer_mode"] not in VISUALIZER_MODES:
             raise RuntimeError("Некорректный режим визуализатора в settings.json.")
+        if data.get("wave_style") not in WAVE_STYLES:
+            data["wave_style"] = "surf"
         data["spectrum_enabled"] = data["visualizer_mode"] != "off"
         data.setdefault("playlist_shape", "square")
         data.setdefault("wallpaper", None)
@@ -609,7 +612,7 @@ class DesktopApi:
             return self._write_settings(data)
 
     # spectrum_enabled keeps the settings readable by earlier desktop versions.
-    def save_visual_effects(self, cover_background, spectrum_enabled, visualizer_mode=None, cover_background_style=None):
+    def save_visual_effects(self, cover_background, spectrum_enabled, visualizer_mode=None, cover_background_style=None, wave_style=None):
         if type(cover_background) is not bool or type(spectrum_enabled) is not bool:
             raise ValueError("Переключатели эффектов должны быть True или False.")
         if visualizer_mode is None:
@@ -618,11 +621,15 @@ class DesktopApi:
             raise ValueError("Неизвестный режим визуализатора.")
         if cover_background_style is not None and cover_background_style not in COVER_BACKGROUND_STYLES:
             raise ValueError("Неизвестный стиль фона обложки.")
+        if wave_style is not None and wave_style not in WAVE_STYLES:
+            raise ValueError("Неизвестная форма волны.")
         with self._storage_lock:
             data = self._read_settings()
             data["cover_background"] = cover_background
             if cover_background_style is not None:
                 data["cover_background_style"] = cover_background_style
+            if wave_style is not None:
+                data["wave_style"] = wave_style
             data["visualizer_mode"] = visualizer_mode
             data["spectrum_enabled"] = visualizer_mode != "off"
             return self._write_settings(data)

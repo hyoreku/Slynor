@@ -27,6 +27,8 @@
 
     window.createCoverVisualizer = (canvas, cover) => {
         const ctx = canvas.getContext('2d');
+        const wave = window.createWaveRenderer(ctx);
+        let albumPalette;
         const levels = new Float32Array(SAMPLES), radii = new Float32Array(SAMPLES);
         let geometry, palette, colors, painted = false;
 
@@ -79,22 +81,6 @@
             ctx.stroke();
         }
 
-        function drawWave(points, phase, intensity) {
-            for (let i = 0; i < points.length; i++) {
-                const a = points[i].angle;
-                const flow = .55 + .23 * Math.sin(a * 3 + phase) + .14 * Math.cos(a * 5 - phase * 1.4) + .08 * Math.sin(a * 8 + phase);
-                levels[i] *= flow;
-            }
-            trace(points, 1);
-            paintShape(colors.liquid, intensity * .48, colors.liquid, intensity * .2, 6);
-            ctx.globalAlpha = intensity * .91;
-            ctx.strokeStyle = colors.edge;
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            trace(points, .48);
-            paintShape(colors.liquid, intensity * .42, colors.crest, intensity * .52, 1);
-        }
-
         function drawContours(points, phase, intensity) {
             const tilt = .18 + .11 * Math.sin(phase);
             for (let i = 0; i < points.length; i++) {
@@ -113,9 +99,10 @@
 
         return {
             setColors(values) { palette = values; colors = null; },
+            setPalette(values) { albumPalette = values; },
             invalidateGeometry() { geometry = null; },
             clear,
-            draw(mode, bands, time) {
+            draw(mode, bands, time, style) {
                 clear();
                 const width = canvas.clientWidth, height = canvas.clientHeight;
                 const peak = Math.max(...bands);
@@ -144,17 +131,18 @@
                 ctx.clip('evenodd');
                 ctx.lineJoin = 'round';
                 ctx.lineCap = 'round';
-                const bass = (bands[0] + bands[1] + bands[2] + bands[3] + bands[4] + bands[5]) / 6;
-                const bassWeight = mode === 'rays' ? .7 : .34;
-                for (let i = 0; i < SAMPLES; i++) {
-                    const position = 1 - Math.abs(1 - 2 * i / SAMPLES);
-                    const band = Math.round(position * (bands.length - 1));
-                    levels[i] = Math.sqrt(Math.min(1, 1.8 * ((1 - bassWeight) * smoothBand(bands, band) + bassWeight * bass)));
+                if (mode === 'wave') {
+                    wave.draw({ width: w, height: h, radius, reach: Math.min(width - w, height - h) / 2 - 4,
+                        bands, time, style, palette: albumPalette, fallback: palette });
+                } else {
+                    const bass = (bands[0] + bands[1] + bands[2] + bands[3] + bands[4] + bands[5]) / 6;
+                    for (let i = 0; i < SAMPLES; i++) {
+                        const position = 1 - Math.abs(1 - 2 * i / SAMPLES);
+                        const band = Math.round(position * (bands.length - 1));
+                        levels[i] = Math.sqrt(Math.min(1, 1.8 * (.3 * smoothBand(bands, band) + .7 * bass)));
+                    }
+                    drawContours(geometry.points, time * .0018, Math.min(1, Math.sqrt(peak) * 1.8));
                 }
-                const phase = time * .0018;
-                const intensity = Math.min(1, Math.sqrt(peak) * 1.8);
-                if (mode === 'wave') drawWave(geometry.points, phase, intensity);
-                else drawContours(geometry.points, phase, intensity);
                 ctx.restore();
                 painted = true;
             },

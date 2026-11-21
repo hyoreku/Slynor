@@ -341,6 +341,13 @@
                     <option value="off">Выкл.</option><option value="bars">Полосы</option><option value="wave">Волна</option><option value="rays">Контуры</option>
                 </select>
                 <p id="visualizer-hint" class="settings-note">Визуализатор использует частоты локального трека после эквалайзера. Выбранный эффект работает на экране «Сейчас играет» и в миниплеере.</p>
+                <div id="wave-style-row" hidden>
+                    <label for="wave-style">Форма волны</label>
+                    <select id="wave-style" disabled>
+                        <option value="surf">Прибой</option><option value="ion">Ион</option><option value="ember">Жар</option>
+                    </select>
+                    <p class="settings-note">Цвета волны берутся из обложки текущего трека.</p>
+                </div>
                 <p id="visual-effects-message" class="settings-note" role="status"></p>
             </div>
         </section>
@@ -483,7 +490,7 @@
 <!-- Эффекты изолированы от библиотечного кода: анимации, цвета, FFT-рисование. -->
 <script src="/static/js/cover-effects.js" defer></script>
 <script src="/static/js/liquid-background.js" defer></script>
-<script src="/static/js/cover-visualizer.js" defer></script>
+<script src="/static/js/wave-visualizer.js" defer></script><script src="/static/js/cover-visualizer.js" defer></script>
 <script src="/static/js/visuals.js" defer></script>
 <!-- Интерполяция времени между настоящими снимками VLC. -->
 <script src="/static/js/motion.js" defer></script>
