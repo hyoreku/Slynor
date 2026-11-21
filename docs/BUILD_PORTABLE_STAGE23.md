@@ -81,6 +81,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\windows\BUILD_WI
 
 ## 6. Обязательная приёмка на чистой Windows
 
+На Windows 10 WebView2 Fixed Runtime требует доступа на чтение для контейнеров приложений. Примените команды `icacls` из документации Microsoft к папке `webview2` внутри установленной или распакованной сборки. [Развёртывание WebView2 Fixed Runtime](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution#details-about-the-fixed-version-runtime-distribution-mode)
+
 Использовать новую VM/учётную запись без Python, VLC, FFmpeg, Deno и установленного WebView2. Нельзя считать успешную проверку на машине сборки доказательством автономности.
 
 - Распаковать portable в путь с пробелами и кириллицей. Отключить сеть: проверить старт, локальное MP3/M4A/Opus/WebM, плейлисты, очередь, поиск локальных записей, настройки, мини-плеер и трей.

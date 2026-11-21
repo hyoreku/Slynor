@@ -1,18 +1,14 @@
 # Подготовка Windows-дистрибутива и подписи
 
-В этом архиве **нет готового подписанного EXE/установщика**. Исправленный рецепт и проверочный сценарий подготовлены, но не выполнялись на Windows. Актуальные шаги — в [руководстве по portable-сборке](BUILD_PORTABLE_STAGE23.md). Нужны нативная сборка и приёмка; нельзя считать исходный скрипт проверенным дистрибутивом.
+Setup и portable собираются в [Windows packages](../.github/workflows/windows-package.yml). Успешный запуск публикует оба файла в артефакте `Slynor-Windows-x64`. Сборку на своём компьютере описывает [руководство по portable-сборке](BUILD_PORTABLE_STAGE23.md).
 
 ## Сборка
 
-На Windows x64:
-1. Запустите INSTALL.ps1 из исходников; проверьте запуск приложения.
-2. Установите Inno Setup 6 с официального сайта https://jrsoftware.org/isinfo.php (нужен ISCC.exe).
-3. Выполните `powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\windows\BUILD_WINDOWS.ps1`.
-4. Результат: `dist\Slynor\` (PyInstaller onedir) и `dist\installer\Slynor-Setup.exe` (Inno Setup). **Без сертификата это неподписанная сборка**, скрипт об этом предупреждает.
+Для сборки с подписью подготовьте Python 3.13 x64, Inno Setup 6 и компоненты из руководства. Передайте их пути в `BUILD_WINDOWS.ps1` вместе с `-SignThumbprint`. Скрипт создаёт `dist\installer\Slynor-Setup.exe` и `dist\Slynor-Portable.zip`.
 
 Worker-процессы запускаются только отдельным Python из `.providers` / `.search`, а не GUI-EXE. Входной скрипт поддерживает `--check-runtime` и `--smoke-test` без открытия GUI. Обычный путь загрузчиков — установленное отдельное окружение `.providers` рядом с EXE. `backend/provider_worker.py` и msoc_worker.py включаются как ресурсы для запуска внешним Python. Frontend — внутри `_internal/frontend`. Путь ffmpeg берётся из runtime_paths.json рядом с EXE, настройки/музыка остаются в LOCALAPPDATA\OwnPlayerMusic.
 
-Установщик ставит файлы в пользовательскую папку LocalAppData\Programs\Slynor, не удаляет личную библиотеку. В интерактивном режиме выполняет INSTALL.ps1 с видимым окном и ждёт кода завершения. При ошибке **не запускает плеер автоматически**. Это онлайн-bootstrap: требует сети/winget и может показать запросы сторонних установщиков. Не является автономным офлайн-пакетом. Тихая установка не запускает зависимости автоматически.
+Установщик копирует собранные файлы в `%LOCALAPPDATA%\Programs\Slynor`. Python, VLC, FFmpeg, Deno и WebView2 входят в пакет. Музыка и плейлисты хранятся в `%LOCALAPPDATA%\OwnPlayerMusic`.
 
 ## Значок приложения и трей
 
