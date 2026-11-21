@@ -46,6 +46,9 @@ jobs:
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+          export ANDROID_USER_HOME="$RUNNER_TEMP/slynor-android"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           if [[ ! -x "$sdkmanager" ]]; then
             sdkmanager=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -print -quit)
@@ -53,11 +56,22 @@ jobs:
           image='system-images;android-35;google_apis;x86_64'
           "$sdkmanager" emulator platform-tools "$image"
           echo no | "$(dirname "$sdkmanager")/avdmanager" create avd --name slynor-ui --package "$image" --force
+          test -s "$ANDROID_AVD_HOME/slynor-ui.ini"
           sudo chmod a+rw /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -avd slynor-ui -no-window -no-audio -no-boot-anim \
             -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/slynor-emulator.log" 2>&1 &
+          emulator_pid=$!
           trap 'adb emu kill || true' EXIT
-          if ! timeout 210 bash -c 'adb wait-for-device && until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'; then
+          booted=false
+          for attempt in {1..105}; do
+            if [[ $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then
+              booted=true
+              break
+            fi
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if [[ "$booted" != true ]]; then
             tail -60 "$RUNNER_TEMP/slynor-emulator.log"
             exit 1
           fi
