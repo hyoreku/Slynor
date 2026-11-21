@@ -395,12 +395,26 @@ def replace_library(connection, paths):
     cleaned = clean_track_paths(paths)
     now = _now()
     with transaction(connection):
-        connection.execute('DELETE FROM library_tracks')
+        previous = connection.execute(
+            'SELECT path_key, path, position FROM library_tracks ORDER BY position, rowid').fetchall()
+        kept = set(cleaned)
+        retained = [row['path'] for row in previous if row['path'] in kept]
+        if retained == cleaned[:len(retained)]:
+            connection.executemany(
+                'DELETE FROM library_tracks WHERE path_key=?',
+                ((row['path_key'],) for row in previous if row['path'] not in kept))
+            added = cleaned[len(retained):]
+            position = previous[-1]['position'] + 1 if previous else 0
+        else:
+            connection.execute('DELETE FROM library_tracks')
+            added = cleaned
+            position = 0
         connection.executemany(
             'INSERT INTO library_tracks (path_key, path, position, added_at) VALUES (?,?,?,?)',
-            [(track_path_key(path), path, index, now) for index, path in enumerate(cleaned)])
+            ((track_path_key(path), path, index, now)
+             for index, path in enumerate(added, start=position)))
         _bump_library(connection)
-    return load_library(connection)
+    return cleaned
 
 
 def load_playlists(connection):

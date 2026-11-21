@@ -1,11 +1,67 @@
 """Music Service HTTP contract: jobs API over a temporary SQLite file."""
+from contextlib import closing
 import tempfile
+from threading import Event
+from time import monotonic, sleep
 import unittest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from service import db
 from service.api import create_app
+from service.jobs import JobQueue
+from service.models import JobKind
+
+
+class DispatcherLifecycleTests(unittest.TestCase):
+    def test_running_jobs_recover_and_search_passes_a_blocked_download(self):
+        download_started = Event()
+        release_download = Event()
+
+        def slow_download(_job):
+            download_started.set()
+            if not release_download.wait(10):
+                raise TimeoutError('The test did not release the download.')
+            return {'downloaded': True}
+
+        class TestPipeline:
+            def handlers(self):
+                return {JobKind.DOWNLOAD: slow_download, JobKind.SEARCH: lambda job: {'found': True}}
+
+        def factory(_connection):
+            return TestPipeline()
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'service.sqlite3'
+            with closing(db.connect(path)) as connection:
+                queue = JobQueue(connection)
+                interrupted = queue.enqueue(JobKind.DOWNLOAD)
+                self.assertEqual(queue.claim_next().id, interrupted.id)
+                pending = queue.enqueue(JobKind.DOWNLOAD)
+
+            with TestClient(create_app(path, factory, run_jobs=True, poll_seconds=.05)) as client:
+                try:
+                    self.assertTrue(client.get('/health').json()['processing_jobs'])
+                    self.assertTrue(download_started.wait(3))
+                    self.assertEqual(client.get(f'/jobs/{interrupted.id}').json()['status'], 'failed')
+                    self.assertEqual(client.get(f'/jobs/{pending.id}').json()['status'], 'running')
+
+                    with self.assertRaisesRegex(RuntimeError, 'уже выполняет'):
+                        with TestClient(create_app(path, factory, run_jobs=True)):
+                            self.fail('A second dispatcher must not claim the same database.')
+
+                    job = client.post('/jobs', json={'kind': 'search'}).json()
+                    deadline = monotonic() + 3
+                    while monotonic() < deadline:
+                        job = client.get(f"/jobs/{job['id']}").json()
+                        if job['status'] == 'done':
+                            break
+                        sleep(.025)
+                    self.assertEqual(job['result'], {'found': True})
+                    self.assertEqual(client.get(f'/jobs/{pending.id}').json()['status'], 'running')
+                finally:
+                    release_download.set()
 
 
 class ServiceApiTests(unittest.TestCase):

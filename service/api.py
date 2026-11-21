@@ -2,18 +2,21 @@
 
 Loopback only: device authentication for remote clients is a later stage, so the
 service must not be exposed to a network before that exists. Jobs are accepted
-here and executed by the single dispatcher; when the application is created
+here and executed by separate search and media dispatchers. When created
 without a pipeline the service reports health and keeps jobs queued, which is
 what the skeleton tests rely on.
 """
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import ExitStack, asynccontextmanager, closing, contextmanager
 from pathlib import Path
+import sqlite3
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import db
+from .errors import ProviderError
 from .jobs import Dispatcher, JobQueue
 from .models import Job, JobKind, JobStatus
 
@@ -70,29 +73,55 @@ def provider_operations(name: str):
     return ['search', 'download'] + (['resolve'] if name == 'youtube' else [])
 
 
+@contextmanager
+def dispatcher_lock(path: Path):
+    # Lock a separate file so the worker lease never blocks the job database.
+    lock_path = path.with_name(path.name + '.dispatcher-lock')
+    with closing(sqlite3.connect(lock_path, timeout=0.0)) as lease:
+        try:
+            lease.execute('BEGIN EXCLUSIVE')
+        except sqlite3.OperationalError as error:
+            raise RuntimeError('Music Service уже выполняет задания этой базы.') from error
+        yield
+
+
 def create_app(db_path=None, pipeline_factory=None, *, run_jobs=False, poll_seconds=0.2) -> FastAPI:
-    path = Path(db_path) if db_path else db.default_db_path()
+    path = (Path(db_path) if db_path else db.default_db_path()).resolve()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        connection = db.connect(path)
-        queue = JobQueue(connection)
-        app.state.connection = connection
-        app.state.queue = queue
-        app.state.pipeline = None
-        app.state.dispatcher = None
-        try:
+        with ExitStack() as resources:
+            connection = resources.enter_context(closing(db.connect(path)))
+            queue = JobQueue(connection)
+            app.state.connection = connection
+            # Library SQL transactions must not share the HTTP job connection.
+            job_connection = resources.enter_context(closing(db.connect(path)))
+            app.state.queue = JobQueue(job_connection)
+            app.state.pipeline = None
+            app.state.dispatcher = None
+            dispatchers = []
             if pipeline_factory is not None:
                 app.state.pipeline = pipeline_factory(connection)
-                app.state.dispatcher = Dispatcher(queue, app.state.pipeline.handlers(),
-                                                  poll_seconds=poll_seconds)
                 if run_jobs:
-                    app.state.dispatcher.start()
-            yield
-        finally:
-            if app.state.dispatcher is not None:
-                app.state.dispatcher.stop()
-            connection.close()
+                    resources.enter_context(dispatcher_lock(path))
+                    app.state.queue.recover_interrupted()
+                    for search_only in (True, False):
+                        worker = resources.enter_context(closing(db.connect(path)))
+                        handlers = pipeline_factory(worker).handlers()
+                        dispatchers.append(Dispatcher(JobQueue(worker), handlers, poll_seconds,
+                                                      search_only=search_only))
+                    app.state.dispatcher = dispatchers[0]
+                else:
+                    app.state.dispatcher = Dispatcher(queue, app.state.pipeline.handlers(), poll_seconds)
+            try:
+                for dispatcher in dispatchers:
+                    dispatcher.start()
+                yield
+            finally:
+                for dispatcher in dispatchers:
+                    dispatcher.stop(0)
+                for dispatcher in dispatchers:
+                    await asyncio.to_thread(dispatcher.stop, None)
 
     app = FastAPI(title='Slynor Music Service', version='0.2.0', lifespan=lifespan)
 
@@ -105,7 +134,8 @@ def create_app(db_path=None, pipeline_factory=None, *, run_jobs=False, poll_seco
         for row in connection.execute('SELECT status, COUNT(*) AS total FROM jobs GROUP BY status'):
             counts[row['status']] = row['total']
         return {'status': 'ok', 'schema_version': version, 'journal_mode': journal,
-                'jobs': counts, 'dispatcher': app.state.dispatcher is not None}
+                'jobs': counts, 'dispatcher': app.state.dispatcher is not None,
+                'processing_jobs': run_jobs and app.state.dispatcher is not None}
 
     @app.get('/providers')
     def providers():
@@ -168,7 +198,11 @@ def create_app(db_path=None, pipeline_factory=None, *, run_jobs=False, poll_seco
         asset = db.get_asset(app.state.connection, asset_id)
         if asset is None:
             raise HTTPException(status_code=404, detail='Файл не найден.')
-        return FileResponse(pipeline.store.resolve(asset), media_type='application/octet-stream',
+        try:
+            path = pipeline.store.resolve(asset)
+        except ProviderError as error:
+            raise HTTPException(status_code=404, detail='Аудиофайл недоступен.') from error
+        return FileResponse(path, media_type='application/octet-stream',
                             filename=Path(asset.path).name)
 
     @app.get('/deliveries')
@@ -182,10 +216,10 @@ def create_app(db_path=None, pipeline_factory=None, *, run_jobs=False, poll_seco
     @app.put('/library')
     def put_library(body: LibraryBody):
         try:
-            db.replace_library(app.state.connection, body.tracks)
+            tracks = db.replace_library(app.state.connection, body.tracks)
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
-        return _library_response(app.state.connection)
+        return {'tracks': tracks, **db.library_state(app.state.connection)}
 
     @app.get('/library/revision')
     def get_library_revision():

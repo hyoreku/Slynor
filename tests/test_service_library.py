@@ -33,6 +33,18 @@ class LibraryRepositoryTests(unittest.TestCase):
         self.addCleanup(reopened.close)
         self.assertEqual(db.load_library(reopened), ['C:/Music/a.mp3'])
 
+    def test_ordered_append_and_removal_write_only_changed_rows(self):
+        paths = ['C:/Music/a.mp3', 'C:/Music/b.mp3', 'C:/Music/c.mp3']
+        db.replace_library(self.connection, paths)
+        changes = self.connection.total_changes
+        desired = [paths[0], paths[2], 'C:/Music/d.mp3']
+        self.assertEqual(db.replace_library(self.connection, desired), desired)
+        self.assertEqual(self.connection.total_changes - changes, 3)
+        self.assertEqual(db.load_library(self.connection), desired)
+        desired.reverse()
+        db.replace_library(self.connection, desired)
+        self.assertEqual(db.load_library(self.connection), desired)
+
     def test_playlists_crud_order_and_cascade(self):
         first = db.create_playlist(self.connection, 'One')
         second = db.create_playlist(self.connection, 'Two')

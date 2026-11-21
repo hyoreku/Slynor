@@ -1,6 +1,6 @@
 """The vertical slice: search -> candidate -> download -> delivery.
 
-Handlers run inside the single dispatcher, so they are synchronous and short.
+Handlers run synchronously on the search dispatcher or the media dispatcher.
 Every step persists its own record before the next one can use it: a failed job
 leaves a Recording, a known AudioCandidate or a measured AudioAsset behind, and
 the store publishes files atomically, so there is never a half-written asset.

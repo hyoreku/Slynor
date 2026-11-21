@@ -1,9 +1,4 @@
-"""Persistent job queue and a single dispatcher.
-
-A job survives a service restart: the row is committed before any work starts.
-The dispatcher claims one row at a time; the queue lock keeps the shared SQLite
-connection safe for the polling thread and the API thread.
-"""
+"""Persistent job queue and dispatch threads."""
 from datetime import datetime, timezone
 import json
 import logging
@@ -59,24 +54,27 @@ class JobQueue:
                     (JobStatus(status).value, limit)).fetchall()
         return [_job(row) for row in rows]
 
-    def claim_next(self) -> Job | None:
+    def recover_interrupted(self) -> int:
+        """Record interrupted outcomes before a new dispatcher accepts work."""
         with self._lock:
-            self._connection.execute('BEGIN IMMEDIATE')
-            try:
-                row = self._connection.execute(
-                    "SELECT * FROM jobs WHERE status='queued' ORDER BY created_at, rowid LIMIT 1"
-                ).fetchone()
-                if row is None:
-                    self._connection.execute('COMMIT')
-                    return None
-                self._connection.execute(
-                    "UPDATE jobs SET status='running', started_at=?, attempts=attempts+1"
-                    " WHERE id=? AND status='queued'", (_now(), row['id']))
-                self._connection.execute('COMMIT')
-            except BaseException:
-                self._connection.execute('ROLLBACK')
-                raise
-        return self.get(row['id'])
+            result = self._connection.execute(
+                "UPDATE jobs SET status='failed', finished_at=?, error=? WHERE status='running'",
+                (_now(), 'Сервис перезапустился во время задания. Повторите запрос.'))
+        return result.rowcount
+
+    def claim_next(self, *, search_only: bool | None = None) -> Job | None:
+        predicates = {None: '', True: " AND kind='search'", False: " AND kind!='search'"}
+        with self._lock:
+            next_job = self._connection.execute(
+                "SELECT id FROM jobs WHERE status='queued'" + predicates[search_only]
+                + " ORDER BY created_at, rowid LIMIT 1"
+            ).fetchone()
+            if next_job is None:
+                return None
+            updated = self._connection.execute(
+                "UPDATE jobs SET status='running', started_at=?, attempts=attempts+1"
+                " WHERE id=? AND status='queued'", (_now(), next_job['id']))
+            return self.get(next_job['id']) if updated.rowcount == 1 else None
 
     def complete(self, job_id: str, result: dict | None = None) -> Job:
         with self._lock:
@@ -118,18 +116,23 @@ class JobQueue:
                 raise ValueError('Задание уже выполняется; отмена не поддерживается.')
             if status != JobStatus.QUEUED.value:
                 raise ValueError('Отменить можно только задание в очереди.')
-            self._connection.execute(
-                "UPDATE jobs SET status='cancelled', finished_at=? WHERE id=?", (_now(), job_id))
+            updated = self._connection.execute(
+                "UPDATE jobs SET status='cancelled', finished_at=? WHERE id=? AND status='queued'",
+                (_now(), job_id))
+            if updated.rowcount == 0:
+                raise ValueError('Задание уже выполняется; отмена не поддерживается.')
         return self.get(job_id)
 
 
 class Dispatcher:
-    """One thread, one job at a time; handlers never run inside the queue lock."""
+    """One job at a time on a dedicated queue connection."""
 
-    def __init__(self, queue: JobQueue, handlers: dict[JobKind, object], poll_seconds: float = 0.2):
+    def __init__(self, queue: JobQueue, handlers: dict[JobKind, object], poll_seconds: float = 0.2,
+                 *, search_only: bool | None = None):
         self.queue = queue
         self.handlers = {JobKind(kind): handler for kind, handler in handlers.items()}
         self.poll_seconds = max(0.05, float(poll_seconds))
+        self.search_only = search_only
         self._stop = Event()
         self._thread = None
         self._lock = RLock()
@@ -142,16 +145,15 @@ class Dispatcher:
             self._thread = Thread(target=self._run, name='music-service-dispatch', daemon=True)
             self._thread.start()
 
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float | None = 5.0) -> None:
         with self._lock:
             self._stop.set()
             thread = self._thread
-            self._thread = None
         if thread is not None:
             thread.join(timeout=timeout)
 
     def run_once(self) -> bool:
-        job = self.queue.claim_next()
+        job = self.queue.claim_next(search_only=self.search_only)
         if job is None:
             return False
         handler = self.handlers.get(job.kind)
