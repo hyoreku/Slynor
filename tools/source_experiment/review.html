@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Оценка совпадений · Slynor</title>
+<style>
+:root{color-scheme:light dark;font:16px system-ui;background:Canvas;color:CanvasText}
+body{max-width:1000px;margin:auto;padding:20px}
+h1{font-size:1.55rem}h2{font-size:1.15rem}h3{font-size:1rem;margin:0}
+button,select,input{font:inherit;padding:6px 8px;max-width:100%}
+button{cursor:pointer}label{display:grid;gap:4px}
+.row{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.box{border:1px solid GrayText;border-radius:8px;padding:14px;margin:12px 0}
+p{margin:7px 0}.muted{color:GrayText}.card{padding:12px 0;border-bottom:1px solid GrayText}.card:last-child{border:0}
+#evidence{flex:1;min-width:min(100%,280px)}
+</style>
+<h1>Оценка совпадений</h1>
+<div class="row">
+  <label>Имя проверяющего <input id="reviewer" autocomplete="off" maxlength="80" placeholder="Ник"></label>
+  <button id="download-reviews">Скачать reviews.csv</button>
+  <button id="download-availability">Скачать availability.csv</button>
+</div>
+<p id="progress" role="status"></p>
+<p id="storage" class="muted"></p>
+<div class="row">
+  <label>Запрос <select id="query"></select></label>
+  <label>Адаптер <select id="adapter"></select></label>
+  <button id="previous">← Предыдущий запрос</button>
+  <button id="next">Следующий запрос →</button>
+</div>
+<main id="content"></main>
+<script type="application/json" id="data">__REVIEW_DATA__</script>
+<script>
+'use strict';
+const data=JSON.parse(document.getElementById('data').textContent);
+const byId=id=>document.getElementById(id);
+const content=byId('content'), reviewer=byId('reviewer'), querySelect=byId('query'), adapterSelect=byId('adapter');
+const key='slynor-source-review:'+data.run;
+const reviewFields=['attempt_id','rank','relevant','artist_match','duration_match','version_match','full_or_preview','reviewer','title','artist'];
+const availabilityFields=['adapter','query_id','available','reference_evidence','reviewer','negative_control'];
+const cardKey=row=>row.attempt_id+'#'+row.rank;
+const availabilityKey=row=>row.adapter+'#'+row.query_id;
+const decisions={ '':'—', true:'Да', false:'Нет' };
+const matchFields={artist_match:'Исполнитель',duration_match:'Длительность',version_match:'Версия'};
+const reviewEdits=new Map(), availabilityEdits=new Map();
+try{
+    const saved=JSON.parse(localStorage.getItem(key) || '{}');
+    for(const [id,value] of saved.reviews||[]) reviewEdits.set(id,value);
+    for(const [id,value] of saved.availability||[]) availabilityEdits.set(id,value);
+    reviewer.value=saved.reviewer||'';
+    byId('storage').textContent='Черновик хранится в этом браузере. Скачай CSV, чтобы сохранить отдельную копию.';
+}catch{
+    byId('storage').textContent='Хранилище браузера недоступно. Скачай CSV перед закрытием страницы.';
+}
+function effective(row, modifications, id){return {...row,...modifications.get(id(row))};}
+const currentReview=card=>effective(card.review,reviewEdits,cardKey);
+const currentAvailability=row=>effective(row,availabilityEdits,availabilityKey);
+const attempts=new Map(data.attempts.map(attempt=>[attempt.attempt_id,attempt]));
+const cardsByAttempt=Map.groupBy(data.cards,card=>card.attempt_id);
+const duration=value=>value!=null && value!=='' && Number.isFinite(Number(value)) ? (Number(value)/1000).toFixed(1)+' с' : 'длительность неизвестна';
+const decision=value=>String(value??'').toLowerCase();
+function node(tag,text,parent){
+    const child=document.createElement(tag);
+    if(text!=null) child.textContent=text;
+    if(parent) parent.append(child);
+    return child;
+}
+function selectOptions(select,choices){
+    for(const [value,label] of Object.entries(choices)) select.add(new Option(label,value));
+}
+function labelled(parent,text,choices,value,update){
+    const label=node('label',text,parent);
+    const select=node('select',null,label);
+    selectOptions(select,choices);
+    select.value=decision(value);
+    select.addEventListener('change',()=>update(select.value));
+    return select;
+}
+function save(){
+    try{
+        localStorage.setItem(key,JSON.stringify({reviewer:reviewer.value,reviews:[...reviewEdits],availability:[...availabilityEdits]}));
+    }catch{
+        byId('storage').textContent='Черновик сохраняется только до закрытия страницы. Скачай CSV.';
+    }
+    updateProgress();
+}
+function updateProgress(){
+    const judged=data.cards.filter(card=>{const r=currentReview(card);return r.relevant && r.reviewer;}).length;
+    const checked=data.availability.filter(row=>{const a=currentAvailability(row);return a.available && a.reference_evidence && a.reviewer;}).length;
+    byId('progress').textContent=`Карточки: ${judged}/${data.cards.length} · Доступность: ${checked}/${data.availability.length}`;
+}
+function edit(row,edits,id,change){
+    const patch={...edits.get(id(row)),...change};
+    if(reviewer.value.trim()) patch.reviewer=reviewer.value.trim();
+    edits.set(id(row),patch);
+    save();
+}
+function renderCard(parent,card){
+    const section=node('article',null,parent);
+    section.className='card';
+    node('h3',`#${card.rank} · ${card.title || 'Без названия'}`,section);
+    node('p',[card.artist,duration(card.duration_ms),card.recording_version].filter(Boolean).join(' · '),section);
+    try{
+        const url=new URL(card.public_page);
+        if(url.protocol==='https:'&&!url.username&&!url.password){
+            const link=node('a','Страница записи',section);
+            link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';
+        }
+    }catch{}
+    const controls=node('div',null,section);
+    controls.className='row';
+    const row=currentReview(card);
+    const set=patch=>edit(card.review,reviewEdits,cardKey,patch);
+    const relevant=labelled(controls,'Совпадение',decisions,row.relevant,value=>{
+        if(value==='true' && Object.keys(matchFields).some(field=>decision(currentReview(card)[field])!=='true')){
+            relevant.value=decision(currentReview(card).relevant);
+            relevant.setCustomValidity('Подтверди исполнителя, длительность и версию или нажми «Всё совпало».');
+            relevant.reportValidity();
+            relevant.setCustomValidity('');
+            return;
+        }
+        set({relevant:value});
+    });
+    const checks=[];
+    for(const [field,label] of Object.entries(matchFields)){
+        checks.push(labelled(controls,label,decisions,row[field],value=>{
+            const patch={[field]:value};
+            if(value!=='true'&&decision(currentReview(card).relevant)==='true') {
+                patch.relevant='';
+                relevant.value='';
+            }
+            set(patch);
+        }));
+    }
+    labelled(controls,'Аудио',{unknown:'Не проверено',full:'Полное',preview:'Превью'},row.full_or_preview||'unknown',value=>set({full_or_preview:value}));
+    const accept=node('button','Всё совпало',controls);
+    accept.addEventListener('click',()=>{
+        set({relevant:'true',artist_match:'true',duration_match:'true',version_match:'true'});
+        relevant.value='true';checks.forEach(check=>{check.value='true';});
+    });
+}
+function render(){
+    content.replaceChildren();
+    const query=data.queries[querySelect.selectedIndex], adapter=adapterSelect.value;
+    const reference=node('section',null,content);
+    reference.className='box';
+    node('h2',`${query.query_id} · ${query.query}`,reference);
+    node('p',['Эталон',query.target_artist,query.target_title,query.target_version,duration(query.reference_duration_ms)].filter(Boolean).join(' · '),reference);
+    if(query.reference_recording_id) node('p','ID записи: '+query.reference_recording_id,reference);
+    if(query.group==='negative_control') node('p','Отрицательный контроль',reference);
+    const source=data.availability.find(row=>row.query_id===query.query_id&&row.adapter===adapter);
+    const saved=currentAvailability(source);
+    const controls=node('div',null,reference);controls.className='row';
+    labelled(controls,'Доступность по независимому эталону',decisions,saved.available,value=>edit(source,availabilityEdits,availabilityKey,{available:value}));
+    const label=node('label','Ссылка или основание проверки',controls);label.id='evidence';
+    const evidence=node('input',null,label);
+    evidence.value=saved.reference_evidence;
+    evidence.addEventListener('input',()=>edit(source,availabilityEdits,availabilityKey,{reference_evidence:evidence.value}));
+    for(const [phase,title] of [['cold','Холодный запуск'],['warm','Повторный поиск']]){
+        const list=node('section',null,content);list.className='box';
+        node('h2',title,list);
+        const id=`${query.query_id}-${adapter}-${phase}`;
+        const attempt=attempts.get(id);
+        const cards=cardsByAttempt.get(id)||[];
+        if(!cards.length)node('p',!attempt?'Попытка не запускалась':attempt.status==='failed'?'Ошибка поиска: '+attempt.error_category:'Карточек нет',list);
+        for(const card of cards)renderCard(list,card);
+    }
+    byId('previous').disabled=querySelect.selectedIndex===0;
+    byId('next').disabled=querySelect.selectedIndex===data.queries.length-1;
+}
+function csv(value){
+    let text=String(value??'');
+    if(/^[=+@-]/.test(text)) text="'"+text;
+    return '"'+text.replaceAll('"','""')+'"';
+}
+function download(name,fields,rows){
+    const alias=reviewer.value.trim();
+    const available=name==='availability.csv';
+    for(const row of rows){
+        const marked=available?row.available:row.relevant;
+        if(!marked)continue;
+        if(!row.reviewer && alias) row.reviewer=alias;
+        if(!String(row.reviewer||'').trim()||(available && !String(row.reference_evidence||'').trim())){
+            window.alert('Для выставленной оценки укажи проверяющего, а для доступности — основание.');return;
+        }
+    }
+    const body=fields.join(',')+'\r\n'+rows.map(row=>fields.map(field=>csv(row[field])).join(',')).join('\r\n')+'\r\n';
+    const url=URL.createObjectURL(new Blob(['\uFEFF',body],{type:'text/csv;charset=utf-8'}));
+    const link=node('a',null,document.body);
+    link.href=url;link.download=name;link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+for(const query of data.queries)querySelect.add(new Option(query.query_id+' · '+query.query,query.query_id));
+for(const adapter of data.adapters)adapterSelect.add(new Option(adapter,adapter));
+for(const select of [querySelect,adapterSelect])select.addEventListener('change',render);
+for(const [id,step] of [['previous',-1],['next',1]])byId(id).onclick=()=>{querySelect.selectedIndex+=step;render();};
+reviewer.addEventListener('change',()=>{
+    const alias=reviewer.value.trim();
+    if(alias) for(const edits of [reviewEdits,availabilityEdits])
+        for(const row of edits.values()) row.reviewer ||= alias;
+    save();
+});
+byId('download-reviews').onclick=()=>download('reviews.csv',reviewFields,data.cards.map(currentReview));
+byId('download-availability').onclick=()=>download('availability.csv',availabilityFields,data.availability.map(currentAvailability));
+render();updateProgress();
+</script>
+</html>

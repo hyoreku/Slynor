@@ -22,7 +22,7 @@ class EvidenceTests(unittest.TestCase):
         self.addCleanup(dataset.stop)
 
     def test_documented_isolated_cli_entry_points_start_without_import_errors(self):
-        for script in ('run.py','report.py','compare.py'):
+        for script in ('run.py','report.py','compare.py','review.py'):
             with self.subTest(script=script):
                 result=subprocess.run([sys.executable,'-I',str(common.ROOT/'tools/source_experiment'/script),'--help'],
                     cwd=common.ROOT,capture_output=True,timeout=5,check=False)
