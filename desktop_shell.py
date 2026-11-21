@@ -135,10 +135,10 @@ class DesktopShell:
         if mini is None:
             try:
                 mini=webview.create_window('Slynor · Миниплеер',
-                    url='http://127.0.0.1:8765/mini',width=360,height=112,
-                    min_size=(320,108),on_top=True,frameless=True,easy_drag=False,
-                    x=position(360,112,self.api.load_settings().get('mini_position'),top=True)[0],
-                    y=position(360,112,self.api.load_settings().get('mini_position'),top=True)[1])
+                    url='http://127.0.0.1:8765/mini',width=376,height=128,
+                    min_size=(336,124),on_top=True,frameless=True,transparent=True,easy_drag=False,
+                    x=position(376,128,self.api.load_settings().get('mini_position'),top=True)[0],
+                    y=position(376,128,self.api.load_settings().get('mini_position'),top=True)[1])
                 def closed(*args):
                     with self.lock:
                         if self.mini is mini: self.mini=None

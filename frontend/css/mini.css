@@ -90,3 +90,21 @@ button:focus-visible {
     height: 100%;
     pointer-events: none;
 }
+
+:root {
+    --mini-frame-gutter: 8px;
+    --mini-frame-radius: 11px;
+    background: transparent;
+}
+
+body {
+    padding: calc(8px + var(--mini-frame-gutter));
+    min-height: calc(108px + 2 * var(--mini-frame-gutter));
+    background: transparent;
+}
+
+#mini-background {
+    inset: var(--mini-frame-gutter);
+    border-radius: var(--mini-frame-radius);
+    border: 1px solid color-mix(in srgb, var(--mini-text) 16%, transparent);
+}

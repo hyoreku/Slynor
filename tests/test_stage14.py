@@ -22,7 +22,7 @@ class NativeModeTests(unittest.TestCase):
   with patch('desktop_shell.webview.create_window',return_value=mini,create=True) as create:self.shell.show_mini()
   return create.call_args.kwargs
  def test_compact_size(self):
-  args=self.mini();self.assertEqual((args['width'],args['height']),(360,112));self.assertEqual(args['min_size'],(320,108))
+  args=self.mini();self.assertEqual((args['width'],args['height']),(376,128));self.assertEqual(args['min_size'],(336,124));self.assertTrue(args['transparent'])
  def test_maximized_restored_not_normalized(self):
   self.window.maximize=lambda:self.window.calls.append('maximize');self.shell.main_mode='maximized';self.mini();self.shell.show_main()
   self.assertIn('maximize',self.window.calls);self.assertNotIn('restore',self.window.calls)

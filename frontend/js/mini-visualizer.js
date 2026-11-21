@@ -3,6 +3,7 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const wave = window.createWaveRenderer(ctx);
+    const panel = document.getElementById('mini-background');
     const cover = document.getElementById('mini-cover');
     let waveStyle, albumPalette, paletteUrl;
     function updatePalette() {
@@ -20,7 +21,7 @@
     const bands = new Float32Array(48);
     const target = new Float32Array(48);
     let session, mode, color, highlight, timer, controller, raf;
-    let width, height, edge = [];
+    let width, height, contour, edge = [];
 
     function clear() {
         ctx.resetTransform();
@@ -40,10 +41,9 @@
         canvas.hidden = true;
     }
 
-    function perimeter(width, height) {
-        const inset = 2, radius = 8;
-        const left = inset + radius, right = width - left;
-        const top = inset + radius, bottom = height - top;
+    function perimeter({x, y, width, height, radius}) {
+        const left = x + radius, right = x + width - radius;
+        const top = y + radius, bottom = y + height - radius;
         const horizontal = right - left, vertical = bottom - top, corner = Math.PI * radius / 2;
         const sides = [
             [left, top, 0, -1, horizontal], [right, top, 1, 0, vertical],
@@ -70,7 +70,12 @@
         if (nextWidth !== width || nextHeight !== height) {
             width = nextWidth;
             height = nextHeight;
-            edge = perimeter(width, height);
+            const canvasBox = canvas.getBoundingClientRect();
+            const box = panel.getBoundingClientRect();
+            contour = { x: box.left - canvasBox.left, y: box.top - canvasBox.top,
+                width: box.width, height: box.height,
+                radius: parseFloat(getComputedStyle(panel).borderTopLeftRadius) };
+            edge = perimeter(contour);
         }
         const scale = Math.min(2, devicePixelRatio || 1);
         const w = Math.round(width * scale), h = Math.round(height * scale);
@@ -92,8 +97,8 @@
         ctx.beginPath();
         edge.forEach(([x, y, nx, ny], index) => {
             const distance = offset + amplitude(index) * travel;
-            if (index === 0) ctx.moveTo(x - nx * distance, y - ny * distance);
-            else ctx.lineTo(x - nx * distance, y - ny * distance);
+            if (index === 0) ctx.moveTo(x + nx * distance, y + ny * distance);
+            else ctx.lineTo(x + nx * distance, y + ny * distance);
         });
         ctx.closePath();
         ctx.strokeStyle = stroke;
@@ -102,36 +107,44 @@
     }
 
     function drawPerimeter() {
+        const {x, y, width: panelWidth, height: panelHeight, radius} = contour;
+        let bassEnergy = 0;
+        for (let index = 0; index < 8; index++) bassEnergy += bands[index];
+        const bass = Math.sqrt(bassEnergy / 8);
+        const tone = index => albumPalette?.[index] ? `rgb(${albumPalette[index].join(',')})` : color;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, width, height);
+        ctx.roundRect(x, y, panelWidth, panelHeight, radius);
+        ctx.clip('evenodd');
         ctx.lineJoin = ctx.lineCap = 'round';
         ctx.lineWidth = 1.3;
-        if (mode === 'bars') {
-            ctx.beginPath();
-            for (let i = 0; i < edge.length; i += 2) {
-                const [x, y, nx, ny] = edge[i];
-                const length = amplitude(i) * 5.5;
-                if (length < .35) continue;
-                ctx.moveTo(x, y);
-                ctx.lineTo(x - nx * length, y - ny * length);
-            }
-            ctx.strokeStyle = color;
-            ctx.stroke();
-        } else if (mode === 'wave') {
-            const inset = 9;
-            ctx.save();
-            ctx.translate(width / 2, height / 2);
-            ctx.beginPath();
-            ctx.rect(-width / 2, -height / 2, width, height);
-            ctx.roundRect(inset - width / 2, inset - height / 2, width - 2 * inset, height - 2 * inset, 8);
-            ctx.clip('evenodd');
-            wave.draw({ width: width - 2 * inset, height: height - 2 * inset, radius: 8, reach: 8,
+        if (mode === 'wave') {
+            ctx.translate(x + panelWidth / 2, y + panelHeight / 2);
+            wave.draw({ width: panelWidth, height: panelHeight, radius, reach: 6.3,
                 bands, time: reduced.matches ? 0 : performance.now(), style: waveStyle,
                 palette: albumPalette, fallback: [color, highlight], compact: true });
-            ctx.restore();
         } else {
-            outline(0, 0, color, .85);
-            outline(2.1, 2.6, highlight, .75);
+            if (mode === 'rays') outline(.7, bass * .7, tone(0), .7);
+            const spacing = mode === 'rays' ? 3 : 2;
+            const drawBands = (scale, stroke, lineWidth, opacity) => {
+                ctx.beginPath();
+                for (let i = 0; i < edge.length; i += spacing) {
+                    const [px, py, nx, ny] = edge[i];
+                    const length = Math.min(6.5, amplitude(i) * 5.3 + bass * 1.4) * scale;
+                    if (length < .35) continue;
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px + nx * length, py + ny * length);
+                }
+                ctx.strokeStyle = stroke;
+                ctx.globalAlpha = opacity;
+                ctx.lineWidth = lineWidth;
+                ctx.stroke();
+            };
+            if (mode === 'rays') drawBands(1, tone(1), 2.5, .42);
+            drawBands(mode === 'rays' ? .68 : 1, tone(0), 1.3, .9);
         }
-        ctx.globalAlpha = 1;
+        ctx.restore();
     }
 
     function draw() {
@@ -139,7 +152,7 @@
         if (!session) return;
         let audible = false;
         for (let i = 0; i < bands.length; i++) {
-            bands[i] += (target[i] - bands[i]) * (reduced.matches ? 1 : .28);
+            bands[i] += (target[i] - bands[i]) * (reduced.matches ? 1 : target[i] > bands[i] ? .44 : .19);
             if (bands[i] < .001) bands[i] = 0;
             audible ||= bands[i] > 0;
         }

@@ -32,6 +32,7 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
     data=network18;
    }else if(url.pathname==='/api/network/check')data={network:{mode:network18.mode,proxy_detected:true},checks:[{service:'youtube',code:'http_200',elapsed_ms:12}]};
    else if(url.pathname==='/api/player/state'){data=structuredClone(state);if(holdState){holdState=false;await new Promise(resolve=>releaseState=resolve);}}
+   else if(url.pathname==='/api/player/spectrum'){data={file_path:state.file_path,state:'playing',status:'ready',bands:Array(48).fill(.65)};}
    else if(url.pathname==='/api/appearance'){state.appearance={...body};data=body;}
    else if(url.pathname==='/api/player/output-devices')data={devices:[{id:'',name:'По умолчанию в Windows'},{id:'usb',name:'Наушники USB'}],selected:'',available:true};
    else if(url.pathname==='/api/player/output-device')data={selected:body.device,message:'Команда выбора передана VLC.'};
@@ -142,6 +143,30 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  await page.locator('#library-list [data-play-track]').click();
  await page.waitForFunction(()=>!commandBusy);
  check(queueCommits.length===3&&queueCommits[2].index===24999,'Play handler uploads complete queue from filtered view');
+ const mini = await context.newPage();
+ mini.on('pageerror', error => errors.push(error.message));
+ await mini.setViewportSize({width:376,height:128});
+ state = {...state,file_path:local[0],state:'playing',appearance:{...settings,
+     mini_background:'classic',visualizer_mode:'bars',wave_style:'surf',dim:50,blur:0}};
+ await mini.goto('http://127.0.0.1:8765/mini');
+ for (const mode of ['bars', 'wave', 'rays']) {
+   state.appearance.visualizer_mode = mode;
+   await mini.waitForFunction(mode => {
+     const canvas = document.querySelector('#mini-spectrum[data-mode="' + mode + '"]:not([hidden])');
+     if (!canvas) return false;
+     const panel = document.querySelector('#mini-background').getBoundingClientRect();
+     const ctx = canvas.getContext('2d');
+     const scale = canvas.width / canvas.clientWidth;
+     const alpha = (x,y,w,h) => ctx.getImageData(x*scale,y*scale,w*scale,h*scale).data.filter((_,i)=>i%4===3);
+     const middle = alpha(panel.left+30,panel.top+15,panel.width-60,panel.height-30);
+     return alpha(panel.left+20,0,panel.width-40,panel.top).some(a=>a>40)
+         && alpha(0,panel.top+20,panel.left,panel.height-40).some(a=>a>40)
+         && !middle.some(a=>a);
+   }, mode);
+   check(true, mode + ' renders outside the mini-player panel');
+ }
+ state.state = 'paused';
+ await mini.locator('#mini-spectrum').waitFor({state:'hidden'});
  check(errors.length===0,'no browser JS errors: '+errors.join(';'));
  console.log(`PASS ${checks} stage23 UI assertions; 25,000-track fixture, mocked API/audio, Chromium not WebView2.`);
  } finally {await context.close();await browser.close();}
