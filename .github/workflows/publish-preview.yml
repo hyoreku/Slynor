@@ -1,0 +1,66 @@
+name: Publish Slynor preview
+
+on:
+  push:
+    tags: [v0.23.0-preview.1]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify source and download tested packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          git diff --exit-code 274f78401bc6eb257f4c036f7551b11e703468c6 HEAD -- \
+            backend player service frontend telegram_bot desktop.py desktop_shell.py \
+            start.py window_geometry.py packaging requirements
+          git diff --exit-code 8a39a28 HEAD -- android
+
+          cd "$RUNNER_TEMP"
+          mkdir release-assets
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14726400864/zip" > windows.zip
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14726216650/zip" > android.zip
+          sha256sum --check <<'EOF'
+          1270b6ed37b64f65487d4b7988bd234b742b4e0aa6aad75d99adc2527a98619a  windows.zip
+          2da6852860ddf82a6705db7107ededbc1d3ae19a9a2523147afb81c3dd437904  android.zip
+          EOF
+          unzip -j windows.zip '*Slynor-Setup.exe' '*Slynor-Portable.zip' -d release-assets
+          unzip -j android.zip '*Slynor-Android-debug.apk' -d release-assets
+          cd release-assets
+          sha256sum Slynor-Setup.exe Slynor-Portable.zip Slynor-Android-debug.apk > SHA256SUMS.txt
+
+      - name: Publish GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP/release-assets"
+          cat > notes.md <<'EOF'
+          ### Windows x64
+
+          Мини-плеер сворачивается до обложки и спектра после трёх секунд без курсора. Исправлены контур окна и обновление активности Discord при быстрой смене треков.
+
+          `Slynor-Setup.exe` устанавливает приложение. Для portable распакуйте `Slynor-Portable.zip` целиком и запустите `Slynor.exe`. Оба пакета без цифровой подписи. Для Windows 10 см. [настройку WebView2](https://github.com/hyoreku/Slynor/blob/v0.23.0-preview.1/docs/BUILD_PORTABLE_STAGE23.md#6-обязательная-приёмка-на-чистой-windows).
+
+          ### Android 8+
+
+          `Slynor-Android-debug.apk` — первая офлайн-сборка Android 0.1.0 с локальной библиотекой, очередью, перемоткой и управлением из уведомления. APK подписан отладочным ключом.
+
+          Контрольные суммы файлов в `SHA256SUMS.txt`.
+
+          [Проверки Windows](https://github.com/hyoreku/Slynor/actions/runs/44951309731) · [Сборка APK и проверка подписи](https://github.com/hyoreku/Slynor/actions/runs/44952052697)
+          EOF
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --prerelease --title 'Slynor v0.23.0 Preview 1' --notes-file notes.md \
+            Slynor-Setup.exe Slynor-Portable.zip Slynor-Android-debug.apk SHA256SUMS.txt
