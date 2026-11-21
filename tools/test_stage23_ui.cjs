@@ -9,6 +9,7 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const context=await browser.newContext({viewport:{width:1280,height:800},deviceScaleFactor:1.25,reducedMotion:'no-preference'});
  let state={state:'playing',filename:'one.wav',file_path:local[0],volume:50,time_ms:2000,duration_ms:180000,can_seek:true,queue_size:3,queue_index:0,rate:1,speed_mode:'standard'};
+ let spectrumBands = Array(48).fill(.65);
  let eq={enabled:false,preamp:0,bands:Array(10).fill(0),speed_mode:'standard'};const calls=[];const errors=[];
  let queueUpload=[],queueCommits=[];
  let holdState=false,releaseState=null,holdMetadata=false,releaseMetadata=null;
@@ -32,7 +33,7 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
     data=network18;
    }else if(url.pathname==='/api/network/check')data={network:{mode:network18.mode,proxy_detected:true},checks:[{service:'youtube',code:'http_200',elapsed_ms:12}]};
    else if(url.pathname==='/api/player/state'){data=structuredClone(state);if(holdState){holdState=false;await new Promise(resolve=>releaseState=resolve);}}
-   else if(url.pathname==='/api/player/spectrum'){data={file_path:state.file_path,state:'playing',status:'ready',bands:Array(48).fill(.65)};}
+   else if(url.pathname==='/api/player/spectrum'){data={file_path:state.file_path,state:'playing',status:'ready',bands:spectrumBands};}
    else if(url.pathname==='/api/appearance'){state.appearance={...body};data=body;}
    else if(url.pathname==='/api/player/output-devices')data={devices:[{id:'',name:'По умолчанию в Windows'},{id:'usb',name:'Наушники USB'}],selected:'',available:true};
    else if(url.pathname==='/api/player/output-device')data={selected:body.device,message:'Команда выбора передана VLC.'};
@@ -190,12 +191,17 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  await mini.locator('#mini-title').waitFor({state:'hidden'});
  check(await mini.locator('#mini-cover img').isVisible(), 'compact shows the same cover and hides text');
  check(await mini.locator('#mini-background[data-mode="colors"] .mini-colors').isVisible(), 'compact keeps the album-colors background');
+ spectrumBands = Array(48).fill(0);
+ spectrumBands[1] = 1;
+ spectrumBands[17] = .8;
  await mini.waitForFunction(() => {
    const canvas = document.querySelector('#mini-compact-spectrum');
-   const pixels = canvas.getContext('2d').getImageData(0,5,canvas.width,4).data;
-   return canvas.clientWidth===60 && pixels.some((channel, i) => i%4===0 && channel>180 && pixels[i+3]>120);
+   const context = canvas.getContext('2d');
+   const bright = (x, width) => context.getImageData(x,5,width,4).data
+       .some((channel, i, pixels) => i%4===0 && channel>180 && pixels[i+3]>120);
+   return canvas.clientWidth===60 && bright(0,6) && bright(25,7) && !bright(13,5);
  });
- check(true, 'compact plays high-contrast spectrum bars beside the cover');
+ check(true, 'compact renders bright peaks from all bands in each group');
  await mini.mouse.move(26,23);
  await mini.waitForFunction(() => innerWidth === 360);
  check(!miniSizes.at(-1)[0] && miniSizes.at(-1)[1], 'hover requests animated expansion');
