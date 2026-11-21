@@ -2,7 +2,7 @@ name: Windows checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/windows-acceptance]
   pull_request:
   workflow_dispatch:
 

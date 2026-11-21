@@ -124,6 +124,13 @@ class DispatchTests(unittest.TestCase):
             check.assert_called_once_with(smoke=True)
             main.assert_not_called()
 
+    def test_music_service_mode_does_not_open_window(self):
+        with patch('backend.startup_runtime.prepare_runtime'), \
+                patch('service.__main__.main') as service, patch('start.main') as main:
+            self.assertEqual(start.cli(['--music-service', '--port', '18766']), 0)
+            service.assert_called_once_with(['--port', '18766'])
+            main.assert_not_called()
+
     def test_startup_failure_is_reported(self):
         with patch('backend.startup_runtime.prepare_runtime'), patch('backend.startup_runtime.show_failure') as failure, patch('start.main', side_effect=RuntimeError('test')):
             self.assertEqual(start.cli([]), 1)

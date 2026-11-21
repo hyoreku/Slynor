@@ -27,7 +27,7 @@ spotDL и msoc остаются в разных процессах/окруже�
 Полный разрешённый набор сохранён в `requirements/validated/` с SHA-256 артефактов, версиями
 Python/pip и маркерами Windows. `INSTALL.ps1` и `packaging/windows/BUILD_WINDOWS.ps1` ставят зависимости только
 из этих файлов с `--require-hashes`; при отсутствии lock-файла скрипт останавливается.
-`tools/prepare_portable.py` устанавливает зависимости приватных воркеров из `base/provider.txt` и `base/search.txt`.
+`tools/prepare_portable.py` использует Windows x64 lock-файлы провайдеров и поиска из `validated/`.
 
 Все четыре группы проверены на Windows 11 x64 (CPython 3.13.15, pip 26.2.1): [validated](validated/README.md).
 Свежие venv воспроизвели observed constraints без расхождений; офлайн-установка с `--require-hashes`,

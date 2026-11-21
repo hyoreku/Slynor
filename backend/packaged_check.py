@@ -1,4 +1,5 @@
 """Packaged preflight and real local HTTP smoke test. No playback or online queries."""
+from contextlib import contextmanager
 import importlib
 import json
 import logging
@@ -8,13 +9,39 @@ import shutil
 import socket
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import threading
 import time
 from urllib.request import build_opener, ProxyHandler
 from backend.startup_runtime import log_dir
 
 
+@contextmanager
+def _isolated_music_service():
+    with TemporaryDirectory(prefix="slynor-music-check-") as temporary:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        url = f"http://127.0.0.1:{port}"
+        settings = {"SLYNOR_SERVICE_URL": url, "SLYNOR_SERVICE_DB": str(Path(temporary) / "smoke.sqlite3")}
+        previous = {key: os.environ.get(key) for key in settings}
+        os.environ.update(settings)
+        try:
+            yield url
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+
 def _smoke(app):
+    with _isolated_music_service() as music_url:
+        _smoke_api(app, music_url)
+
+
+def _smoke_api(app, music_url):
     import uvicorn
     # Bind once to an ephemeral port; don't race another process for a free port.
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -44,6 +71,10 @@ def _smoke(app):
             with opener.open(f'http://127.0.0.1:{port}' + route, timeout=5) as response:
                 if response.status != 200 or not response.read(32):
                     raise RuntimeError('Empty or failed HTTP response: ' + route)
+        with opener.open(music_url + '/health', timeout=5) as response:
+            health = json.load(response)
+            if health.get('status') != 'ok' or not health.get('processing_jobs'):
+                raise RuntimeError('Music Service did not start its job dispatchers')
     finally:
         server.should_exit = True
         thread.join(12)

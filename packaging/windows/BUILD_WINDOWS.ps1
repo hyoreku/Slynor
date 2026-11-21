@@ -10,13 +10,17 @@ function Run([string]$Program, [string[]]$Arguments) {
     & $Program @Arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "$Program failed with exit code $LASTEXITCODE" }
 }
-function Check-Packaged([string]$Mode) {
+function Check-Packaged(
+    [string]$Mode,
+    [string]$PackageRoot = (Join-Path $projectRoot 'dist\Slynor'),
+    [string]$LogPrefix = ''
+) {
     $oldLocal = $env:LOCALAPPDATA
     $temporary = Join-Path ([IO.Path]::GetTempPath()) ('Slynor-check-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $temporary | Out-Null
     try {
         $env:LOCALAPPDATA = $temporary
-        $process = Start-Process -FilePath (Join-Path $projectRoot 'dist\Slynor\Slynor.exe') -ArgumentList $Mode -WorkingDirectory (Join-Path $projectRoot 'dist\Slynor') -PassThru
+        $process = Start-Process -FilePath (Join-Path $PackageRoot 'Slynor.exe') -ArgumentList $Mode -WorkingDirectory $PackageRoot -PassThru
         if (-not $process.WaitForExit(90000)) { $process.Kill(); throw "Packaged $Mode timed out after 90 seconds." }
         $process.Refresh()
         if ($process.ExitCode -ne 0) { throw "Packaged $Mode failed ($($process.ExitCode)). See build-logs." }
@@ -29,7 +33,11 @@ function Check-Packaged([string]$Mode) {
     } finally {
         $env:LOCALAPPDATA = $oldLocal
         $logs = Join-Path $temporary 'Slynor\logs'
-        if (Test-Path $logs) { Copy-Item (Join-Path $logs '*') $logDirectory -Force }
+        if (Test-Path $logs) {
+            Get-ChildItem -LiteralPath $logs -File | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $logDirectory ($LogPrefix + $_.Name)) -Force
+            }
+        }
         if (Test-Path $temporary) { Remove-Item $temporary -Recurse -Force }
     }
 }
@@ -40,8 +48,13 @@ try {
     $EmbedZip = (Resolve-Path -LiteralPath $EmbedZip).Path
     $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path
     $isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-    $iscc = if ($isccCommand) { $isccCommand.Source } else { "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" }
-    if (-not (Test-Path $iscc)) { throw 'Install Inno Setup 6 (https://jrsoftware.org/isinfo.php), then retry.' }
+    $iscc = if ($isccCommand) { $isccCommand.Source } else {
+        @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+          "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+          "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    }
+    if (-not $iscc) { throw 'Install Inno Setup 6 (https://jrsoftware.org/isinfo.php), then retry.' }
     $python = $PythonPath
     if (-not $python -and (Get-Command py -ErrorAction SilentlyContinue)) {
         $candidate = & py -3.13 -c 'import sys; print(sys.executable)'
@@ -54,6 +67,7 @@ try {
     }
     if (-not $python -or -not (Test-Path $python)) { throw 'Python 3.13 x64 not found. Run INSTALL.ps1 first or pass -PythonPath.' }
     Run $python @('-c', "import struct,sys; assert struct.calcsize('P')==8 and sys.version_info[:2]==(3,13), 'Python 3.13 x64 required'")
+    Run $python @('tools\prepare_portable.py','--check-inputs','--native',$NativeBundle,'--embed',$EmbedZip,'--embed-sha256',$EmbedSha256)
     $buildLock = 'requirements/validated/build-win-py313.txt'
     if (-not (Test-Path -LiteralPath $buildLock)) { throw "Validated build set is missing: $buildLock. Restore it from Git before building." }
     $signtool = $null
@@ -89,10 +103,21 @@ try {
         if ((Get-AuthenticodeSignature $Path).Status -ne 'Valid') { throw "Signature verification failed: $Path" }
     }
     if ($SignThumbprint) { Sign 'dist\Slynor\Slynor.exe' }
+    $portableZip = Join-Path $projectRoot 'dist\Slynor-Portable.zip'
+    $pendingZip = Join-Path $projectRoot 'dist\Slynor-Portable.build.zip'
+    $portableCheck = Join-Path ([IO.Path]::GetTempPath()) ('Slynor portable test ' + [Guid]::NewGuid().ToString('N'))
+    try {
+        Run $buildPython @('-m','zipfile','-c',$pendingZip,'dist\Slynor')
+        Run $buildPython @('-m','zipfile','-e',$pendingZip,$portableCheck)
+        Check-Packaged '--smoke-test' (Join-Path $portableCheck 'Slynor') 'portable-'
+        Move-Item -LiteralPath $pendingZip -Destination $portableZip -Force
+    } finally {
+        if (Test-Path -LiteralPath $portableCheck) { Remove-Item -LiteralPath $portableCheck -Recurse -Force }
+        if (Test-Path -LiteralPath $pendingZip) { Remove-Item -LiteralPath $pendingZip -Force }
+    }
     Run $iscc @('packaging\Slynor.iss')
     if (-not (Test-Path 'dist\installer\Slynor-Setup.exe')) { throw 'Installer output missing.' }
     if ($SignThumbprint) { Sign 'dist\installer\Slynor-Setup.exe' } else { Write-Warning 'UNSIGNED build: SmartScreen warnings are possible.' }
-    Compress-Archive -Path 'dist\Slynor' -DestinationPath 'dist\Slynor-Portable.zip' -Force
     Get-FileHash 'dist\Slynor\Slynor.exe','dist\installer\Slynor-Setup.exe','dist\Slynor-Portable.zip' -Algorithm SHA256 | Format-List | Out-File -Encoding UTF8 (Join-Path $logDirectory 'SHA256.txt')
     Write-Host 'Build and packaged API checks passed. Installer created.' -ForegroundColor Green
     Write-Host 'Visible GUI/audio and clean-PC installation still require Windows acceptance testing.'

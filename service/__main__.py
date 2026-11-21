@@ -6,10 +6,10 @@ this project unless OWNPLAYER_PROVIDER_PYTHON points elsewhere.
 """
 import argparse
 from pathlib import Path
-import sys
 
 import uvicorn
 
+from backend.worker_runtime import worker_python
 from . import db
 from .api import create_app
 from .assets import AssetStore
@@ -25,12 +25,7 @@ PROXY_VARIABLES = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY',
 def worker_settings():
     """The isolated provider environment that already owns the parser libraries."""
     project = Path(__file__).resolve().parent.parent
-    try:
-        from backend.worker_runtime import worker_python
-        executable = worker_python('provider')
-    except (ImportError, RuntimeError):
-        executable = sys.executable
-    return executable, ['-m', 'backend.provider_worker'], project
+    return worker_python('provider'), ['-m', 'backend.provider_worker'], project
 
 
 def build_pipeline(connection, root, proxy=''):
@@ -66,7 +61,8 @@ def main(argv=None) -> None:
         return build_pipeline(connection, root, args.proxy)
 
     uvicorn.run(create_app(database, factory, run_jobs=not args.api_only),
-                host=args.host, port=args.port, log_level='info')
+                host=args.host, port=args.port, log_config=None, use_colors=False, access_log=False,
+                loop='asyncio', http='h11', ws='none')
 
 
 if __name__ == '__main__':

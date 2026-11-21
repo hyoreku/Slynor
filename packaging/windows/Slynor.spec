@@ -9,7 +9,7 @@ for name in ('__init__.py', 'provider_worker.py', 'msoc_worker.py', 'proxy_worke
     datas.append((str(root / 'backend' / name), 'backend'))
 binaries = []
 hiddenimports = collect_submodules('backend') + collect_submodules('player') + collect_submodules('uvicorn')
-hiddenimports += ['backend.main', 'socksio', 'pystray._win32', 'webview.platforms.winforms']
+hiddenimports += ['backend.main', 'service.__main__', 'socksio', 'pystray._win32', 'webview.platforms.winforms']
 for package in ('webview', 'av', 'pythonnet', 'clr_loader'):
     d, b, h = collect_all(package)
     datas += d

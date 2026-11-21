@@ -3,7 +3,7 @@ import json
 import tempfile
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import httpx
 
@@ -175,11 +175,24 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(status['available'])
         self.assertIn('не запущен', status['error'])
 
-    def test_frozen_build_does_not_spawn_python(self):
-        runtime = ServiceRuntime(FakeRuntimeClient(healthy=False))
-        with patch('backend.service_runtime.sys.frozen', True, create=True):
-            self.assertFalse(runtime.ensure_started(timeout=1))
-        self.assertIn('недоступен', runtime.error)
+    def test_frozen_build_launches_headless_slynor_instead_of_system_python(self):
+        client = FakeRuntimeClient()
+        client.base_url = 'http://127.0.0.1:18766'
+        runtime = ServiceRuntime(client)
+        process = Mock()
+        process.poll.return_value = None
+
+        def launch(command, **options):
+            self.assertEqual(command, ['Slynor.exe', '--music-service', '--port', '18766'])
+            self.assertEqual(options['env']['PYINSTALLER_RESET_ENVIRONMENT'], '1')
+            client.healthy = True
+            return process
+
+        with patch('backend.service_runtime.sys.frozen', True, create=True), \
+                patch('backend.service_runtime.sys.executable', 'Slynor.exe'), \
+                patch.object(runtime, '_proxy', return_value=''), \
+                patch('backend.service_runtime.subprocess.Popen', side_effect=launch):
+            self.assertTrue(runtime.ensure_started())
 
 
 if __name__ == '__main__':

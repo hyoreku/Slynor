@@ -2,8 +2,8 @@
 
 The service stays a separate process and owns its provider worker. Launching it
 from the app is a convenience: if another instance is already healthy, it is
-reused and never stopped by this process. A frozen GUI cannot launch a Python
-module and simply reports that the service is unavailable.
+reused and never stopped by this process. The Windows app launches its
+headless Music Service mode with the bundled runtime.
 """
 import os
 from pathlib import Path
@@ -19,9 +19,9 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 
 class ServiceRuntime:
-    def __init__(self, client=None, port=8766, database=None):
+    def __init__(self, client=None, port=None, database=None):
         self.client = client or ServiceClient()
-        self.port = int(port)
+        self.port = int(port if port is not None else urlsplit(self.client.base_url).port or 8766)
         self.database = Path(database) if database else None
         self.process = None
         self.error = None
@@ -62,7 +62,8 @@ class ServiceRuntime:
             return ''
 
     def _command(self):
-        command = [sys.executable, '-m', 'service', '--port', str(self.port)]
+        entry = ['--music-service'] if getattr(sys, 'frozen', False) else ['-m', 'service']
+        command = [sys.executable, *entry, '--port', str(self.port)]
         if self.database:
             command += ['--db', str(self.database)]
         proxy = self._proxy()
@@ -80,13 +81,10 @@ class ServiceRuntime:
             if not already:
                 self._starting = True
         if not already:
-            if getattr(sys, 'frozen', False):
-                with self._lock:
-                    self._starting = False
-                self.error = 'Автозапуск сервиса недоступен в этой сборке.'
-                return False
             try:
                 options = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}
+                if getattr(sys, 'frozen', False):
+                    options['env'] = {**os.environ, 'PYINSTALLER_RESET_ENVIRONMENT': '1'}
                 process = subprocess.Popen(self._command(), cwd=PROJECT_DIR,
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                            **options)

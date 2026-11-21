@@ -1,6 +1,7 @@
 """Запуск локального сервера и окна одной командой."""
 
 import argparse
+import logging
 import os
 import sys
 import socket
@@ -111,6 +112,17 @@ def main(debug=False):
 def cli(argv=None):
     from backend.startup_runtime import prepare_runtime, show_failure
     prepare_runtime()
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["--music-service"]:
+        try:
+            from service.__main__ import main as run_music_service
+            run_music_service(argv[1:])
+            return 0
+        except KeyboardInterrupt:
+            return 130
+        except Exception:
+            logging.getLogger("ownplayer.service").exception("Music Service startup failed")
+            return 1
     parser = argparse.ArgumentParser(description="Запуск Slynor")
     parser.add_argument("--debug", action="store_true", help="Отладка интерфейса WebView")
     checks = parser.add_mutually_exclusive_group()

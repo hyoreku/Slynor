@@ -34,14 +34,8 @@ def extract_embed(archive, target):
         'python313.zip\n.\nLib/site-packages\n../_internal\nimport site\n', encoding='ascii')
 
 
-def prepare(root, output, native, embed, expected_hash):
-    if os.name != 'nt' or sys.version_info[:2] != (3, 13):
-        raise RuntimeError('Preparation requires Windows x64 and CPython 3.13')
-    import struct
-    if struct.calcsize('P') != 8:
-        raise RuntimeError('x64 interpreter required')
-    root, output, native, embed = (Path(p).resolve() for p in (root, output, native, embed))
-    require_file(output / 'Slynor.exe')
+def check_inputs(native, embed, expected_hash):
+    native, embed = Path(native), Path(embed)
     require_file(embed)
     if len(expected_hash) != 64 or any(c not in '0123456789abcdefABCDEF' for c in expected_hash):
         raise ValueError('Supply the official embeddable ZIP SHA256')
@@ -55,20 +49,37 @@ def prepare(root, output, native, embed, expected_hash):
         require_file(native / relative)
     if not (native / 'vlc/plugins').is_dir() or not (native / 'licenses').is_dir():
         raise FileNotFoundError('Supply VLC plugins and redistributable licenses')
+    with zipfile.ZipFile(embed) as archive:
+        provided = set(archive.namelist())
+        missing = {'python.exe', 'python313.dll', 'python313.zip', 'python313._pth'} - provided
+        if missing:
+            raise ValueError('Private Python is missing ' + ', '.join(sorted(missing)))
+
+
+def prepare(root, output, native, embed, expected_hash):
+    if os.name != 'nt' or sys.version_info[:2] != (3, 13):
+        raise RuntimeError('Preparation requires Windows x64 and CPython 3.13')
+    import struct
+    if struct.calcsize('P') != 8:
+        raise RuntimeError('x64 interpreter required')
+    root, output, native, embed = (Path(p).resolve() for p in (root, output, native, embed))
+    require_file(output / 'Slynor.exe')
+    check_inputs(native, embed, expected_hash)
     for name in ('vlc', 'ffmpeg', 'deno', 'webview2', 'licenses'):
         destination = output / name
         if destination.exists():
             shutil.rmtree(destination)
         shutil.copytree(native / name, destination)
-    for folder, requirements in (('.providers', 'requirements/base/provider.txt'), ('.search', 'requirements/base/search.txt')):
+    for folder, group in (('.providers', 'provider'), ('.search', 'search')):
+        requirements = root / 'requirements' / 'validated' / f'{group}-win-py313.txt'
         runtime = output / folder
         if runtime.exists():
             shutil.rmtree(runtime)
         runtime.mkdir()
         extract_embed(embed, runtime)
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '--only-binary=:all:',
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '--only-binary=:all:', '--require-hashes',
                         '--target', str(runtime / 'Lib/site-packages'),
-                        '-r', str(root / requirements)], check=True)
+                        '-r', str(requirements)], check=True)
         code = ('import spotdl,scdl,yt_dlp,yt_dlp_ejs; import backend.provider_worker'
                 if folder == '.providers' else 'import msoc,httpx; import backend.msoc_worker')
         subprocess.run([str(runtime / 'python.exe'), '-c', code],
@@ -86,9 +97,15 @@ def prepare(root, output, native, embed, expected_hash):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', default=str(Path(__file__).resolve().parents[1]))
-    parser.add_argument('--output', required=True)
+    parser.add_argument('--output')
+    parser.add_argument('--check-inputs', action='store_true')
     parser.add_argument('--native', required=True)
     parser.add_argument('--embed', required=True)
     parser.add_argument('--embed-sha256', required=True)
     args = parser.parse_args()
-    prepare(args.root, args.output, args.native, args.embed, args.embed_sha256)
+    if args.check_inputs:
+        check_inputs(args.native, args.embed, args.embed_sha256)
+    elif not args.output:
+        parser.error('--output is required when staging the package')
+    else:
+        prepare(args.root, args.output, args.native, args.embed, args.embed_sha256)
