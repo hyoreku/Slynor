@@ -1,0 +1,70 @@
+name: Windows packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/windows-acceptance]
+    paths:
+      - .github/workflows/windows-package.yml
+      - packaging/windows/**
+      - tools/prepare_portable.py
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build and check Windows x64 packages
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.15'
+          architecture: x64
+
+      - name: Prepare compiler and redistributables
+        id: inputs
+        run: |
+          $bundledCompiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue) -and -not (Test-Path $bundledCompiler)) {
+              choco install innosetup --yes --no-progress
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $inputs = .\packaging\windows\GET_BUILD_INPUTS.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'slynor-inputs')
+          foreach ($key in $inputs.Keys) { "$key=$($inputs[$key])" >> $env:GITHUB_OUTPUT }
+
+      - name: Build and smoke-test packages
+        env:
+          OWNPLAYER_BUILD_NATIVE: ${{ steps.inputs.outputs.native }}
+          OWNPLAYER_BUILD_EMBED: ${{ steps.inputs.outputs.embed }}
+          OWNPLAYER_BUILD_EMBED_SHA256: ${{ steps.inputs.outputs.embed_sha256 }}
+        run: .\packaging\windows\BUILD_WINDOWS.ps1 -PythonPath (Get-Command python.exe).Source
+
+      - name: Upload Setup and portable
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: Slynor-Windows-x64
+          path: |
+            dist/installer/Slynor-Setup.exe
+            dist/Slynor-Portable.zip
+            build-logs/SHA256.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: windows-packaging-logs
+          path: build-logs/
+          if-no-files-found: ignore
+          retention-days: 7
