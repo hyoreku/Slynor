@@ -19,8 +19,7 @@
 
     function syncMedia() {
         if (!current) return;
-        const compact = document.documentElement.dataset.miniCompact === 'true';
-        const visible = !compact && !nativeHidden && !document.hidden && lastState?.window_visibility?.mini !== false;
+        const visible = !nativeHidden && !document.hidden && lastState?.window_visibility?.mini !== false;
         const moving = visible && !reduced.matches;
         const mode = current.mini_background;
         const url = mode === 'wallpaper' && current.wallpaper ? '/api/assets/wallpapers/' + current.wallpaper : '';

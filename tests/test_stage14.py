@@ -28,7 +28,7 @@ class NativeModeTests(unittest.TestCase):
   resize=Mock()
   with patch('desktop_shell.configure_mini_window',return_value=resize):
    native=self.mini()['js_api']
-  self.assertTrue(native.set_mini_compact(True));resize.assert_called_once_with(True)
+  self.assertTrue(native.set_mini_compact(True, True));resize.assert_called_once_with(True, True)
   with self.assertRaises(ValueError):native.set_mini_compact('compact')
   self.shell.show_main()
   self.assertFalse(native.set_mini_compact(False));resize.assert_called_once()
@@ -48,7 +48,7 @@ class MiniWindowRegionTests(unittest.TestCase):
         from ctypes import wintypes
         import clr
         clr.AddReference('System.Windows.Forms')
-        from System.Windows.Forms import Form, FormBorderStyle
+        from System.Windows.Forms import Application, Form, FormBorderStyle
         from window_geometry import configure_mini_window
 
         form = Form()
@@ -84,6 +84,17 @@ class MiniWindowRegionTests(unittest.TestCase):
         self.assertNotEqual(user.GetWindowRgn(handle, region), 0)
         self.assertTrue(gdi.PtInRegion(region, form.Width - 2, form.Height // 2))
         self.assertFalse(form.Visible)
+        form.Show()
+        for target, expected_width in ((True, 120), (False, 360)):
+            resize(target, True)
+            widths = set()
+            deadline = time.monotonic() + 1
+            while time.monotonic() < deadline and form.Width != round(expected_width * scale):
+                Application.DoEvents()
+                widths.add(form.Width)
+                time.sleep(.01)
+            self.assertEqual(form.Width, round(expected_width * scale))
+            self.assertTrue(any(round(120 * scale) < width < round(360 * scale) for width in widths))
 
 
 class CatalogueTests(unittest.TestCase):

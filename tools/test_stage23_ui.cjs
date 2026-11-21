@@ -145,10 +145,11 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
  check(queueCommits.length===3&&queueCommits[2].index===24999,'Play handler uploads complete queue from filtered view');
  const mini = await context.newPage();
  mini.on('pageerror', error => errors.push(error.message));
+ await mini.clock.install();
  await mini.setViewportSize({width:360,height:112});
  const miniSizes = [];
- await mini.exposeFunction('resizeMini', async compact => {
-   miniSizes.push(compact);
+ await mini.exposeFunction('resizeMini', async (compact, animate) => {
+   miniSizes.push([compact, animate]);
    await mini.setViewportSize(compact ? {width:120,height:46} : {width:360,height:112});
    return true;
  });
@@ -173,31 +174,42 @@ const remote=[1,2,3].map((id,i)=>({path:'online:soundcloud:'+id,title:'Online '+
          && alpha(20,0,box.width-40,2).some(a=>a>40)
          && alpha(0,20,2,box.height-40).some(a=>a>40)
          && !alpha(0,0,3,3).some(a=>a)
-         && !alpha(15,7,box.width-30,box.height-14).some(a=>a);
+         && !alpha(15,10,box.width-30,box.height-20).some(a=>a);
    }, mode);
    check(true, mode + ' follows the panel contour and leaves the center and corners clear');
  }
- await mini.locator('html[data-mini-compact="true"]').waitFor();
- check(miniSizes[0]===true && mini.viewportSize().width===120, 'idle shrinks the native viewport');
- check(await mini.locator('#mini-cover img').isVisible() && await mini.locator('#mini-title').isHidden(), 'compact shows the same cover and hides controls and text');
+ await mini.mouse.move(60,30);
+ await mini.mouse.move(400,150);
+ state.appearance.mini_background = 'colors';
+ await mini.locator('#mini-background[data-mode="colors"]').waitFor();
+ await mini.clock.fastForward(13000);
+ check(miniSizes.length===0, 'mini stays expanded during the first 13 seconds');
+ await mini.clock.fastForward(2300);
+ await mini.waitForFunction(() => innerWidth === 120);
+ check(miniSizes[0][0] && miniSizes[0][1], '15 seconds of inactivity requests native animation');
+ await mini.locator('#mini-title').waitFor({state:'hidden'});
+ check(await mini.locator('#mini-cover img').isVisible(), 'compact shows the same cover and hides text');
+ check(await mini.locator('#mini-background[data-mode="colors"] .mini-colors').isVisible(), 'compact keeps the album-colors background');
  await mini.waitForFunction(() => {
-   const canvas = document.querySelector('#mini-spectrum');
-   return canvas.clientWidth===54 && canvas.getContext('2d').getImageData(0,5,canvas.width,3).data.some(a=>a);
+   const canvas = document.querySelector('#mini-compact-spectrum');
+   const pixels = canvas.getContext('2d').getImageData(0,5,canvas.width,4).data;
+   return canvas.clientWidth===60 && pixels.some((channel, i) => i%4===0 && channel>180 && pixels[i+3]>120);
  });
- check(true, 'compact plays the spectrum beside the cover');
+ check(true, 'compact plays high-contrast spectrum bars beside the cover');
  await mini.mouse.move(26,23);
- await mini.locator('html[data-mini-compact="false"]').waitFor();
- check(miniSizes.at(-1)===false && mini.viewportSize().width===360, 'hover restores the native viewport');
+ await mini.waitForFunction(() => innerWidth === 360);
+ check(!miniSizes.at(-1)[0] && miniSizes.at(-1)[1], 'hover requests animated expansion');
  const volume = await mini.locator('#mini-volume').boundingBox();
  await mini.mouse.move(volume.x + volume.width / 2, volume.y + volume.height / 2);
  await mini.mouse.down();
  await mini.mouse.move(400,150);
- await mini.waitForTimeout(3100);
+ await mini.clock.fastForward(16000);
  check(mini.viewportSize().width===360, 'volume dragging keeps the mini player open');
  await mini.mouse.up();
- await mini.locator('html[data-mini-compact="true"]').waitFor();
+ await mini.clock.fastForward(16000);
+ await mini.waitForFunction(() => innerWidth === 120);
  await mini.locator('#mini-unfold').press('Enter');
- await mini.locator('html[data-mini-compact="false"]').waitFor();
+ await mini.waitForFunction(() => innerWidth === 360);
  check(await mini.locator('#mini-hide').evaluate(el=>el===document.activeElement), 'keyboard expansion moves focus into controls');
  state.state = 'paused';
  await mini.locator('#mini-spectrum').waitFor({state:'hidden'});

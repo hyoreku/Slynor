@@ -68,6 +68,9 @@ jobs:
           }
           exit $testExit
 
+      - name: Check mini-player spectrum with native VLC
+        run: python -m tools.check_mini_spectrum
+
       - name: Check Windows runtime and local HTTP
         if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
         run: |

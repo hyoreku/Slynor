@@ -138,12 +138,12 @@ class DesktopShell:
             try:
                 resize_mini = None
 
-                def set_mini_compact(compact):
-                    if type(compact) is not bool:
+                def set_mini_compact(compact, animate=False):
+                    if type(compact) is not bool or type(animate) is not bool:
                         raise ValueError('Ожидается состояние миниплеера.')
                     if resize_mini is None or self.mini is not mini or not self.mini_visible:
                         return False
-                    resize_mini(compact)
+                    resize_mini(compact, animate)
                     return True
 
                 width, height = MINI_EXPANDED_SIZE

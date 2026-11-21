@@ -1,7 +1,9 @@
 (() => {
     const canvas = document.getElementById('mini-spectrum');
+    const compactCanvas = document.getElementById('mini-compact-spectrum');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const compactContext = compactCanvas.getContext('2d');
+    if (!ctx || !compactContext) return;
     const wave = window.createWaveRenderer(ctx);
     const panel = document.getElementById('mini-panel');
     const cover = document.getElementById('mini-cover');
@@ -24,6 +26,7 @@
     let width, height, radius, edge = [];
     let compact = document.documentElement.dataset.miniCompact === 'true';
     let theme;
+    let lastReadyAt = -Infinity;
 
     function clear() {
         ctx.resetTransform();
@@ -39,8 +42,9 @@
         timer = raf = null;
         bands.fill(0);
         target.fill(0);
+        lastReadyAt = -Infinity;
         clear();
-        canvas.hidden = !compact;
+        canvas.hidden = true;
         if (compact) paint(false);
     }
 
@@ -73,10 +77,8 @@
         if (nextWidth !== width || nextHeight !== height) {
             width = nextWidth;
             height = nextHeight;
-            if (!compact) {
-                radius = parseFloat(getComputedStyle(panel).borderTopLeftRadius);
-                edge = perimeter();
-            }
+            radius = parseFloat(getComputedStyle(panel).borderTopLeftRadius);
+            edge = perimeter();
         }
         const scale = Math.min(2, devicePixelRatio || 1);
         const w = Math.round(width * scale), h = Math.round(height * scale);
@@ -111,16 +113,20 @@
         let bassEnergy = 0;
         for (let index = 0; index < 8; index++) bassEnergy += bands[index];
         const bass = Math.sqrt(bassEnergy / 8);
-        const tone = index => albumPalette?.[index] ? `rgb(${albumPalette[index].join(',')})` : color;
+        const tone = index => {
+            const source = albumPalette?.[index] ? `rgb(${albumPalette[index].join(',')})` : color;
+            return `color-mix(in srgb, ${source} 68%, ${highlight})`;
+        };
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(0, 0, width, height, radius);
         ctx.clip();
         ctx.lineJoin = ctx.lineCap = 'round';
-        ctx.lineWidth = 1.3;
+        ctx.lineWidth = 1.5;
+        outline(1, 0, tone(0), .68);
         if (mode === 'wave') {
             ctx.translate(width / 2, height / 2);
-            wave.draw({ width, height, radius, reach: 5.2,
+            wave.draw({ width, height, radius, reach: 10,
                 bands, time: reduced.matches ? 0 : performance.now(), style: waveStyle,
                 palette: albumPalette, fallback: [color, highlight], mini: true });
         } else {
@@ -130,9 +136,9 @@
                 ctx.beginPath();
                 for (let i = 0; i < edge.length; i += spacing) {
                     const [px, py, nx, ny] = edge[i];
-                    const length = Math.min(5, amplitude(i) * 4.5 + bass * 1.2) * scale;
+                    const length = Math.min(9, amplitude(i) * 8.5 + bass * 1.6) * scale;
                     if (length < .35) continue;
-                    ctx.moveTo(px, py);
+                    ctx.moveTo(px - nx, py - ny);
                     ctx.lineTo(px - nx * length, py - ny * length);
                 }
                 ctx.strokeStyle = stroke;
@@ -147,22 +153,33 @@
     }
 
     function drawCompact(audible) {
+        const width = compactCanvas.clientWidth, height = compactCanvas.clientHeight;
+        if (!width || !height) return;
+        const dpr = Math.min(2, devicePixelRatio || 1);
+        const w = Math.round(width * dpr), h = Math.round(height * dpr);
+        if (compactCanvas.width !== w) compactCanvas.width = w;
+        if (compactCanvas.height !== h) compactCanvas.height = h;
+        compactContext.setTransform(w / width, 0, 0, h / height, 0, 0);
+        compactContext.clearRect(0, 0, width, height);
         const count = 12;
         const spacing = width / count;
-        ctx.fillStyle = 'currentColor';
-        ctx.beginPath();
+        compactContext.fillStyle = theme === 'light' ? '#252132' : '#f7f4ff';
+        compactContext.strokeStyle = theme === 'light' ? '#ffffff91' : '#101014bb';
+        compactContext.lineWidth = 1.7;
+        compactContext.beginPath();
         for (let i = 0; i < count; i++) {
-            const energy = audible ? Math.sqrt(bands[i * 4]) : 0;
-            const bar = 2 + energy * (height - 4) * (1 - i / (count + 2));
-            ctx.roundRect((i + .5) * spacing - .75, (height - bar) / 2, 1.5, bar, .75);
+            const offset = i * 4;
+            const peak = Math.max(bands[offset], bands[offset + 1], bands[offset + 2], bands[offset + 3]);
+            const bar = 3 + (audible ? Math.sqrt(peak) * (height - 5) : 0);
+            compactContext.roundRect((i + .5) * spacing - 1.25, (height - bar) / 2, 2.5, bar, 1.25);
         }
-        ctx.fill();
+        compactContext.stroke();
+        compactContext.fill();
     }
 
     function paint(audible) {
-        if (!frame()) return;
         if (compact) drawCompact(audible);
-        else if (audible) drawPerimeter();
+        else if (frame() && audible) drawPerimeter();
     }
 
     function draw() {
@@ -195,7 +212,8 @@
                     && Array.isArray(data.bands) && data.bands.length === bands.length
                     && data.bands.every(value => Number.isFinite(value) && value >= 0 && value <= 1)) {
                 target.set(data.bands);
-            } else if (data.status !== 'preparing' || data.file_path !== key.path) {
+                lastReadyAt = performance.now();
+            } else if (data.status !== 'preparing' || data.file_path !== key.path || performance.now() - lastReadyAt > 400) {
                 target.fill(0);
             }
             if (['error', 'unavailable'].includes(data.status)) delay = 1500;
@@ -241,7 +259,6 @@
     document.addEventListener('mini-layout-change', () => {
         compact = document.documentElement.dataset.miniCompact === 'true';
         width = undefined;
-        canvas.hidden = !session && !compact;
         paint(bands.some(value => value > 0));
     });
     document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });

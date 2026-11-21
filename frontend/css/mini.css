@@ -38,7 +38,7 @@ html, body {
     isolation: isolate;
     width: 100%;
     height: 100%;
-    border-radius: 14px;
+    border-radius: clamp(14px, calc(23px - (100vh - 46px) * 0.13636), 23px);
     overflow: hidden;
     background: var(--mini-surface);
 }
@@ -52,7 +52,7 @@ html, body {
     pointer-events: none;
 }
 
-#mini-background, #mini-spectrum {
+#mini-background, #mini-spectrum, #mini-compact-spectrum {
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -96,8 +96,10 @@ html, body {
 }
 @media (prefers-reduced-motion: reduce) { .mini-colors > span { animation: none; } }
 
-#mini-spectrum { width: 100%; height: 100%; z-index: 1; }
-main { position: relative; z-index: 2; padding: 9px 10px 6px; }
+#mini-spectrum { width: 100%; height: 100%; }
+#mini-compact-spectrum { inset: 10px auto auto 51px; width: 60px; height: 26px; opacity: 0; }
+#mini-spectrum, #mini-compact-spectrum { z-index: 1; transition: opacity 160ms ease, visibility 160ms; }
+main { position: relative; z-index: 2; min-width: 340px; padding: 9px 10px 6px; transition: padding 260ms ease; }
 .song { display: flex; gap: 10px; align-items: center; }
 
 #mini-cover {
@@ -111,6 +113,7 @@ main { position: relative; z-index: 2; padding: 9px 10px 6px; }
     background: var(--mini-cover);
     color: var(--accent);
     font-size: 25px;
+    transition: flex-basis 260ms ease, height 260ms ease, border-radius 260ms ease;
 }
 #mini-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
@@ -164,8 +167,19 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 #mini-unfold:focus-visible { outline-offset: -3px; }
 
-:root[data-mini-compact="true"] #mini-panel { border-radius: 23px; }
-:root[data-mini-compact="true"] :is(#mini-background, .identity, .song > button, .controls, #mini-error) { display: none; }
+#mini-panel :is(.identity, .song > button, .controls, #mini-error) {
+    transition: opacity 160ms ease, visibility 160ms;
+}
+:root[data-mini-compact="true"] :is(.identity, .song > button, .controls, #mini-error, #mini-spectrum) {
+    opacity: 0;
+    visibility: hidden;
+}
 :root[data-mini-compact="true"] main { padding: 6px; pointer-events: none; }
 :root[data-mini-compact="true"] #mini-cover { flex-basis: 34px; height: 34px; border-radius: 50%; font-size: 19px; }
-:root[data-mini-compact="true"] #mini-spectrum { inset: 12px auto auto 50px; width: 54px; height: 22px; }
+:root[data-mini-compact="true"] #mini-compact-spectrum { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+    #mini-panel :is(main, #mini-cover, #mini-spectrum, #mini-compact-spectrum, .identity, .song > button, .controls, #mini-error) {
+        transition: none;
+    }
+}
