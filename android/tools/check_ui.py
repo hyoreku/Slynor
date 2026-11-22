@@ -102,12 +102,15 @@ def assert_queue(*tracks):
 
 def wait_for_media_state(state):
     end = time.monotonic() + 15
+    pattern = re.compile(rf"PlaybackState \{{state=(?:{state}|[A-Z_]+\({state}\)),")
+    states = []
     while time.monotonic() < end:
         sessions = adb("shell", "dumpsys", "media_session").decode()
-        if PACKAGE in sessions and re.search(rf"PlaybackState \{{state={state},", sessions):
+        states = [line.strip() for line in sessions.splitlines() if "PlaybackState {" in line]
+        if PACKAGE in sessions and any(pattern.search(line) for line in states):
             return
         time.sleep(.4)
-    raise RuntimeError(f"Slynor media session did not reach state {state}")
+    raise RuntimeError(f"Slynor media session did not reach state {state}. Reported states: {states}")
 
 
 def pause_active_playback():
