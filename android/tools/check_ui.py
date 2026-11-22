@@ -41,10 +41,14 @@ def wait_for(*labels, any_label=False):
     raise RuntimeError(f"Missing {labels}. Visible labels: {[label for label in visible if label]}")
 
 
+def bounds(node):
+    return tuple(map(int, re.findall(r"\d+", node.attrib["bounds"])))
+
+
 def centers(tree, label):
     for node in tree.iter("node"):
         if label_is(node, label):
-            left, top, right, bottom = map(int, re.findall(r"\d+", node.attrib["bounds"]))
+            left, top, right, bottom = bounds(node)
             if right > left and bottom > top:
                 yield ((left + right) // 2, (top + bottom) // 2)
 
@@ -61,7 +65,17 @@ def tap(tree, *labels, near=None):
 
 
 def track_action(track, action):
-    tap(wait_for(track, "Действия для трека"), "Действия для трека", near=track)
+    label = "Действия для трека"
+    tree = wait_for(label)
+    if not list(centers(tree, track)):
+        scrollable = next(node for node in tree.iter("node") if node.get("scrollable") == "true")
+        left, top, right, bottom = bounds(scrollable)
+        x = str((left + right) // 2)
+        start = str((top + 3 * bottom) // 4)
+        end = str((3 * top + bottom) // 4)
+        adb("shell", "input", "swipe", x, start, x, end, "400")
+        tree = wait_for(track, label)
+    tap(tree, label, near=track)
     tap(wait_for(action), action)
 
 
@@ -122,6 +136,8 @@ def pause_active_playback():
 
 def main(output):
     output.mkdir(parents=True, exist_ok=True)
+    adb("shell", "wm", "size", "480x920")
+    adb("shell", "wm", "density", "160")
     adb("shell", "settings", "put", "global", "animator_duration_scale", "0")
     home = wait_for("Включите первую песню")
     (output / "home.png").write_bytes(adb("exec-out", "screencap", "-p"))
