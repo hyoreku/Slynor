@@ -1,8 +1,8 @@
-import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from time import perf_counter
 import httpx
+import logging
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from starlette.background import BackgroundTask
 from urllib.parse import urlparse
 from secrets import compare_digest
-from backend.local_session import APP_TOKEN, COOKIE_NAME
+from backend.local_session import APP_TOKEN, COOKIE_NAME, DEFAULT_DESKTOP_URL, DESKTOP_PORT
 from backend.online_music import OnlineLibrary, ProviderError
 from backend.internet_music import InternetLibrary
 from backend.catalog_music import CatalogueLibrary
@@ -51,20 +51,15 @@ async def lifespan(app: FastAPI):
     app.state.service_client = service_client
     app.state.service_runtime = service_runtime
     app.state.online = CatalogueLibrary(get_data_dir(), service=service_client)
+    app.state.online.desktop_url = getattr(app.state, 'desktop_url', DEFAULT_DESKTOP_URL)
     app.state.track_artwork = DiscordArtwork(
         get_data_dir() / "discord-covers.sqlite3", DISCORD_APPLICATION_ID, app.state.online.network,
     )
     app.state.library_service = LibraryService(get_data_dir(), service_client)
-    if service_runtime is not None:
-        # Wait briefly so the first window reads the shared state, not only the
-        # cache. A slow or broken service must not delay startup for long.
-        try:
-            await asyncio.to_thread(service_runtime.ensure_started, 6.0)
-            await asyncio.to_thread(app.state.library_service.sync)
-        except Exception:
-            pass
-    app.state.library_service.start_background()
-    app.state.audio_engine = AudioEngine()
+    app.state.library_service.start_background(
+        prepare=service_runtime.ensure_started if service_runtime is not None else None,
+    )
+    app.state.audio_engine = AudioEngine(defer_native=True)
     try:
         import json
         saved=json.loads((get_data_dir()/'settings.json').read_text('utf-8')).get('audio_output','')
@@ -75,10 +70,12 @@ async def lifespan(app: FastAPI):
     app.state.audio_engine.stream_resolver = resolve_stream
     app.state.spectrum_analyzer = PostEqSpectrumAnalyzer()
     app.state.equalizer = EqualizerController(app.state.audio_engine, get_data_dir())
+    logging.getLogger('ownplayer').info('Desktop API initialized')
 
     try:
         yield
     finally:
+        app.state.library_service.stop_background()
         app.state.spectrum_analyzer.close()
         app.state.audio_engine.close()
         app.state.online.close()
@@ -108,7 +105,7 @@ async def local_api_guard(request: Request, call_next):
                 parsed = urlparse(origin); origin_port=parsed.port
             except ValueError:
                 return JSONResponse({'detail':'Недопустимый источник запроса.'},status_code=403)
-            if parsed.scheme != 'http' or parsed.hostname not in ('127.0.0.1','localhost') or origin_port != 8765:
+            if parsed.scheme != 'http' or parsed.hostname not in ('127.0.0.1','localhost') or origin_port != getattr(app.state, 'desktop_port', DESKTOP_PORT):
                 return JSONResponse({'detail':'Недопустимый источник запроса.'}, status_code=403)
         if request.headers.get('sec-fetch-site') == 'cross-site':
             return JSONResponse({'detail':'Межсайтовые команды запрещены.'}, status_code=403)
@@ -610,12 +607,12 @@ def online_media(handle: str, resource: str, request: Request):
                 # Headers may already have been sent: update playback state instead of claiming HTTP 503.
                 from backend.provider_diagnostics import record
                 record(None,'stream',0,'stream_read_error')
-                app.state.audio_engine.report_stream_error('http://127.0.0.1:8765/api/online/media/'+handle+'/master','Соединение с аудиоисточником прервалось.')
+                app.state.audio_engine.report_stream_error(getattr(app.state, 'desktop_url', DEFAULT_DESKTOP_URL)+'/api/online/media/'+handle+'/master','Соединение с аудиоисточником прервалось.')
             finally: response.close()
         return StreamingResponse(chunks(),status_code=response.status_code,media_type=content_type,
                                  headers=headers,background=BackgroundTask(response.close))
     except ProviderError as error:
-        app.state.audio_engine.report_stream_error('http://127.0.0.1:8765/api/online/media/'+handle+'/master', str(error))
+        app.state.audio_engine.report_stream_error(getattr(app.state, 'desktop_url', DEFAULT_DESKTOP_URL)+'/api/online/media/'+handle+'/master', str(error))
         raise HTTPException(503,str(error)) from error
     except (UnicodeError,ValueError): raise HTTPException(502,'Некорректные данные потока.') from None
 

@@ -10,6 +10,7 @@ from uuid import uuid4
 import webview
 
 from backend.discord_presence import DiscordPresence
+from backend.local_session import DEFAULT_DESKTOP_URL
 from backend.image_assets import discard_cover, get_data_dir, import_cover, is_cover_name
 
 
@@ -761,7 +762,7 @@ def configure_webview():
 
 
 # Запуск окна PyWebView и Python-моста.
-def main(debug=False):
+def main(debug=False, base_url=DEFAULT_DESKTOP_URL):
     gui = configure_webview()
     desktop_api = DesktopApi()
 
@@ -769,7 +770,7 @@ def main(debug=False):
     center=position(1000,800)
     window = webview.create_window(
         title="Slynor",
-        url="http://127.0.0.1:8765/ui",
+        url=base_url + "/ui",
         js_api=desktop_api,
         width=1000,
         height=800,
@@ -780,7 +781,7 @@ def main(debug=False):
     desktop_api._window = window
     from desktop_shell import DesktopShell
     from backend.desktop_controls import register
-    shell = DesktopShell(window, desktop_api)
+    shell = DesktopShell(window, desktop_api, base_url)
     register(shell)
     window.events.closing += shell.closing
     window.events.closed += shell.stop_tray

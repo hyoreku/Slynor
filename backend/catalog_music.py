@@ -400,7 +400,7 @@ class CatalogueLibrary(InternetLibrary):
      handle=token_urlsafe(24)
      self.media[handle]={'ref':ref,'resources':{'master':ready['url']},'headers':dict(ready.get('headers',{}))}
      while len(self.media)>8:self.media.popitem(last=False)
-    return 'http://127.0.0.1:8765/api/online/media/'+handle+'/master'
+    return self.desktop_url+'/api/online/media/'+handle+'/master'
    raise ProviderError('Поток устарел. Запустите трек из поиска снова.')
   return super().play_url(ref)
  def start_stream(self,ref):

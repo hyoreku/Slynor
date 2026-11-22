@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
@@ -129,6 +130,38 @@ class WorkerTests(unittest.TestCase):
 
 
 class DispatchTests(unittest.TestCase):
+    def test_desktop_keeps_a_reserved_socket_when_default_port_is_occupied(self):
+        with socket.socket() as occupied:
+            occupied.bind((start.HOST, 0))
+            occupied.listen()
+            default = occupied.getsockname()[1]
+            with patch.object(start, 'PORT', default), start._reserve_desktop_socket() as reserved:
+                host, port = reserved.getsockname()
+                self.assertEqual(host, '127.0.0.1')
+                self.assertNotEqual(port, default)
+                reserved.listen()
+                with socket.create_connection((host, port), timeout=2):
+                    pass
+
+    def test_desktop_lock_prevents_overlapping_launches(self):
+        from backend.startup_runtime import DesktopAlreadyRunning
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'LOCALAPPDATA': tmp}):
+            with start._desktop_lock():
+                with self.assertRaises(DesktopAlreadyRunning), start._desktop_lock():
+                    self.fail('A second desktop launch acquired the lock')
+            with start._desktop_lock():
+                pass
+
+    def test_idle_desktop_does_not_initialize_vlc(self):
+        from player.audio_engine import AudioEngine
+        with patch('player.audio_engine.vlc.Instance') as instance:
+            engine = AudioEngine(defer_native=True)
+            engine.set_volume(25)
+            self.assertEqual(engine.get_state()['volume'], 25)
+            self.assertEqual(engine.get_state()['state'], 'idle')
+            engine.close()
+            instance.assert_not_called()
+
     def test_check_runtime_does_not_open_window(self):
         with patch('backend.startup_runtime.prepare_runtime'), patch('backend.packaged_check.run_check', return_value=0) as check, patch('start.main') as main:
             self.assertEqual(start.cli(['--check-runtime']), 0)

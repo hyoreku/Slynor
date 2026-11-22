@@ -17,6 +17,10 @@ class WebView2Unavailable(RuntimeError):
     pass
 
 
+class DesktopAlreadyRunning(RuntimeError):
+    pass
+
+
 def application_dir():
     return Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent
 
@@ -110,9 +114,18 @@ def configure_paths():
 
 
 def show_failure():
-    logging.getLogger('ownplayer').exception('Application startup failed')
+    error = sys.exc_info()[1]
+    logger = logging.getLogger('ownplayer')
+    if isinstance(error, DesktopAlreadyRunning):
+        logger.info('%s', error)
+        if os.name == 'nt' and getattr(sys, 'frozen', False):
+            ctypes.windll.user32.MessageBoxW(None, str(error), 'Slynor', 0x40)
+        else:
+            print(str(error), file=sys.stderr)
+        return
+    logger.exception('Application startup failed')
     message = 'Slynor could not start. Details:\n' + str(log_dir() / 'startup.log')
-    if os.name == 'nt' and isinstance(sys.exc_info()[1], WebView2Unavailable):
+    if os.name == 'nt' and isinstance(error, WebView2Unavailable):
         result = ctypes.windll.user32.MessageBoxW(
             None, 'Требуется актуальный Microsoft Edge WebView2 Runtime. Открыть страницу загрузки Microsoft?',
             'Slynor', 0x24)

@@ -29,6 +29,7 @@ class ServiceRuntime:
         self._last_check = 0.0
         self._last_ok = False
         self._starting = False
+        self._stopped = False
 
     def status(self, refresh=False):
         if refresh or monotonic() - self._last_check > 2:
@@ -76,6 +77,8 @@ class ServiceRuntime:
             self.error = None
             return True
         with self._lock:
+            if self._stopped:
+                return False
             process = self.process
             already = self._starting
             if not already:
@@ -94,7 +97,12 @@ class ServiceRuntime:
                 self.error = 'Не удалось запустить Music Service.'
                 return False
             with self._lock:
-                self.process = process
+                stopped = self._stopped
+                if not stopped:
+                    self.process = process
+            if stopped:
+                self._terminate(process)
+                return False
         deadline = monotonic() + max(3.0, float(timeout))
         try:
             while monotonic() < deadline:
@@ -102,6 +110,8 @@ class ServiceRuntime:
                     self.error = None
                     return True
                 with self._lock:
+                    if self._stopped:
+                        return False
                     current = self.process
                 if current is not None and current.poll() is not None:
                     self.error = 'Music Service завершился при запуске.'
@@ -115,8 +125,13 @@ class ServiceRuntime:
 
     def stop(self):
         with self._lock:
+            self._stopped = True
             process = self.process
             self.process = None
+        self._terminate(process)
+
+    @staticmethod
+    def _terminate(process):
         if process is None or process.poll() is not None:
             return
         process.terminate()

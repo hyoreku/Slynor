@@ -2,13 +2,17 @@ name: Windows packages
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
-    branches: [release/windows-acceptance, codex/android-0.5-windows-fix]
+    branches: [main, release/windows-acceptance, codex/android-0.5-windows-fix]
     paths:
       - .github/workflows/windows-package.yml
       - packaging/windows/**
-      - backend/packaged_check.py
+      - backend/**
+      - player/**
       - desktop.py
+      - desktop_shell.py
+      - start.py
       - tools/prepare_portable.py
 
 permissions:
@@ -62,22 +66,34 @@ jobs:
           if (-not $check.WaitForExit(90000)) { $check.Kill(); throw 'Installed Slynor timed out' }
           if ($check.ExitCode -ne 0) { throw "Installed Slynor failed its smoke test ($($check.ExitCode))" }
 
-      - name: Open the installed desktop window
+      - name: Open the installed desktop window with the usual port occupied
         run: |
           $install = Join-Path $env:RUNNER_TEMP 'Slynor test install'
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'slynor-installed-check'
-          $app = Start-Process -FilePath (Join-Path $install 'Slynor.exe') -PassThru
+          $log = Join-Path $env:LOCALAPPDATA 'Slynor\logs\startup.log'
+          $occupied = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 8765)
+          $occupied.Start()
+          $app = $null
           try {
+              $app = Start-Process -FilePath (Join-Path $install 'Slynor.exe') -PassThru
               $deadline = [DateTime]::UtcNow.AddSeconds(60)
               do {
                   $app.Refresh()
                   if ($app.HasExited) { throw "Installed Slynor exited before showing its window ($($app.ExitCode))" }
-                  if ($app.MainWindowHandle -ne 0 -and $app.MainWindowTitle -eq 'Slynor') { exit 0 }
+                  if ($app.MainWindowHandle -ne 0 -and $app.MainWindowTitle -eq 'Slynor') {
+                      $reservation = Select-String -LiteralPath $log -Pattern 'Desktop API reserved (http://127\.0\.0\.1:(\d+))' | Select-Object -Last 1
+                      if (-not $reservation -or $reservation.Matches[0].Groups[2].Value -eq '8765') { throw 'Slynor did not switch to a free port.' }
+                      $url = $reservation.Matches[0].Groups[1].Value
+                      $ui = Invoke-WebRequest -Uri "$url/ui" -UseBasicParsing -TimeoutSec 5
+                      if ($ui.StatusCode -ne 200 -or $ui.Content -notmatch 'Slynor') { throw 'UI did not load on the reserved port.' }
+                      break
+                  }
                   Start-Sleep -Milliseconds 500
               } while ([DateTime]::UtcNow -lt $deadline)
-              throw 'The installed Slynor window did not open within 60 seconds.'
+              if (-not $ui) { throw 'The installed Slynor window did not open within 60 seconds.' }
           } finally {
-              if (-not $app.HasExited -and (-not $app.CloseMainWindow() -or -not $app.WaitForExit(10000))) {
+              $occupied.Stop()
+              if ($app -and -not $app.HasExited -and (-not $app.CloseMainWindow() -or -not $app.WaitForExit(10000))) {
                   taskkill /PID $app.Id /T /F
               }
           }

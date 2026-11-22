@@ -13,6 +13,7 @@ from tempfile import TemporaryDirectory
 import threading
 import time
 from urllib.request import build_opener, ProxyHandler
+from urllib.error import URLError
 from backend.startup_runtime import log_dir
 
 
@@ -71,10 +72,18 @@ def _smoke_api(app, music_url):
             with opener.open(f'http://127.0.0.1:{port}' + route, timeout=5) as response:
                 if response.status != 200 or not response.read(32):
                     raise RuntimeError('Empty or failed HTTP response: ' + route)
-        with opener.open(music_url + '/health', timeout=5) as response:
-            health = json.load(response)
-            if health.get('status') != 'ok' or not health.get('processing_jobs'):
-                raise RuntimeError('Music Service did not start its job dispatchers')
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            try:
+                with opener.open(music_url + '/health', timeout=2) as response:
+                    health = json.load(response)
+                if health.get('status') == 'ok' and health.get('processing_jobs'):
+                    break
+            except URLError:
+                pass
+            time.sleep(.2)
+        else:
+            raise RuntimeError('Music Service did not start its job dispatchers')
     finally:
         server.should_exit = True
         thread.join(12)

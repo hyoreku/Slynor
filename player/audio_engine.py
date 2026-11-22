@@ -13,21 +13,21 @@ from player.playback_snapshot import PlaybackSnapshot, PlaybackStatus
 
 
 logger = logging.getLogger(__name__)
+VLC_EQ_FREQUENCIES = (60., 170., 310., 600., 1000., 3000., 6000., 12000., 14000., 16000.)
 
 
 class AudioEngine:
     # Создание объектов и приватного состояния; вызывается один раз при запуске.
-    def __init__(self):
+    def __init__(self, *, defer_native=False):
         self._lock = RLock()
-
-        self._instance = vlc.Instance("--no-video", "--no-audio-time-stretch")
-        if self._instance is None:
-            raise RuntimeError("Не удалось создать движок VLC.")
-
-        self._player = self._instance.media_player_new()
-        self._player.audio_set_volume(50)
+        self._instance = None
+        self._player = None
+        self._event_manager = None
+        self._worker = None
+        self._volume = 50
 
         self._equalizer_config = deepcopy(DEFAULT_EQ)
+        self._apply_eq_on_initialize = False
         self._native_eq = None
         self._current_filename = None
         self.stream_resolver = None
@@ -52,14 +52,41 @@ class AudioEngine:
         self._closed = False
 
         self._events = SimpleQueue()
-        self._event_manager = self._player.event_manager()
+        if not defer_native:
+            self._initialize_native()
 
-        self._worker = Thread(
-            target=self._process_events,
-            name="audio-events",
-            daemon=True,
-        )
+    def _initialize_native(self):
+        if self._player is not None:
+            return
+        if self._closed:
+            raise RuntimeError("Плеер уже закрыт.")
+        logger.info("Initializing LibVLC audio")
+        instance = vlc.Instance("--no-video", "--no-audio-time-stretch")
+        if instance is None:
+            raise RuntimeError("Не удалось создать движок VLC.")
+        player = None
+        try:
+            player = instance.media_player_new()
+            if player is None:
+                raise RuntimeError("VLC не создал аудиоплеер.")
+            player.audio_set_volume(self._volume)
+            self._event_manager = player.event_manager()
+            self._instance = instance
+            self._player = player
+            if self._apply_eq_on_initialize:
+                self.set_equalizer(self._equalizer_config)
+        except BaseException:
+            if self._native_eq is not None:
+                self._native_eq.release()
+                self._native_eq = None
+            if player is not None:
+                player.release()
+            instance.release()
+            self._instance = self._player = self._event_manager = None
+            raise
+        self._worker = Thread(target=self._process_events, name="audio-events", daemon=True)
         self._worker.start()
+        logger.info("LibVLC audio initialized")
 
     # Проверка состава очереди до изменения состояния плеера.
     def _validate_paths(self, paths):
@@ -118,6 +145,7 @@ class AudioEngine:
             display_name = file_path.name
 
         with self._lock:
+            self._initialize_native()
             self._auto_advance_enabled = False
             self._generation += 1
             generation = self._generation
@@ -350,7 +378,7 @@ class AudioEngine:
     # Пауза только при воспроизведении.
     def pause(self):
         with self._lock:
-            state=self._player.get_state()
+            state=self._player.get_state() if self._player is not None else vlc.State.NothingSpecial
             if state==vlc.State.Paused:return True
             if state in (vlc.State.Opening,vlc.State.Buffering) or (self._current_filename and state in (vlc.State.NothingSpecial,vlc.State.Stopped)):return False
             if state != vlc.State.Playing:
@@ -364,7 +392,7 @@ class AudioEngine:
     # Продолжение только после паузы.
     def resume(self):
         with self._lock:
-            state=self._player.get_state()
+            state=self._player.get_state() if self._player is not None else vlc.State.NothingSpecial
             if state==vlc.State.Playing:return True
             if state in (vlc.State.Opening,vlc.State.Buffering) or (self._current_filename and state in (vlc.State.NothingSpecial,vlc.State.Stopped)):return False
             if state != vlc.State.Paused:
@@ -382,7 +410,8 @@ class AudioEngine:
             self._generation += 1
             self._seek_target = None
             self._playback_error = None
-            self._player.stop()
+            if self._player is not None:
+                self._player.stop()
             self._current_filename = None
             self._current_stream_url = None
             self._source_paths = []
@@ -423,10 +452,9 @@ class AudioEngine:
         }
 
         with self._lock:
-            native_state = self._player.get_state()
-
-            time_ms = max(0, self._player.get_time())
-            duration_ms = max(0, self._player.get_length())
+            native_state = self._player.get_state() if self._player is not None else vlc.State.NothingSpecial
+            time_ms = max(0, self._player.get_time()) if self._player is not None else 0
+            duration_ms = max(0, self._player.get_length()) if self._player is not None else 0
             if self._seek_target is not None:
                 target_ms, requested_at = self._seek_target
                 if abs(time_ms - target_ms) <= 250 or perf_counter() - requested_at >= .75:
@@ -480,7 +508,7 @@ class AudioEngine:
     def get_state(self):
         with self._lock:
             playback = self.get_playback_snapshot()
-            volume = self._player.audio_get_volume()
+            volume = self._player.audio_get_volume() if self._player is not None else self._volume
             return {
                 **playback,
                 "startup": deepcopy(self._startup),
@@ -494,6 +522,8 @@ class AudioEngine:
     # Эквалайзер применяется к аудиовыходу VLC, без второго плеера/перезапуска песни.
     def get_equalizer_frequencies(self):
         with self._lock:
+            if self._player is None:
+                return list(VLC_EQ_FREQUENCIES)
             try:
                 count = vlc.libvlc_audio_equalizer_get_band_count()
                 if count != 10:
@@ -516,6 +546,10 @@ class AudioEngine:
         with self._lock:
             if self._closed:
                 raise RuntimeError("Плеер уже закрыт.")
+            if self._player is None:
+                self._equalizer_config = config
+                self._apply_eq_on_initialize = True
+                return
             previous = self._equalizer_config
             if config == previous and self._native_eq is not None:
                 return
@@ -566,12 +600,11 @@ class AudioEngine:
             )
 
         with self._lock:
-            result = self._player.audio_set_volume(volume)
-
-            if result == -1:
+            if self._player is not None and self._player.audio_set_volume(volume) == -1:
                 raise RuntimeError(
                     "VLC не смог изменить громкость."
                 )
+            self._volume = volume
 
     # Перемотка внутри длительности текущего трека.
     def seek(self, position_ms: int, expected_path: str | None = None):
@@ -583,8 +616,7 @@ class AudioEngine:
                     return str(Path(a).expanduser().resolve()).casefold() == str(Path(b).expanduser().resolve()).casefold()
                 if actual is None or not same_path(actual, expected_path):
                     raise ValueError("Текущая песня изменилась. Повтори перемотку.")
-            state = self._player.get_state()
-            duration_ms = self._player.get_length()
+            state = self._player.get_state() if self._player is not None else vlc.State.NothingSpecial
 
             if state not in (
                 vlc.State.Playing,
@@ -595,6 +627,7 @@ class AudioEngine:
                     "воспроизведения или паузы."
                 )
 
+            duration_ms = self._player.get_length()
             if duration_ms <= 0 or not self._player.is_seekable():
                 raise ValueError(
                     "Этот трек пока нельзя перемотать."
@@ -625,6 +658,8 @@ class AudioEngine:
             self._auto_advance_enabled = False
             self._generation += 1
 
+        if self._worker is None:
+            return
         self._events.put(None)
         self._worker.join()
 
@@ -642,6 +677,7 @@ class AudioEngine:
     def output_devices(self):
         """Enumerate the active VLC audio module. Only Windows/VLC can certify real IDs."""
         with self._lock:
+            self._initialize_native()
             rows=[{'id':'','name':'По умолчанию в Windows'}]
             head=None
             try:
@@ -663,7 +699,8 @@ class AudioEngine:
         with self._lock:
             if device and device not in {d['id'] for d in self.output_devices()['devices']}:
                 raise ValueError('Устройство не найдено. Обновите список или выберите системное.')
-            self._player.audio_output_device_set(None,device or None)
+            if self._player is not None:
+                self._player.audio_output_device_set(None,device or None)
             self._output_device=device
             return {'selected':device,'message':'Команда выбора передана VLC. Проверьте звук на выбранном выходе.'}
 

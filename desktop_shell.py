@@ -13,7 +13,7 @@ from urllib.request import Request, build_opener, ProxyHandler
 # Loopback controls must not inherit a Windows/HTTP_PROXY route.
 urlopen=build_opener(ProxyHandler({})).open
 import webview
-from backend.local_session import APP_TOKEN
+from backend.local_session import APP_TOKEN, DEFAULT_DESKTOP_URL
 from PIL import Image, ImageDraw
 
 def _tray_image(path=None):
@@ -29,9 +29,10 @@ def _tray_image(path=None):
         return image
 
 class DesktopShell:
-    def __init__(self, window, api):
+    def __init__(self, window, api, base_url=DEFAULT_DESKTOP_URL):
         self.window = window
         self.api = api
+        self.base_url = base_url
         self.mini = None
         self.creating_mini = False
         self.icon = None
@@ -149,7 +150,7 @@ class DesktopShell:
                 width, height = MINI_EXPANDED_SIZE
                 x, y = position(width, height, self.api.load_settings().get('mini_position'), top=True)
                 mini=webview.create_window('Slynor · Миниплеер',
-                    url='http://127.0.0.1:8765/mini',width=width,height=height,
+                    url=self.base_url + '/mini',width=width,height=height,
                     min_size=MINI_COMPACT_SIZE,on_top=True,frameless=True,shadow=False,easy_drag=False,
                     js_api=SimpleNamespace(set_mini_compact=set_mini_compact),
                     hidden=os.name=='nt',background_color='#15151a',x=x,y=y)
@@ -212,12 +213,12 @@ class DesktopShell:
         def run():
             try:
                 if action == 'toggle':
-                    with urlopen(Request('http://127.0.0.1:8765/api/player/state', headers={'X-OwnPlayer-Token':APP_TOKEN}), timeout=3) as response:
+                    with urlopen(Request(self.base_url + '/api/player/state', headers={'X-OwnPlayer-Token':APP_TOKEN}), timeout=3) as response:
                         state = json.load(response)['state']
                     if state not in ('playing','paused'): return
                     command = 'pause' if state == 'playing' else 'resume'
                 else: command = action
-                request = Request('http://127.0.0.1:8765/api/player/'+command, method='POST',headers={'X-OwnPlayer-Token':APP_TOKEN})
+                request = Request(self.base_url + '/api/player/'+command, method='POST',headers={'X-OwnPlayer-Token':APP_TOKEN})
                 with urlopen(request, timeout=5) as response: response.read(4096)
             except Exception:
                 # Make normal UI playback errors visible rather than a console-only traceback.

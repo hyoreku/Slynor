@@ -10,8 +10,8 @@ service sync.
 import json
 import ntpath
 from pathlib import Path
-from threading import RLock, Thread
-from time import monotonic, sleep
+from threading import Event, RLock, Thread
+from time import monotonic
 from uuid import uuid4
 
 from .image_assets import get_data_dir, is_cover_name
@@ -28,6 +28,7 @@ class LibraryService:
         self.lock = RLock()
         self._synced = False
         self._sync_started = False
+        self._closed = Event()
         self._last_error = None
 
     # --- local cache -----------------------------------------------------
@@ -199,19 +200,25 @@ class LibraryService:
                 self._last_error = str(error)
                 return False
 
-    def start_background(self):
+    def start_background(self, prepare=None):
         with self.lock:
-            if self._sync_started or self.client is None:
+            if self._sync_started or self.client is None or self._closed.is_set():
                 return
             self._sync_started = True
-        Thread(target=self._background_sync, name='library-sync', daemon=True).start()
+        Thread(target=self._background_sync, args=(prepare,), name='library-sync', daemon=True).start()
 
-    def _background_sync(self):
+    def stop_background(self):
+        self._closed.set()
+
+    def _background_sync(self, prepare):
         try:
+            if prepare is not None and not self._closed.is_set():
+                prepare(6.0)
             for _ in range(30):
-                if self._service_ready() and self.sync():
+                if self._closed.is_set() or (self._service_ready() and self.sync()):
                     return
-                sleep(1.0)
+                if self._closed.wait(1.0):
+                    return
         finally:
             with self.lock:
                 self._sync_started = False

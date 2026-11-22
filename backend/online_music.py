@@ -4,6 +4,7 @@ No scraping, preview playback, audio downloads or persisted credentials.
 from collections import OrderedDict
 from copy import deepcopy
 from hashlib import sha256
+from backend.local_session import DEFAULT_DESKTOP_URL
 import json
 import os
 from pathlib import Path
@@ -161,6 +162,7 @@ class SoundCloud:
                 'cover_url':artwork(playlist.get('artwork_url')),'source_url':url,'tracks':items}
 
 class OnlineLibrary:
+    desktop_url = DEFAULT_DESKTOP_URL
     def __init__(self, data_dir, provider=None):
         self.path=Path(data_dir)/'online_playlists.json';self.lock=RLock()
         self.provider=provider or SoundCloud();self.tracks=OrderedDict();self.playlists=[];self.warning=None
@@ -233,7 +235,7 @@ class OnlineLibrary:
             handle=token_urlsafe(24)
             self.media[handle]={'ref':ref,'resources':{'master':None}}
             while len(self.media)>8:self.media.popitem(last=False)
-        return 'http://127.0.0.1:8765/api/online/media/'+handle+'/master'
+        return self.desktop_url+'/api/online/media/'+handle+'/master'
 
     def resource(self, handle, resource):
         with self.lock:
