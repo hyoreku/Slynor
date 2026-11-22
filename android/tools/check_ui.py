@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 PACKAGE = "io.github.hyoreku.slynor.debug"
 ACTIVITY = f"{PACKAGE}/io.github.hyoreku.slynor.MainActivity"
 TRACKS = [f"Slynor-{name}.wav" for name in ("Alpha", "Beta", "Gamma")]
+FIXTURE_FOLDER = "0-slynor-ui"
 
 
 def adb(*args, timeout=24):
@@ -66,25 +67,27 @@ def track_action(track, action):
 
 def import_tracks():
     with TemporaryDirectory() as folder:
-        adb("shell", "mkdir", "-p", "/sdcard/Download")
+        remote_folder = f"/sdcard/{FIXTURE_FOLDER}"
+        adb("shell", "mkdir", "-p", remote_folder)
         for name in TRACKS:
             audio = Path(folder) / name
             with wave.open(str(audio), "wb") as sample:
                 sample.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
                 sample.writeframes(b"\x00\x00" * 8000 * 120)
-            remote = f"/sdcard/Download/{name}"
-            adb("push", str(audio), remote)
-            adb("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", f"file://{remote}")
+            adb("push", str(audio), f"{remote_folder}/{name}")
 
-    roots = ("Show roots", "Show roots menu", "Показать корневые папки", "Открыть меню")
-    downloads = ("Downloads", "Загрузки")
+    roots = "Show roots"
+    storage = adb("shell", "getprop", "ro.product.model").decode().strip()
     for index, track in enumerate(TRACKS):
         add_label = "Добавить музыку" if index == 0 else "Добавить"
         tap(wait_for(add_label), add_label)
-        picker = wait_for(track, *roots, any_label=True)
+        picker = wait_for(track, roots, storage, any_label=True)
         if not list(centers(picker, track)):
-            tap(picker, *roots)
-            tap(wait_for(*downloads, any_label=True), *downloads)
+            if not list(centers(picker, storage)):
+                tap(picker, roots)
+                picker = wait_for(storage)
+            tap(picker, storage)
+            tap(wait_for(FIXTURE_FOLDER), FIXTURE_FOLDER)
         tap(wait_for(track), track)
         wait_for("Недавно добавленные", track)
 
@@ -116,6 +119,7 @@ def pause_active_playback():
 
 def main(output):
     output.mkdir(parents=True, exist_ok=True)
+    adb("shell", "settings", "put", "global", "animator_duration_scale", "0")
     home = wait_for("Включите первую песню")
     (output / "home.png").write_bytes(adb("exec-out", "screencap", "-p"))
 
@@ -130,6 +134,7 @@ def main(output):
     import_tracks()
     tap(wait_for("Недавно добавленные", "Моя музыка"), "Моя музыка")
     wait_for("3 трека", *TRACKS)
+    print("Imported all three audio files through the system picker.", flush=True)
     (output / "library.png").write_bytes(adb("exec-out", "screencap", "-p"))
     track_action(alpha, "В избранное")
     wait_for("В избранном")
@@ -140,6 +145,7 @@ def main(output):
     tap(wait_for("Избранное", "В избранном"), "Избранное")
     favorites = wait_for("1 трек", alpha, "В избранном")
     assert not list(centers(favorites, beta)), "A non-favorite track appears in Favorites"
+    print("Favorite track persisted after the app restarted.", flush=True)
     (output / "favorites.png").write_bytes(adb("exec-out", "screencap", "-p"))
     tap(favorites, alpha)
     pause_active_playback()
