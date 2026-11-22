@@ -42,6 +42,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -191,6 +192,8 @@ private fun TrackControls(
     onFavorite: () -> Unit, onQueue: () -> Unit, modifier: Modifier,
 ) {
     var selected by remember(state.trackId) { mutableStateOf<Float?>(null) }
+    var showEqualizer by rememberSaveable { mutableStateOf(false) }
+    if (showEqualizer) EqualizerDialog { showEqualizer = false }
     val colors = MaterialTheme.colorScheme
     val artist = state.artist.ifBlank { track.artist }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -213,6 +216,7 @@ private fun TrackControls(
                 color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             Text(formatTime(state.duration), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         }
+        SpectrumStrip(state.playing)
         Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically) {
             FilledTonalIconButton(onClick = player::seekToPreviousMediaItem, enabled = state.hasPrevious) {
@@ -247,6 +251,7 @@ private fun TrackControls(
             }
             SleepMenu(player, sleepRemaining, compact = true)
         }
+        TextButton(onClick = { showEqualizer = true }) { Text("Эквалайзер") }
     }
 }
 

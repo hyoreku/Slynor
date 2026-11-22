@@ -2,6 +2,7 @@ name: Android APK
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [main, release/windows-acceptance, codex/android-0.5-windows-fix]
     paths: [android/**, .github/workflows/android.yml]

@@ -52,10 +52,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -89,6 +93,7 @@ internal fun SlynorScreens(
     status: String?,
     importing: Boolean,
     theme: ThemeMode,
+    appearance: AppearanceSettings,
     onTheme: (ThemeMode) -> Unit,
     sleepRemaining: Long,
     onAdd: () -> Unit,
@@ -133,11 +138,16 @@ internal fun SlynorScreens(
     detailsId?.let(byId::get)?.let { TrackDetails(it) { detailsId = null } }
 
     Surface(Modifier.fillMaxSize(), color = colors.background) {
+        val wallpaper = appearance.wallpaper
+        val backdrop = if (wallpaper == null) Modifier else Modifier.paint(
+            painter = remember(wallpaper) { BitmapPainter(wallpaper.asImageBitmap()) },
+            sizeToIntrinsics = false, contentScale = ContentScale.Crop, alpha = .3f,
+        )
         Column(
-            Modifier.fillMaxSize().background(
+            Modifier.fillMaxSize().then(backdrop).background(
                 Brush.verticalGradient(colorStops = arrayOf(
-                    0f to lerp(colors.background, colors.primary, .10f),
-                    .50f to colors.background,
+                    0f to lerp(colors.background, colors.primary, .10f).copy(alpha = if (wallpaper == null) 1f else .25f),
+                    .68f to colors.background.copy(alpha = if (wallpaper == null) 1f else .8f),
                 )),
             ).safeDrawingPadding().imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -295,7 +305,7 @@ internal fun SlynorScreens(
                             Destination.Playlists -> PlaylistsScreen(
                                 library, data, playlist, current, player, { playlistId = it }, onPlay,
                             )
-                            Destination.Settings -> SettingsScreen(theme, onTheme, player, playback, sleepRemaining)
+                            Destination.Settings -> SettingsScreen(theme, onTheme, appearance, player, playback, sleepRemaining)
                             Destination.Queue -> {
                                 val queue = remember(playback.queue, byId) {
                                     playback.queue.mapIndexedNotNull { index, id -> byId[id]?.let { index to it } }

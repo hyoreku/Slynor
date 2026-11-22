@@ -1,6 +1,8 @@
 package io.github.hyoreku.slynor
 
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,20 +19,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsScreen(
-    theme: ThemeMode, onTheme: (ThemeMode) -> Unit, player: MediaController?, state: Playback, remaining: Long,
+    theme: ThemeMode, onTheme: (ThemeMode) -> Unit, appearance: AppearanceSettings,
+    player: MediaController?, state: Playback, remaining: Long,
 ) {
+    val context = LocalContext.current
+    val sound = remember(context) { SoundSettings(context.applicationContext) }
+    val visualizer by SoundState.visualizer.collectAsState()
+    var showEqualizer by rememberSaveable { mutableStateOf(false) }
+    if (showEqualizer) EqualizerDialog { showEqualizer = false }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         ScreenTitle("Настройки")
         SettingsRow("Тема") {
@@ -45,7 +58,43 @@ internal fun SettingsScreen(
         SettingsRow("Таймер сна") {
             SleepMenu(player, remaining)
         }
+        SettingsRow("Эквалайзер") {
+            FilledTonalButton(onClick = { showEqualizer = true }) { Text("Открыть") }
+        }
+        SettingsRow("Спектр") {
+            ChoiceMenu(visualizer.label, VisualizerStyle.entries, VisualizerStyle::label, onChoice = sound::setVisualizer)
+        }
+        SettingsRow("Цвет акцента") {
+            ChoiceMenu(appearance.accent.label, ThemeAccent.entries, ThemeAccent::label, onChoice = appearance::updateAccent)
+        }
+        WallpaperSettings(appearance)
     }
+}
+
+@Composable
+private fun WallpaperSettings(appearance: AppearanceSettings) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            busy = true
+            scope.launch {
+                try { failed = !appearance.updateWallpaper(uri) } finally { busy = false }
+            }
+        }
+    }
+    SettingsRow("Обои") {
+        FilledTonalButton(onClick = { picker.launch(arrayOf("image/*")) }, enabled = !busy) {
+            Text(if (appearance.wallpaper == null) "Выбрать" else "Заменить")
+        }
+    }
+    if (appearance.wallpaper != null) {
+        TextButton(enabled = !busy, onClick = { scope.launch { failed = !appearance.updateWallpaper(null) } }) {
+            Text("Убрать обои")
+        }
+    }
+    if (failed) Text("Не удалось сохранить выбранное изображение.", color = MaterialTheme.colorScheme.error)
 }
 
 @Composable

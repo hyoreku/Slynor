@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
         val playbackStorage = playbackStorage()
         setContent {
             var theme by remember { mutableStateOf(ThemeMode.read(library.storage)) }
+            val appearance = remember { AppearanceSettings(applicationContext) }
+            LaunchedEffect(appearance) { appearance.loadWallpaper() }
             val systemDark = isSystemInDarkTheme()
             val dark = theme == ThemeMode.Dark || (theme == ThemeMode.System && systemDark)
             LaunchedEffect(dark) {
@@ -50,8 +52,8 @@ class MainActivity : ComponentActivity() {
                     else SystemBarStyle.light(Color.TRANSPARENT, Color.BLACK)
                 enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
             }
-            SlynorTheme(dark) {
-                MusicLibrary(library, playbackStorage, controller, connectionError, theme) {
+            SlynorTheme(dark, appearance.accent) {
+                MusicLibrary(library, playbackStorage, controller, connectionError, theme, appearance) {
                     theme = it
                     library.storage.edit().putString("theme", it.name).apply()
                 }
@@ -92,6 +94,7 @@ private fun MusicLibrary(
     player: MediaController?,
     connectionError: Boolean,
     theme: ThemeMode,
+    appearance: AppearanceSettings,
     onTheme: (ThemeMode) -> Unit,
 ) {
     var data by remember(library) { mutableStateOf(library.snapshot()) }
@@ -165,6 +168,7 @@ private fun MusicLibrary(
         status = status,
         importing = importing,
         theme = theme,
+        appearance = appearance,
         onTheme = onTheme,
         sleepRemaining = remaining,
         onAdd = { if (!importing) picker.launch(arrayOf("audio/*")) },

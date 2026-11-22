@@ -222,6 +222,10 @@ def main(output):
     tap(wait_for("Тёмная"), "Тёмная")
     tap(wait_for("Светлая"), "Светлая")
     wait_for("1,5×", "Вся очередь", "Светлая")
+    tap(wait_for("Эквалайзер", "Открыть"), "Открыть")
+    tap(wait_for("Пресеты эквалайзера"), "Пресеты эквалайзера")
+    tap(wait_for("Бас"), "Бас")
+    tap(wait_for("-6 дБ", "+6 дБ", "Готово"), "Готово")
 
     adb("shell", "am", "force-stop", PACKAGE)
     adb("shell", "am", "start", "-W", "-n", ACTIVITY)
@@ -234,7 +238,9 @@ def main(output):
     tap(wait_for("Меню Slynor"), "Меню Slynor")
     tap(wait_for("Настройки"), "Настройки")
     wait_for("1,5×", "Вся очередь", "Светлая")
-    print("Created and reordered a playlist, then verified playlist, queue, speed, repeat and theme survive a restart.")
+    tap(wait_for("Эквалайзер", "Открыть"), "Открыть")
+    wait_for("-6 дБ", "+6 дБ", "Готово")
+    print("Verified playlist, queue, playback settings, theme and equalizer preset survive a restart.")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -40,8 +41,16 @@ private val typography = Typography(
 )
 
 @Composable
-internal fun SlynorTheme(dark: Boolean, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (dark) graphite else lilac, typography = typography, content = content)
+internal fun SlynorTheme(dark: Boolean, accent: ThemeAccent, content: @Composable () -> Unit) {
+    val base = if (dark) graphite else lilac
+    val primary = if (dark) accent.dark else accent.light
+    val colors = if (accent == ThemeAccent.Lilac) base else base.copy(
+        primary = primary,
+        onPrimary = if (dark) base.background else base.surface,
+        primaryContainer = lerp(base.surfaceContainer, primary, if (dark) .18f else .22f),
+        onPrimaryContainer = base.onSurface,
+    )
+    MaterialTheme(colorScheme = colors, typography = typography, content = content)
 }
 
 private val lilac = lightColorScheme(
