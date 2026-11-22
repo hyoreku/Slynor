@@ -3,10 +3,8 @@ package io.github.hyoreku.slynor
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -18,16 +16,10 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionError
-import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import org.json.JSONArray
 
-internal val sleepTimerCommand = SessionCommand("io.github.hyoreku.slynor.SET_SLEEP_TIMER", Bundle.EMPTY)
-internal const val sleepTimerMinutes = "minutes"
-internal const val sleepTimerDeadline = "sleepDeadline"
 internal val playbackSpeeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 internal fun Context.playbackStorage() = getSharedPreferences("playback", Context.MODE_PRIVATE)
@@ -44,11 +36,6 @@ class PlaybackService : MediaSessionService() {
             if (player.isPlaying) handler.postDelayed(this, 5000)
         }
     }
-    private val sleep = Runnable {
-        session?.player?.pause()
-        storage.edit().remove(sleepTimerDeadline).apply()
-    }
-
     override fun onCreate() {
         super.onCreate()
         val attributes = AudioAttributes.Builder()
@@ -87,40 +74,9 @@ class PlaybackService : MediaSessionService() {
                 ) savePlayback(player)
             }
         })
-        val remaining = storage.getLong(sleepTimerDeadline, 0) - SystemClock.elapsedRealtime()
-        if (remaining in 1..3_600_000) handler.postDelayed(sleep, remaining)
-        else storage.edit().remove(sleepTimerDeadline).apply()
     }
 
     private fun callback(library: LocalLibrary) = object : MediaSession.Callback {
-        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
-            val result = super.onConnect(session, controller)
-            if (controller.packageName != packageName || !result.isAccepted) return result
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(result.availableSessionCommands.buildUpon().add(sleepTimerCommand).build())
-                .setAvailablePlayerCommands(result.availablePlayerCommands)
-                .build()
-        }
-
-        override fun onCustomCommand(
-            session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle,
-        ): ListenableFuture<SessionResult> {
-            if (customCommand != sleepTimerCommand || controller.packageName != packageName) {
-                return super.onCustomCommand(session, controller, customCommand, args)
-            }
-            val minutes = args.getInt(sleepTimerMinutes, -1)
-            if (minutes !in 0..60) return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
-            handler.removeCallbacks(sleep)
-            if (minutes == 0) {
-                storage.edit().remove(sleepTimerDeadline).apply()
-            } else {
-                val delay = minutes * 60_000L
-                storage.edit().putLong(sleepTimerDeadline, SystemClock.elapsedRealtime() + delay).apply()
-                handler.postDelayed(sleep, delay)
-            }
-            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
-
         override fun onAddMediaItems(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -165,7 +121,6 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(checkpoint)
-        handler.removeCallbacks(sleep)
         session?.let {
             savePlayback(it.player)
             it.player.release()

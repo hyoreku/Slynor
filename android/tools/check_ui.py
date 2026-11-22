@@ -1,19 +1,24 @@
 """Exercise Android navigation and a local queue on a fresh emulator."""
 
 from pathlib import Path
+import json
 import re
+import struct
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import time
 import wave
 import xml.etree.ElementTree as ET
+import zlib
 
 
 PACKAGE = "io.github.hyoreku.slynor.debug"
 ACTIVITY = f"{PACKAGE}/io.github.hyoreku.slynor.MainActivity"
 TRACKS = [f"Slynor-{name}.wav" for name in ("Alpha", "Beta", "Gamma")]
 FIXTURE_FOLDER = "0-slynor-ui"
+COVER_FIXTURE = "Slynor-cover.png"
+PLAYER = "Открыть экран текущего трека"
 
 
 def adb(*args, timeout=24):
@@ -79,6 +84,19 @@ def track_action(track, action):
     tap(wait_for(action), action)
 
 
+def pick_document(filename):
+    roots = "Show roots"
+    storage = adb("shell", "getprop", "ro.product.model").decode().strip()
+    picker = wait_for(filename, roots, storage, any_label=True)
+    if not list(centers(picker, filename)):
+        if not list(centers(picker, storage)):
+            tap(picker, roots)
+            picker = wait_for(storage)
+        tap(picker, storage)
+        tap(wait_for(FIXTURE_FOLDER), FIXTURE_FOLDER)
+    tap(wait_for(filename), filename)
+
+
 def import_tracks():
     with TemporaryDirectory() as folder:
         remote_folder = f"/sdcard/{FIXTURE_FOLDER}"
@@ -90,20 +108,54 @@ def import_tracks():
                 sample.writeframes(b"\x00\x00" * 8000 * 120)
             adb("push", str(audio), f"{remote_folder}/{name}")
 
-    roots = "Show roots"
-    storage = adb("shell", "getprop", "ro.product.model").decode().strip()
+        def chunk(kind, data):
+            payload = kind + data
+            return struct.pack(">I", len(data)) + payload + struct.pack(">I", zlib.crc32(payload))
+
+        cover = Path(folder) / COVER_FIXTURE
+        cover.write_bytes(
+            b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 24, 24, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress((b"\0" + bytes((105, 74, 164)) * 24) * 24))
+            + chunk(b"IEND", b"")
+        )
+        adb("push", str(cover), f"{remote_folder}/{COVER_FIXTURE}")
+
     for index, track in enumerate(TRACKS):
         add_label = "Добавить музыку" if index == 0 else "Добавить"
         tap(wait_for(add_label), add_label)
-        picker = wait_for(track, roots, storage, any_label=True)
-        if not list(centers(picker, track)):
-            if not list(centers(picker, storage)):
-                tap(picker, roots)
-                picker = wait_for(storage)
-            tap(picker, storage)
-            tap(wait_for(FIXTURE_FOLDER), FIXTURE_FOLDER)
-        tap(wait_for(track), track)
+        pick_document(track)
         wait_for("Недавно добавленные", track)
+
+
+def open_player():
+    tap(wait_for(PLAYER), PLAYER)
+    return wait_for("Сейчас играет", "Свернуть плеер")
+
+
+def open_queue(size):
+    button = f"Очередь · {size}"
+    tree = wait_for(PLAYER, button, any_label=True)
+    if list(centers(tree, PLAYER)):
+        tree = open_player()
+    if not list(centers(tree, button)):
+        tree = wait_for(button)
+    tap(tree, button)
+    wait_for("Очередь", "Закрыть очередь")
+
+
+def close_queue():
+    tap(wait_for("Закрыть очередь"), "Закрыть очередь")
+
+
+def collapse_player():
+    tap(wait_for("Свернуть плеер"), "Свернуть плеер")
+    return wait_for("Моя музыка", "Плейлисты")
+
+
+def saved_playlist(name):
+    library = ET.fromstring(adb("exec-out", "run-as", PACKAGE, "cat", "shared_prefs/library.xml"))
+    rows = json.loads(library.find("./string[@name='playlists']").text)
+    return next(playlist for playlist in rows if playlist["name"] == name)
 
 
 def assert_queue(*tracks):
@@ -138,22 +190,20 @@ def main(output):
     output.mkdir(parents=True, exist_ok=True)
     adb("shell", "wm", "size", "480x920")
     adb("shell", "wm", "density", "160")
-    adb("shell", "settings", "put", "global", "animator_duration_scale", "0")
+    adb("shell", "settings", "put", "global", "animator_duration_scale", "1")
     home = wait_for("Включите первую песню")
+    assert not list(centers(home, "Очередь")), "Queue appears in the bottom navigation"
     (output / "home.png").write_bytes(adb("exec-out", "screencap", "-p"))
 
     tap(home, "Моя музыка")
     library = wait_for("Библиотека пуста")
-    tap(library, "Очередь")
-    queue = wait_for("Очередь пуста")
-    tap(queue, "Главная")
+    tap(library, "Главная")
     wait_for("Включите первую песню")
 
     alpha, beta, gamma = TRACKS
     import_tracks()
     tap(wait_for("Недавно добавленные", "Моя музыка"), "Моя музыка")
     wait_for("3 трека", *TRACKS)
-    print("Imported all three audio files through the system picker.", flush=True)
     (output / "library.png").write_bytes(adb("exec-out", "screencap", "-p"))
     track_action(alpha, "В избранное")
     wait_for("В избранном")
@@ -164,17 +214,16 @@ def main(output):
     tap(wait_for("Избранное", "В избранном"), "Избранное")
     favorites = wait_for("1 трек", alpha, "В избранном")
     assert not list(centers(favorites, beta)), "A non-favorite track appears in Favorites"
-    print("Favorite track persisted after the app restarted.", flush=True)
-    (output / "favorites.png").write_bytes(adb("exec-out", "screencap", "-p"))
     tap(favorites, alpha)
     pause_active_playback()
-    tap(wait_for("Очередь"), "Очередь")
+    open_queue(1)
     assert_queue(alpha)
-    tap(wait_for("Моя музыка"), "Моя музыка")
+    close_queue()
+    collapse_player()
     tap(wait_for("Все треки"), "Все треки")
     track_action(beta, "В конец очереди")
     track_action(gamma, "Играть следующим")
-    tap(wait_for("Очередь", "3 трека"), "Очередь")
+    open_queue(3)
     assert_queue(alpha, gamma, beta)
     (output / "queue.png").write_bytes(adb("exec-out", "screencap", "-p"))
 
@@ -182,24 +231,36 @@ def main(output):
     assert_queue(alpha, beta, gamma)
     track_action(gamma, "Убрать из очереди")
     assert_queue(alpha, beta)
-    tap(wait_for(alpha), alpha)
+    close_queue()
     player = wait_for("Сейчас играет", "Следующий трек", "Воспроизвести")
+    assert not list(centers(player, "Таймер сна"))
     (output / "playing.png").write_bytes(adb("exec-out", "screencap", "-p"))
     tap(player, "Следующий трек")
     wait_for(beta, "Воспроизвести")
 
-    tap(wait_for("Вернуться"), "Вернуться")
-    tap(wait_for("Моя музыка"), "Моя музыка")
+    collapse_player()
     tap(wait_for("3 трека", "Перемешать и включить"), "Перемешать и включить")
     pause_active_playback()
-    tap(wait_for("Очередь"), "Очередь")
+    open_queue(3)
     shuffled = wait_for("1 из 3", *TRACKS)
     queue_order = sorted(TRACKS, key=lambda track: next(centers(shuffled, track))[1])
-    print("Imported three tracks through the file picker, verified favorites persist and exercised queue playback and editing.", flush=True)
+    close_queue()
+    print("Verified queue opens over Now Playing and supports reordering and removal.", flush=True)
 
-    tap(wait_for("Плейлисты"), "Плейлисты")
+    tap(wait_for("1×"), "1×")
+    tap(wait_for("1,5×"), "1,5×")
+    tap(wait_for("Без повтора", "1,5×"), "Без повтора")
+    tap(wait_for("Вся очередь"), "Вся очередь")
+    tap(wait_for("Эквалайзер"), "Эквалайзер")
+    tap(wait_for("Пресеты эквалайзера"), "Пресеты эквалайзера")
+    tap(wait_for("Бас"), "Бас")
+    tap(wait_for("-6 дБ", "+6 дБ", "Готово"), "Готово")
+
+    tap(collapse_player(), "Плейлисты")
     tap(wait_for("Плейлистов пока нет", "Создать"), "Создать")
-    tap(wait_for("Название"), "Название")
+    tap(wait_for("Новый плейлист", "Выбрать обложку"), "Выбрать обложку")
+    pick_document(COVER_FIXTURE)
+    tap(wait_for("Сменить обложку", "Название"), "Название")
     adb("shell", "input", "text", "Roadtrip")
     tap(wait_for("Сохранить"), "Сохранить")
     tap(wait_for("Roadtrip", "Плейлист пуст", "Добавить треки"), "Добавить треки")
@@ -213,34 +274,38 @@ def main(output):
     assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
     (output / "playlist.png").write_bytes(adb("exec-out", "screencap", "-p"))
 
-    tap(wait_for("Меню Slynor"), "Меню Slynor")
     tap(wait_for("Настройки"), "Настройки")
-    tap(wait_for("Тема", "Тёмная", "1×"), "1×")
-    tap(wait_for("1,5×"), "1,5×")
-    tap(wait_for("Без повтора", "1,5×"), "Без повтора")
-    tap(wait_for("Вся очередь"), "Вся очередь")
-    tap(wait_for("Тёмная"), "Тёмная")
+    settings = wait_for("Тема приложения", "Тёмная", "Визуализатор")
+    for label in ("Эквалайзер", "Скорость", "Повтор", "Таймер сна", "1,5×", "Вся очередь"):
+        assert not list(centers(settings, label)), f"Unexpected playback control in Settings: {label}"
+    (output / "settings.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    tap(settings, "Тёмная")
     tap(wait_for("Светлая"), "Светлая")
-    wait_for("1,5×", "Вся очередь", "Светлая")
-    tap(wait_for("Эквалайзер", "Открыть"), "Открыть")
-    tap(wait_for("Пресеты эквалайзера"), "Пресеты эквалайзера")
-    tap(wait_for("Бас"), "Бас")
-    tap(wait_for("-6 дБ", "+6 дБ", "Готово"), "Готово")
+    wait_for("Тема приложения", "Светлая")
 
     adb("shell", "am", "force-stop", PACKAGE)
     adb("shell", "am", "start", "-W", "-n", ACTIVITY)
-    tap(wait_for("Очередь"), "Очередь")
+    open_queue(3)
     assert_queue(*queue_order)
-    tap(wait_for("Плейлисты"), "Плейлисты")
+    close_queue()
+    wait_for("1,5×", "Вся очередь")
+    tap(wait_for("Эквалайзер"), "Эквалайзер")
+    tap(wait_for("-6 дБ", "+6 дБ", "Готово"), "Готово")
+    tap(collapse_player(), "Плейлисты")
     tap(wait_for("Roadtrip"), "Roadtrip")
     playlist = wait_for("Roadtrip", alpha, beta)
     assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
-    tap(wait_for("Меню Slynor"), "Меню Slynor")
-    tap(wait_for("Настройки"), "Настройки")
-    wait_for("1,5×", "Вся очередь", "Светлая")
-    tap(wait_for("Эквалайзер", "Открыть"), "Открыть")
-    wait_for("-6 дБ", "+6 дБ", "Готово")
-    print("Verified playlist, queue, playback settings, theme and equalizer preset survive a restart.")
+    cover = saved_playlist("Roadtrip")["cover"]
+    image = adb("exec-out", "run-as", PACKAGE, "cat", f"files/playlist-covers/{cover}.jpg")
+    assert image.startswith(b"\xff\xd8"), "Playlist cover was not saved locally as a JPEG"
+    tap(wait_for("Редактировать плейлист"), "Редактировать плейлист")
+    wait_for("Редактирование плейлиста", "Сменить обложку")
+    (output / "playlist-editor.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    tap(wait_for("Убрать обложку"), "Убрать обложку")
+    tap(wait_for("Выбрать обложку", "Сохранить"), "Сохранить")
+    wait_for("Roadtrip", alpha, beta)
+    assert "cover" not in saved_playlist("Roadtrip"), "The removed cover is still assigned"
+    print("Verified persistent playlist artwork, track order, theme and playback controls.")
 
 
 if __name__ == "__main__":

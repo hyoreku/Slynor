@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Bundle
-import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,7 +39,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val library = LocalLibrary(applicationContext)
-        val playbackStorage = playbackStorage()
         setContent {
             var theme by remember { mutableStateOf(ThemeMode.read(library.storage)) }
             val appearance = remember { AppearanceSettings(applicationContext) }
@@ -53,7 +51,7 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
             }
             SlynorTheme(dark, appearance.accent) {
-                MusicLibrary(library, playbackStorage, controller, connectionError, theme, appearance) {
+                MusicLibrary(library, controller, connectionError, theme, appearance) {
                     theme = it
                     library.storage.edit().putString("theme", it.name).apply()
                 }
@@ -90,7 +88,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MusicLibrary(
     library: LocalLibrary,
-    playbackStorage: SharedPreferences,
     player: MediaController?,
     connectionError: Boolean,
     theme: ThemeMode,
@@ -100,37 +97,20 @@ private fun MusicLibrary(
     var data by remember(library) { mutableStateOf(library.snapshot()) }
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    var deadline by remember(playbackStorage) { mutableStateOf(playbackStorage.getLong(sleepTimerDeadline, 0)) }
-    var remaining by remember { mutableStateOf(0L) }
     val playback = rememberPlayback(player)
     val scope = rememberCoroutineScope()
 
-    DisposableEffect(library, playbackStorage) {
+    DisposableEffect(library) {
         val libraryListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key in setOf("tracks", "playlists", "history")) data = library.snapshot()
         }
-        val playbackListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == sleepTimerDeadline) deadline = playbackStorage.getLong(sleepTimerDeadline, 0)
-        }
         library.storage.registerOnSharedPreferenceChangeListener(libraryListener)
-        playbackStorage.registerOnSharedPreferenceChangeListener(playbackListener)
         data = library.snapshot()
-        deadline = playbackStorage.getLong(sleepTimerDeadline, 0)
-        onDispose {
-            library.storage.unregisterOnSharedPreferenceChangeListener(libraryListener)
-            playbackStorage.unregisterOnSharedPreferenceChangeListener(playbackListener)
-        }
+        onDispose { library.storage.unregisterOnSharedPreferenceChangeListener(libraryListener) }
     }
     LaunchedEffect(library) {
         withContext(Dispatchers.IO) { library.refreshLegacyMetadata() }
     }
-    LaunchedEffect(deadline) {
-        do {
-            remaining = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0)
-            if (remaining > 0) delay(1000)
-        } while (remaining > 0)
-    }
-
     fun importTracks(read: () -> LocalLibrary.ImportResult) {
         if (importing) return
         importing = true
@@ -170,7 +150,6 @@ private fun MusicLibrary(
         theme = theme,
         appearance = appearance,
         onTheme = onTheme,
-        sleepRemaining = remaining,
         onAdd = { if (!importing) picker.launch(arrayOf("audio/*")) },
         onAddFolder = { if (!importing) folderPicker.launch(null) },
         onPlay = { track, selection -> player?.playSelection(track, selection) },

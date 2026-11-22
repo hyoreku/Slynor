@@ -1,5 +1,6 @@
 package io.github.hyoreku.slynor
 
+import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal enum class ThemeAccent(val label: String, val light: Color, val dark: Color) {
-    Lilac("Сиреневый", Color(0xFF604B78), Color(0xFFE2D4F5)),
+    Lilac("Сиреневый", Color(0xFF604B78), Color(0xFFC8B6FF)),
     Blue("Синий", Color(0xFF315C96), Color(0xFFADC7FA)),
     Mint("Мятный", Color(0xFF006B59), Color(0xFF94D8C7)),
     Rose("Розовый", Color(0xFF92436C), Color(0xFFF9B5D9)),
@@ -48,15 +49,7 @@ internal class AppearanceSettings(private val context: Context) {
                     image.delete()
                     return@runCatching null
                 }
-                val resolver = context.contentResolver
-                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-                if (options.outWidth <= 0 || options.outHeight <= 0) throw IOException("Invalid image")
-                var sample = 1
-                while (maxOf(options.outWidth, options.outHeight) / sample > 1600) sample *= 2
-                val bitmap = resolver.openInputStream(uri)?.use {
-                    BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
-                } ?: throw IOException("Unreadable image")
+                val bitmap = readDocumentImage(context.contentResolver, uri, 1600)
                 val out = image.startWrite()
                 try {
                     if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 86, out)) throw IOException("Could not save image")
@@ -72,4 +65,15 @@ internal class AppearanceSettings(private val context: Context) {
         wallpaper = result.getOrNull()
         return true
     }
+}
+
+internal fun readDocumentImage(resolver: ContentResolver, uri: Uri, maxSide: Int): Bitmap {
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+    if (options.outWidth <= 0 || options.outHeight <= 0) throw IOException("Invalid image")
+    var sample = 1
+    while (maxOf(options.outWidth, options.outHeight) / sample > maxSide) sample *= 2
+    return resolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+    } ?: throw IOException("Unreadable image")
 }

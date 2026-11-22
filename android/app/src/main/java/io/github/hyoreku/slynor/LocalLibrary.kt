@@ -2,6 +2,8 @@ package io.github.hyoreku.slynor
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -9,6 +11,8 @@ import android.provider.DocumentsContract.Document
 import android.provider.OpenableColumns
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import java.io.File
+import java.io.IOException
 import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
@@ -34,7 +38,11 @@ data class LocalTrack(
         .build()
 }
 
-internal data class Playlist(val id: String, val name: String, val trackIds: List<String> = emptyList())
+internal data class Playlist(
+    val id: String, val name: String, val trackIds: List<String> = emptyList(), val cover: String? = null,
+)
+
+internal class PlaylistNameExists : IllegalArgumentException("Плейлист с таким названием уже существует.")
 
 internal data class LibrarySnapshot(
     val tracks: List<LocalTrack>,
@@ -45,6 +53,7 @@ internal data class LibrarySnapshot(
 internal class LocalLibrary(private val context: Context) {
     internal val storage = context.getSharedPreferences("library", Context.MODE_PRIVATE)
     private val resolver = context.contentResolver
+    private val coverDirectory = File(context.filesDir, "playlist-covers")
 
     fun snapshot(): LibrarySnapshot = synchronized(lock) {
         LibrarySnapshot(read(), readPlaylists(), JSONArray(storage.getString("history", "[]")).strings())
@@ -60,7 +69,10 @@ internal class LocalLibrary(private val context: Context) {
     }
 
     private fun readPlaylists(): List<Playlist> = JSONArray(storage.getString("playlists", "[]")).objects { playlist ->
-        Playlist(playlist.getString("id"), playlist.getString("name"), playlist.getJSONArray("tracks").strings())
+        Playlist(
+            playlist.getString("id"), playlist.getString("name"), playlist.getJSONArray("tracks").strings(),
+            playlist.optString("cover", "").takeIf { coverId.matches(it) },
+        )
     }
 
     data class ImportResult(val added: Int = 0, val unavailable: Int = 0)
@@ -210,20 +222,70 @@ internal class LocalLibrary(private val context: Context) {
         }
     }
 
-    fun createPlaylist(name: String, firstTrack: String? = null): Playlist = synchronized(lock) {
-        val tracks = listOfNotNull(firstTrack?.takeIf { id -> read().any { it.id == id } })
-        val playlist = Playlist(UUID.randomUUID().toString(), name, tracks)
-        updatePlaylists { it + playlist }
-        playlist
+    fun savePlaylist(id: String?, name: String, cover: Bitmap?, removeCover: Boolean, firstTrack: String? = null): Playlist =
+        synchronized(lock) {
+            val playlists = readPlaylists()
+            val previous = if (id == null) {
+                val tracks = listOfNotNull(firstTrack?.takeIf { trackId -> read().any { it.id == trackId } })
+                Playlist(UUID.randomUUID().toString(), name, tracks)
+            } else playlists.firstOrNull { it.id == id } ?: throw IOException("Playlist no longer exists")
+            if ((id == null || !previous.name.equals(name, ignoreCase = true)) &&
+                playlists.any { it.id != id && it.name.equals(name, ignoreCase = true) }
+            ) throw PlaylistNameExists()
+            val replacement = cover?.let { writeCover(it) }
+            val coverKey = when {
+                replacement != null -> replacement
+                removeCover -> null
+                else -> previous.cover
+            }
+            val updated = previous.copy(name = name, cover = coverKey)
+            val next = if (id == null) playlists + updated else playlists.map { if (it.id == id) updated else it }
+            if (!storage.edit().putString("playlists", encodePlaylists(next)).commit()) {
+                throw IOException("Could not save playlist")
+            }
+            if (previous.cover != coverKey) previous.cover?.let { coverFile(it).delete() }
+            updated
+        }
+
+    fun deletePlaylist(id: String) = synchronized(lock) {
+        val playlists = readPlaylists()
+        val removed = playlists.firstOrNull { it.id == id } ?: return@synchronized
+        val next = playlists.filterNot { it.id == id }
+        if (!storage.edit().putString("playlists", encodePlaylists(next)).commit()) {
+            throw IOException("Could not delete playlist")
+        }
+        removed.cover?.let { coverFile(it).delete() }
     }
 
-    fun renamePlaylist(id: String, name: String) = updatePlaylist(id) { it.copy(name = name) }
+    fun readPlaylistCover(key: String): Bitmap? = BitmapFactory.decodeFile(coverFile(key).path)
 
-    fun deletePlaylist(id: String) = updatePlaylists { playlists -> playlists.filterNot { it.id == id } }
+    private fun coverFile(key: String) = File(coverDirectory, "$key.jpg")
+
+    private fun writeCover(bitmap: Bitmap): String {
+        if (!coverDirectory.isDirectory && !coverDirectory.mkdirs()) throw IOException("Could not create cover directory")
+        val key = UUID.randomUUID().toString()
+        val file = coverFile(key)
+        try {
+            file.outputStream().use { if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) throw IOException("Could not save cover") }
+        } catch (error: IOException) {
+            file.delete()
+            throw error
+        }
+        return key
+    }
 
     fun addToPlaylist(id: String, trackIds: List<String>) = updatePlaylist(id) {
         val available = read().mapTo(mutableSetOf(), LocalTrack::id)
         it.copy(trackIds = (it.trackIds + trackIds.filter { trackId -> trackId in available }).distinct())
+    }
+
+    fun addToPlaylists(trackId: String, playlistIds: Set<String>) = updatePlaylists { playlists ->
+        if (read().none { it.id == trackId }) playlists
+        else playlists.map { playlist ->
+            if (playlist.id in playlistIds && trackId !in playlist.trackIds) {
+                playlist.copy(trackIds = playlist.trackIds + trackId)
+            } else playlist
+        }
     }
 
     fun removeFromPlaylist(id: String, trackId: String) = updatePlaylist(id) { it.copy(trackIds = it.trackIds - trackId) }
@@ -252,6 +314,7 @@ internal class LocalLibrary(private val context: Context) {
 
     private companion object {
         val lock = Any()
+        val coverId = Regex("[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}")
         val audioExtensions = setOf("mp3", "flac", "wav", "ogg", "oga", "m4a", "aac", "opus", "wma", "aiff", "amr", "mka")
     }
 }
@@ -270,6 +333,7 @@ private fun encodeTracks(tracks: List<LocalTrack>): String = JSONArray().apply {
 
 private fun encodePlaylists(playlists: List<Playlist>): String = JSONArray().apply {
     playlists.forEach { playlist ->
-        put(JSONObject().put("id", playlist.id).put("name", playlist.name).put("tracks", JSONArray(playlist.trackIds)))
+        put(JSONObject().put("id", playlist.id).put("name", playlist.name)
+            .put("tracks", JSONArray(playlist.trackIds)).put("cover", playlist.cover))
     }
 }.toString()

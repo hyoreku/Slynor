@@ -6,7 +6,9 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.LruCache
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -50,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -67,38 +70,31 @@ import kotlinx.coroutines.withContext
 internal fun CurrentTrackCard(track: LocalTrack, playback: Playback, onOpen: () -> Unit, onToggle: () -> Unit) {
     val art = rememberArtwork(track.uri)
     val colors = MaterialTheme.colorScheme
+    val tint by animateColorAsState(art?.tone ?: colors.primary, tween(360), label = "Цвет обложки")
     Surface(
-        shape = RoundedCornerShape(22.dp), color = colors.surface,
+        onClick = onOpen,
+        shape = RoundedCornerShape(20.dp), color = colors.surface,
         border = BorderStroke(1.dp, colors.outlineVariant),
     ) {
         Column(
             Modifier.fillMaxWidth().background(
-                Brush.horizontalGradient(listOf((art?.tone ?: colors.primary).copy(alpha = .19f), Color.Transparent)),
-            ).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(13.dp),
+                Brush.horizontalGradient(listOf(tint.copy(alpha = .25f), tint.copy(alpha = .08f), Color.Transparent)),
+            ).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(
-                Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(13.dp),
-            ) {
-                Cover(art, Modifier.size(76.dp), brandedFallback = true)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Cover(art, Modifier.size(74.dp), brandedFallback = true)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Текущий трек", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
+                    Text("Продолжить слушать", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                     Text(playback.title.ifBlank { track.title }, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleLarge)
-                    val artist = playback.artist.ifBlank { track.artist }
-                    if (artist.isNotBlank()) Text(artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    val subtitle = listOf(playback.artist.ifBlank { track.artist }, track.album).filter(String::isNotBlank).joinToString(" · ")
+                    if (subtitle.isNotEmpty()) Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
-            }
-            if (playback.duration > 0L) {
-                TrackProgress(playback, Modifier.fillMaxWidth().height(3.dp))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onOpen) { Text("Открыть плеер") }
                 FilledIconButton(onClick = onToggle) { PlaybackIcon(playback.playing) }
             }
+            if (playback.duration > 0) TrackProgress(playback, Modifier.fillMaxWidth().height(3.dp))
         }
     }
 }
@@ -112,6 +108,7 @@ internal fun PlayerBar(track: LocalTrack, state: Playback, onOpen: () -> Unit, o
         Column(
             Modifier.fillMaxWidth().clip(shape)
                 .clickable(onClickLabel = "Открыть экран текущего трека", onClick = onOpen)
+                .semantics { contentDescription = "Открыть экран текущего трека" }
                 .padding(horizontal = 10.dp, vertical = 7.dp),
         ) {
             Row(
@@ -148,23 +145,26 @@ private fun TrackProgress(state: Playback, modifier: Modifier) = key(state.track
 
 @Composable
 internal fun TrackScreen(
-    player: MediaController, state: Playback, track: LocalTrack, sleepRemaining: Long,
-    onFavorite: () -> Unit, onQueue: () -> Unit,
+    player: MediaController, state: Playback, track: LocalTrack,
+    onFavorite: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val art = rememberArtwork(track.uri)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val content = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp)
+    val glow by animateColorAsState(art?.tone ?: colors.primary, tween(420), label = "Фон обложки")
+    BoxWithConstraints(Modifier.fillMaxSize().background(
+        Brush.radialGradient(listOf(glow.copy(alpha = .23f), Color.Transparent)),
+    )) {
+        val content = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 10.dp)
         if (maxWidth >= 580.dp) {
             Row(content, horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
                 TrackArtwork(art, Modifier.weight(1f))
-                TrackControls(player, state, track, sleepRemaining, onFavorite, onQueue, Modifier.weight(1f))
+                TrackControls(player, state, track, onFavorite, Modifier.weight(1f))
             }
         } else {
             Column(content, horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                TrackArtwork(art, Modifier.widthIn(max = 360.dp).fillMaxWidth())
-                TrackControls(player, state, track, sleepRemaining, onFavorite, onQueue, Modifier.fillMaxWidth())
+                verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                TrackArtwork(art, Modifier.widthIn(max = 340.dp).fillMaxWidth())
+                TrackControls(player, state, track, onFavorite, Modifier.fillMaxWidth())
             }
         }
     }
@@ -188,8 +188,8 @@ private fun TrackArtwork(art: Artwork?, modifier: Modifier) {
 
 @Composable
 private fun TrackControls(
-    player: MediaController, state: Playback, track: LocalTrack, sleepRemaining: Long,
-    onFavorite: () -> Unit, onQueue: () -> Unit, modifier: Modifier,
+    player: MediaController, state: Playback, track: LocalTrack,
+    onFavorite: () -> Unit, modifier: Modifier,
 ) {
     var selected by remember(state.trackId) { mutableStateOf<Float?>(null) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
@@ -201,6 +201,8 @@ private fun TrackControls(
             style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
         if (artist.isNotBlank()) Text(artist, Modifier.padding(top = 5.dp), color = colors.onSurfaceVariant,
             textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
+        if (track.album.isNotBlank()) Text(track.album, Modifier.padding(top = 3.dp), color = colors.onSurfaceVariant,
+            textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Slider(
             value = selected ?: state.progress,
             onValueChange = { selected = it },
@@ -242,16 +244,10 @@ private fun TrackControls(
                 )
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (state.queue.isNotEmpty()) {
-                TextButton(onClick = onQueue) {
-                    Glyph(R.drawable.ic_queue, null, Modifier.size(17.dp))
-                    Text("Открыть очередь", Modifier.padding(start = 7.dp))
-                }
-            }
-            SleepMenu(player, sleepRemaining, compact = true)
+        TextButton(onClick = { showEqualizer = true }) {
+            Glyph(R.drawable.ic_equalizer, null)
+            Text("Эквалайзер", Modifier.padding(start = 6.dp))
         }
-        TextButton(onClick = { showEqualizer = true }) { Text("Эквалайзер") }
     }
 }
 
@@ -296,6 +292,11 @@ internal fun MediaController.enqueue(track: LocalTrack, playNext: Boolean) {
     }
 }
 
+internal fun MediaController.moveQueueTrack(track: LocalTrack, offset: Int) {
+    val index = queueIndexOf(track)
+    if (index >= 0 && index + offset in 0 until mediaItemCount) moveMediaItem(index, index + offset)
+}
+
 internal fun MediaController.removeFromQueue(track: LocalTrack) {
     val index = queueIndexOf(track)
     if (index >= 0) removeMediaItem(index)
@@ -307,8 +308,11 @@ private fun MediaController.queueIndexOf(track: LocalTrack): Int {
 }
 
 @Composable
-private fun PlaybackIcon(playing: Boolean, modifier: Modifier = Modifier) =
-    Glyph(if (playing) R.drawable.ic_pause else R.drawable.ic_play, if (playing) "Пауза" else "Воспроизвести", modifier)
+private fun PlaybackIcon(playing: Boolean, modifier: Modifier = Modifier) {
+    Crossfade(playing, animationSpec = tween(150), label = "Воспроизведение") { active ->
+        Glyph(if (active) R.drawable.ic_pause else R.drawable.ic_play, if (active) "Пауза" else "Воспроизвести", modifier)
+    }
+}
 
 internal data class Artwork(val bitmap: Bitmap?, val tone: Color?)
 
@@ -331,18 +335,28 @@ internal fun rememberArtwork(uri: Uri): Artwork? = key(uri) {
 }
 
 @Composable
-internal fun Cover(art: Artwork?, modifier: Modifier, brandedFallback: Boolean = false) {
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center) {
+internal fun Cover(
+    art: Artwork?, modifier: Modifier, brandedFallback: Boolean = false,
+    fallbackTone: Color = MaterialTheme.colorScheme.primary,
+    @DrawableRes fallbackIcon: Int = R.drawable.ic_music,
+    fallbackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier.clip(RoundedCornerShape(12.dp)).background(
+            Brush.linearGradient(listOf(lerp(colors.surface, fallbackTone, .31f), colors.surfaceVariant)),
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
         Crossfade(art?.bitmap, animationSpec = tween(160), label = "Обложка") { bitmap ->
             if (bitmap != null) Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else if (brandedFallback) Image(painterResource(R.drawable.slynor_icon), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Glyph(R.drawable.ic_music, null) }
+            else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Glyph(fallbackIcon, null, tint = fallbackColor) }
         }
     }
 }
 
-private fun artworkTone(bitmap: Bitmap): Color {
+internal fun artworkTone(bitmap: Bitmap): Color {
     var r = 0
     var g = 0
     var b = 0
