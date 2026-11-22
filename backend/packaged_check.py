@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 import threading
 import time
 from urllib.request import build_opener, ProxyHandler
-from backend.startup_runtime import log_dir, require_webview2
+from backend.startup_runtime import log_dir
 
 
 @contextmanager
@@ -100,7 +100,11 @@ def run_check(smoke=False):
         check('import:' + module, lambda m=module: importlib.import_module(m))
     if os.name == 'nt':
         check('webview:winforms', lambda: importlib.import_module('webview.platforms.winforms'))
-        check('webview:runtime', require_webview2)
+        def desktop_webview():
+            from desktop import configure_webview
+            if configure_webview() != 'edgechromium':
+                raise RuntimeError('Windows desktop did not select WebView2')
+        check('webview:runtime', desktop_webview)
     def assets():
         root = Path(__file__).resolve().parent.parent
         for relative in ('frontend/index.html', 'frontend/mini.html', 'frontend/js/app.js',

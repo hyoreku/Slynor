@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from backend.worker_runtime import worker_python, worker_available
@@ -16,6 +17,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BuildContractTests(unittest.TestCase):
+    def test_desktop_selects_windows_webview_with_either_runtime(self):
+        import desktop
+
+        for runtime in (None, Path('bundled-webview2')):
+            with self.subTest(runtime=runtime), patch.object(desktop, 'os', SimpleNamespace(name='nt')):
+                with patch('backend.startup_runtime.require_webview2', return_value=runtime) as require:
+                    with patch.object(desktop.webview, 'settings', {}) as settings:
+                        self.assertEqual(desktop.configure_webview(), 'edgechromium')
+                        require.assert_called_once_with()
+                        expected = {'WEBVIEW2_RUNTIME_PATH': str(runtime)} if runtime else {}
+                        self.assertEqual(settings, expected)
+
     def test_explicit_server_import(self):
         tree = ast.parse((ROOT / 'start.py').read_text(encoding='utf-8'))
         self.assertTrue(any(isinstance(n, ast.ImportFrom) and n.module == 'backend.main' and any(a.name == 'app' for a in n.names) for n in ast.walk(tree)))

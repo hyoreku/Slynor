@@ -3,10 +3,12 @@ name: Windows packages
 on:
   workflow_dispatch:
   push:
-    branches: [release/windows-acceptance]
+    branches: [release/windows-acceptance, codex/android-0.5-windows-fix]
     paths:
       - .github/workflows/windows-package.yml
       - packaging/windows/**
+      - backend/packaged_check.py
+      - desktop.py
       - tools/prepare_portable.py
 
 permissions:
@@ -60,6 +62,26 @@ jobs:
           if (-not $check.WaitForExit(90000)) { $check.Kill(); throw 'Installed Slynor timed out' }
           if ($check.ExitCode -ne 0) { throw "Installed Slynor failed its smoke test ($($check.ExitCode))" }
 
+      - name: Open the installed desktop window
+        run: |
+          $install = Join-Path $env:RUNNER_TEMP 'Slynor test install'
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'slynor-installed-check'
+          $app = Start-Process -FilePath (Join-Path $install 'Slynor.exe') -PassThru
+          try {
+              $deadline = [DateTime]::UtcNow.AddSeconds(60)
+              do {
+                  $app.Refresh()
+                  if ($app.HasExited) { throw "Installed Slynor exited before showing its window ($($app.ExitCode))" }
+                  if ($app.MainWindowHandle -ne 0 -and $app.MainWindowTitle -eq 'Slynor') { exit 0 }
+                  Start-Sleep -Milliseconds 500
+              } while ([DateTime]::UtcNow -lt $deadline)
+              throw 'The installed Slynor window did not open within 60 seconds.'
+          } finally {
+              if (-not $app.HasExited -and (-not $app.CloseMainWindow() -or -not $app.WaitForExit(10000))) {
+                  taskkill /PID $app.Id /T /F
+              }
+          }
+
       - name: Upload Setup and portable
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -77,6 +99,8 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: windows-packaging-logs
-          path: build-logs/
+          path: |
+            build-logs/
+            ${{ runner.temp }}/slynor-installed-check/Slynor/logs/
           if-no-files-found: ignore
           retention-days: 7
