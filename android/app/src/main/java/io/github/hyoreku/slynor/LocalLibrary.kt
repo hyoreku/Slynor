@@ -10,7 +10,7 @@ import androidx.media3.common.MediaMetadata
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class LocalTrack(val uri: Uri, val title: String, val artist: String = "") {
+data class LocalTrack(val uri: Uri, val title: String, val artist: String = "", val favorite: Boolean = false) {
     fun mediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(uri.toString())
         .setUri(uri)
@@ -26,7 +26,10 @@ class LocalLibrary(private val context: Context) {
         val saved = JSONArray(storage.getString("tracks", "[]"))
         return List(saved.length()) { index ->
             val track = saved.getJSONObject(index)
-            LocalTrack(Uri.parse(track.getString("uri")), track.getString("title"), track.optString("artist"))
+            LocalTrack(
+                Uri.parse(track.getString("uri")), track.getString("title"),
+                track.optString("artist"), track.optBoolean("favorite"),
+            )
         }
     }
 
@@ -86,9 +89,18 @@ class LocalLibrary(private val context: Context) {
         return tracks
     }
 
+    fun setFavorite(uri: Uri, favorite: Boolean): List<LocalTrack> {
+        val tracks = read().map { if (it.uri == uri) it.copy(favorite = favorite) else it }
+        save(tracks)
+        return tracks
+    }
+
     private fun save(tracks: Collection<LocalTrack>) {
         val encoded = JSONArray()
-        tracks.forEach { encoded.put(JSONObject().put("uri", it.uri.toString()).put("title", it.title).put("artist", it.artist)) }
+        tracks.forEach { track ->
+            encoded.put(JSONObject().put("uri", track.uri.toString()).put("title", track.title)
+                .put("artist", track.artist).put("favorite", track.favorite))
+        }
         storage.edit().putString("tracks", encoded.toString()).apply()
     }
 }

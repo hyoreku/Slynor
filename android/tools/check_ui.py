@@ -1,39 +1,102 @@
-"""Check navigation on a fresh Android emulator and capture the visible screens."""
+"""Exercise Android navigation and a local queue on a fresh emulator."""
 
 from pathlib import Path
 import re
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import time
+import wave
 import xml.etree.ElementTree as ET
+
+
+PACKAGE = "io.github.hyoreku.slynor.debug"
+ACTIVITY = f"{PACKAGE}/io.github.hyoreku.slynor.MainActivity"
+TRACKS = [f"Slynor-{name}.wav" for name in ("Alpha", "Beta", "Gamma")]
 
 
 def adb(*args, timeout=24):
     return subprocess.check_output(["adb", *args], timeout=timeout)
 
 
-def wait_for(label):
+def label_is(node, label):
+    return label in (node.get("text"), node.get("content-desc"))
+
+
+def wait_for(*labels, any_label=False):
     end = time.monotonic() + 35
+    tree = None
     while time.monotonic() < end:
         try:
             adb("shell", "uiautomator", "dump", "/sdcard/slynor-ui.xml")
             tree = ET.fromstring(adb("exec-out", "cat", "/sdcard/slynor-ui.xml"))
-            if any(element.get("text") == label for element in tree.iter("node")):
+            matches = (any(label_is(node, label) for node in tree.iter("node")) for label in labels)
+            if (any if any_label else all)(matches):
                 return tree
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ET.ParseError):
             pass
         time.sleep(.5)
-    raise RuntimeError(f"Element did not appear: {label}")
+    visible = [] if tree is None else [node.get("text") or node.get("content-desc") for node in tree.iter("node")]
+    raise RuntimeError(f"Missing {labels}. Visible labels: {[label for label in visible if label]}")
 
 
-def tap_tab(tree, label):
-    bounds = [
-        [int(value) for value in re.findall(r"\d+", element.get("bounds", ""))]
-        for element in tree.iter("node")
-        if element.get("text") == label
-    ]
-    left, top, right, bottom = max((rect for rect in bounds if len(rect) == 4), key=lambda rect: rect[1])
-    adb("shell", "input", "tap", str((left + right) // 2), str((top + bottom) // 2))
+def centers(tree, label):
+    for node in tree.iter("node"):
+        if label_is(node, label):
+            left, top, right, bottom = map(int, re.findall(r"\d+", node.attrib["bounds"]))
+            if right > left and bottom > top:
+                yield ((left + right) // 2, (top + bottom) // 2)
+
+
+def tap(tree, *labels, near=None, long=False):
+    points = [point for label in labels for point in centers(tree, label)]
+    if near is not None:
+        y = next(centers(tree, near))[1]
+        point = min(points, key=lambda point: abs(point[1] - y))
+    else:
+        point = max(points, key=lambda point: point[1])
+    x, y = map(str, point)
+    if long:
+        adb("shell", "input", "swipe", x, y, x, y, "900")
+    else:
+        adb("shell", "input", "tap", x, y)
+
+
+def track_action(track, action):
+    tap(wait_for(track, "Действия для трека"), "Действия для трека", near=track)
+    tap(wait_for(action), action)
+
+
+def import_tracks():
+    with TemporaryDirectory() as folder:
+        adb("shell", "mkdir", "-p", "/sdcard/Download")
+        for name in TRACKS:
+            audio = Path(folder) / name
+            with wave.open(str(audio), "wb") as sample:
+                sample.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
+                sample.writeframes(b"\x00\x00" * 8000 * 120)
+            remote = f"/sdcard/Download/{name}"
+            adb("push", str(audio), remote)
+            adb("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", f"file://{remote}")
+
+    tap(wait_for("Добавить музыку"), "Добавить музыку")
+    roots = ("Show roots", "Show roots menu", "Показать корневые папки", "Открыть меню")
+    tap(wait_for(*roots, any_label=True), *roots)
+    downloads = ("Downloads", "Загрузки")
+    tap(wait_for(*downloads, any_label=True), *downloads)
+    tap(wait_for(*TRACKS), TRACKS[0], long=True)
+    for track in TRACKS[1:]:
+        tap(wait_for(track), track)
+    open_labels = ("Open", "OPEN", "Открыть", "ОТКРЫТЬ")
+    tap(wait_for(*open_labels, any_label=True), *open_labels)
+
+
+def assert_queue(*tracks):
+    counter = f"1 из {len(tracks)}"
+    tree = wait_for(counter, *tracks)
+    positions = [next(centers(tree, track))[1] for track in tracks]
+    assert positions == sorted(positions), (tracks, positions)
+    return tree
 
 
 def main(output):
@@ -41,17 +104,55 @@ def main(output):
     home = wait_for("Включите первую песню")
     (output / "home.png").write_bytes(adb("exec-out", "screencap", "-p"))
 
-    tap_tab(home, "Моя музыка")
+    tap(home, "Моя музыка")
     library = wait_for("Библиотека пуста")
-    (output / "library.png").write_bytes(adb("exec-out", "screencap", "-p"))
-
-    tap_tab(library, "Очередь")
+    tap(library, "Очередь")
     queue = wait_for("Очередь пуста")
+    tap(queue, "Главная")
+    wait_for("Включите первую песню")
+
+    alpha, beta, gamma = TRACKS
+    import_tracks()
+    tap(wait_for("Недавно добавленные", "Моя музыка"), "Моя музыка")
+    wait_for("3 трека", *TRACKS)
+    (output / "library.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    track_action(alpha, "В избранное")
+    wait_for("В избранном")
+
+    adb("shell", "am", "force-stop", PACKAGE)
+    adb("shell", "am", "start", "-W", "-n", ACTIVITY)
+    tap(wait_for("Недавно добавленные", "Моя музыка"), "Моя музыка")
+    tap(wait_for("Избранное", "В избранном"), "Избранное")
+    favorites = wait_for("1 трек", alpha, "В избранном")
+    assert not list(centers(favorites, beta)), "A non-favorite track appears in Favorites"
+    (output / "favorites.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    tap(favorites, alpha)
+    tap(wait_for("Пауза", "Очередь"), "Очередь")
+    assert_queue(alpha)
+    tap(wait_for("Моя музыка"), "Моя музыка")
+    tap(wait_for("Все треки"), "Все треки")
+    track_action(beta, "В конец очереди")
+    track_action(gamma, "Играть следующим")
+    tap(wait_for("Очередь", "3 трека"), "Очередь")
+    assert_queue(alpha, gamma, beta)
     (output / "queue.png").write_bytes(adb("exec-out", "screencap", "-p"))
 
-    tap_tab(queue, "Главная")
-    wait_for("Включите первую песню")
-    print("Opened home, library and queue on the Android emulator.")
+    track_action(gamma, "В конец очереди")
+    assert_queue(alpha, beta, gamma)
+    track_action(gamma, "Убрать из очереди")
+    assert_queue(alpha, beta)
+    tap(wait_for("Открыть экран текущего трека"), "Открыть экран текущего трека")
+    player = wait_for("Сейчас играет", "Следующий трек", "Пауза")
+    (output / "playing.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    tap(player, "Следующий трек")
+    wait_for(beta, "Пауза")
+
+    tap(wait_for("Вернуться"), "Вернуться")
+    tap(wait_for("Моя музыка"), "Моя музыка")
+    tap(wait_for("3 трека", "Перемешать и включить"), "Перемешать и включить")
+    tap(wait_for("Очередь"), "Очередь")
+    wait_for("1 из 3", *TRACKS)
+    print("Imported three tracks through the file picker, verified favorites persist and exercised queue playback and editing.")
 
 
 if __name__ == "__main__":

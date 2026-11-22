@@ -240,6 +240,45 @@ internal fun togglePlayback(player: MediaController, state: Playback) {
     }
 }
 
+internal fun MediaController.playSelection(track: LocalTrack, selection: List<LocalTrack>) {
+    val start = selection.indexOf(track)
+    if (start < 0) return
+    setMediaItems(selection.map(LocalTrack::mediaItem), start, 0L)
+    prepare()
+    play()
+}
+
+internal fun MediaController.playFromQueue(index: Int) {
+    seekTo(index, 0L)
+    if (playbackState == Player.STATE_IDLE) prepare()
+    play()
+}
+
+internal fun MediaController.enqueue(track: LocalTrack, playNext: Boolean) {
+    val index = queueIndexOf(track)
+    val count = mediaItemCount
+    val current = currentMediaItemIndex
+    if (index != -1 && index == current) return
+
+    val insertion = if (playNext) (current + 1).coerceAtMost(count) else count
+    if (index == -1) {
+        addMediaItem(insertion, track.mediaItem())
+    } else {
+        val destination = if (index < insertion) insertion - 1 else insertion
+        if (index != destination) moveMediaItem(index, destination)
+    }
+}
+
+internal fun MediaController.removeFromQueue(track: LocalTrack) {
+    val index = queueIndexOf(track)
+    if (index >= 0) removeMediaItem(index)
+}
+
+private fun MediaController.queueIndexOf(track: LocalTrack): Int {
+    val id = track.uri.toString()
+    return (0 until mediaItemCount).firstOrNull { getMediaItemAt(it).mediaId == id } ?: -1
+}
+
 @Composable
 private fun PlaybackIcon(playing: Boolean, modifier: Modifier = Modifier) =
     Glyph(if (playing) R.drawable.ic_pause else R.drawable.ic_play, if (playing) "Пауза" else "Воспроизвести", modifier)

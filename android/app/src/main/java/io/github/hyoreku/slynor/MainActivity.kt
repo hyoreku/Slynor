@@ -109,21 +109,14 @@ private fun MusicLibrary(library: LocalLibrary, player: MediaController?, connec
         status = status,
         importing = importing,
         onAdd = { if (!importing) picker.launch(arrayOf("audio/*")) },
-        onPlay = { track ->
-            val index = tracks.indexOfFirst { it.uri == track.uri }
-            if (player != null && index >= 0) {
-                player.setMediaItems(tracks.map(LocalTrack::mediaItem), index, 0)
-                player.prepare()
-                player.play()
-            }
+        onPlay = { track, selection ->
+            player?.playSelection(track, selection)
+        },
+        onFavorite = { track ->
+            tracks = library.setFavorite(track.uri, !track.favorite)
         },
         onRemove = { track ->
-            if (player != null) {
-                val index = (0 until player.mediaItemCount).firstOrNull {
-                    player.getMediaItemAt(it).mediaId == track.uri.toString()
-                }
-                if (index != null) player.removeMediaItem(index)
-            }
+            player?.removeFromQueue(track)
             tracks = library.remove(track)
         },
     )

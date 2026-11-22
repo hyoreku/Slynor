@@ -31,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,12 +82,14 @@ internal fun SlynorScreens(
     status: String?,
     importing: Boolean,
     onAdd: () -> Unit,
-    onPlay: (LocalTrack) -> Unit,
+    onPlay: (LocalTrack, List<LocalTrack>) -> Unit,
+    onFavorite: (LocalTrack) -> Unit,
     onRemove: (LocalTrack) -> Unit,
 ) {
     var destination by rememberSaveable { mutableStateOf(Destination.Home) }
     var showPlayer by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     val libraryScroll = rememberLazyListState()
     val byId = remember(tracks) { tracks.associateBy { it.uri.toString() } }
     val current = byId[playback.trackId]
@@ -134,22 +137,34 @@ internal fun SlynorScreens(
                     Crossfade(destination, animationSpec = tween(170), label = "Раздел Slynor") { screen ->
                         when (screen) {
                             Destination.Home -> HomeScreen(
-                                tracks, current, playback, player, importing, onAdd, onPlay,
+                                tracks, current, playback, player, importing, onAdd, { onPlay(it, tracks) },
                                 { destination = Destination.Library }, { showPlayer = true },
                             )
                             Destination.Library -> {
                                 val query = search.trim()
-                                val filtered = remember(tracks, query) {
+                                val filtered = remember(tracks, query, favoritesOnly) {
                                     tracks.filter {
-                                        it.title.contains(query, ignoreCase = true) ||
-                                            it.artist.contains(query, ignoreCase = true)
+                                        (!favoritesOnly || it.favorite) &&
+                                            (it.title.contains(query, ignoreCase = true) ||
+                                                it.artist.contains(query, ignoreCase = true))
                                     }
                                 }
                                 Column(Modifier.fillMaxSize().padding(horizontal = screenMargin)) {
-                                    ScreenTitle(screen.title, trackCount(tracks.size))
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(Modifier.weight(1f)) { ScreenTitle(screen.title, trackCount(filtered.size)) }
+                                        IconButton(
+                                            enabled = player != null && !importing && filtered.size > 1,
+                                            onClick = { filtered.shuffled().let { onPlay(it.first(), it) } },
+                                        ) {
+                                            Glyph(R.drawable.ic_shuffle, "Перемешать и включить")
+                                        }
+                                    }
                                     OutlinedTextField(
-                                        value = search, onValueChange = { search = it },
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                                        value = search, onValueChange = {
+                                            search = it
+                                            libraryScroll.requestScrollToItem(0)
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
                                         placeholder = { Text("Поиск по библиотеке") },
                                         leadingIcon = { Glyph(R.drawable.ic_search, null) },
                                         trailingIcon = if (search.isEmpty()) null else {
@@ -157,15 +172,41 @@ internal fun SlynorScreens(
                                         },
                                         singleLine = true, shape = RoundedCornerShape(16.dp),
                                     )
-                                    if (filtered.isEmpty()) {
-                                        EmptyState(
-                                            R.drawable.ic_music,
-                                            if (tracks.isEmpty()) "Библиотека пуста" else "Ничего не найдено",
-                                            if (tracks.isEmpty()) "Выберите аудиофайлы на устройстве." else "Попробуйте другой запрос.",
-                                            if (tracks.isEmpty()) "Добавить музыку" else "Очистить поиск",
-                                            if (tracks.isEmpty()) onAdd else ({ search = "" }),
-                                            enabled = !importing,
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        FilterChip(
+                                            selected = !favoritesOnly, onClick = {
+                                                favoritesOnly = false
+                                                libraryScroll.requestScrollToItem(0)
+                                            },
+                                            label = { Text("Все треки", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                         )
+                                        FilterChip(
+                                            selected = favoritesOnly, onClick = {
+                                                favoritesOnly = true
+                                                libraryScroll.requestScrollToItem(0)
+                                            },
+                                            label = { Text("Избранное", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                            leadingIcon = { Glyph(R.drawable.ic_heart_outline, null, Modifier.size(17.dp)) },
+                                        )
+                                    }
+                                    if (filtered.isEmpty()) {
+                                        when {
+                                            tracks.isEmpty() -> EmptyState(
+                                                R.drawable.ic_music, "Библиотека пуста", "Выберите аудиофайлы на устройстве.",
+                                                "Добавить музыку", onAdd, enabled = !importing,
+                                            )
+                                            favoritesOnly && tracks.none { it.favorite } -> EmptyState(
+                                                R.drawable.ic_heart_outline, "Избранное пусто",
+                                                "Добавьте любимый трек через его меню.", "Все треки", { favoritesOnly = false },
+                                            )
+                                            else -> EmptyState(
+                                                R.drawable.ic_search, "Ничего не найдено", "Попробуйте другой запрос.",
+                                                "Очистить поиск", { search = "" },
+                                            )
+                                        }
                                     } else {
                                         LazyColumn(
                                             state = libraryScroll,
@@ -173,8 +214,22 @@ internal fun SlynorScreens(
                                             contentPadding = PaddingValues(bottom = 14.dp),
                                         ) {
                                             items(filtered, key = { it.uri.toString() }) { track ->
-                                                TrackRow(track, track == current, player != null && !importing, { onPlay(track) },
-                                                    onRemove = if (importing) null else ({ onRemove(track) }))
+                                                TrackRow(track, track == current, player != null && !importing, { onPlay(track, filtered) }) {
+                                                    if (!importing) TrackMenu { close ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(if (track.favorite) "Убрать из избранного" else "В избранное") },
+                                                            onClick = {
+                                                                close()
+                                                                onFavorite(track)
+                                                            },
+                                                        )
+                                                        if (player != null && track != current) QueueMenuItems(player, track, close)
+                                                        DropdownMenuItem(text = { Text("Убрать из библиотеки") }, onClick = {
+                                                            close()
+                                                            onRemove(track)
+                                                        })
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -199,11 +254,16 @@ internal fun SlynorScreens(
                                             verticalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(bottom = 14.dp),
                                         ) {
-                                            items(queue, key = { it.first }) { (index, track) ->
-                                                TrackRow(track, index == playback.queueIndex, player != null, {
-                                                    player?.seekTo(index, 0L)
-                                                    player?.play()
-                                                })
+                                            items(queue, key = { it.second.uri.toString() }) { (index, track) ->
+                                                TrackRow(track, index == playback.queueIndex, player != null, { player?.playFromQueue(index) }) {
+                                                    if (player != null) TrackMenu { close ->
+                                                        if (index != playback.queueIndex) QueueMenuItems(player, track, close)
+                                                        DropdownMenuItem(text = { Text("Убрать из очереди") }, onClick = {
+                                                            close()
+                                                            player.removeFromQueue(track)
+                                                        })
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -352,10 +412,10 @@ private fun EmptyState(@DrawableRes icon: Int, title: String, description: Strin
 }
 
 @Composable
-private fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPlay: () -> Unit, onRemove: (() -> Unit)? = null) {
+private fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPlay: () -> Unit,
+                     actions: @Composable () -> Unit = {}) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(14.dp)
-    var menuOpen by remember { mutableStateOf(false) }
     Surface(shape = shape, border = BorderStroke(1.dp, if (active) colors.outline else colors.outlineVariant),
         color = if (active) colors.primaryContainer else colors.surface) {
         Row(
@@ -372,17 +432,33 @@ private fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPla
                         color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (onRemove != null) Box {
-                IconButton(onClick = { menuOpen = true }) { Glyph(R.drawable.ic_more, "Действия для трека") }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(text = { Text("Убрать из библиотеки") }, onClick = {
-                        menuOpen = false
-                        onRemove()
-                    })
-                }
-            }
+            if (track.favorite) Glyph(R.drawable.ic_heart, "В избранном", Modifier.size(16.dp), tint = colors.primary)
+            actions()
         }
     }
+}
+
+@Composable
+private fun TrackMenu(content: @Composable (() -> Unit) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) { Glyph(R.drawable.ic_more, "Действия для трека") }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            content { expanded = false }
+        }
+    }
+}
+
+@Composable
+private fun QueueMenuItems(player: MediaController, track: LocalTrack, close: () -> Unit) {
+    DropdownMenuItem(text = { Text("Играть следующим") }, onClick = {
+        close()
+        player.enqueue(track, playNext = true)
+    })
+    DropdownMenuItem(text = { Text("В конец очереди") }, onClick = {
+        close()
+        player.enqueue(track, playNext = false)
+    })
 }
 
 @Composable
