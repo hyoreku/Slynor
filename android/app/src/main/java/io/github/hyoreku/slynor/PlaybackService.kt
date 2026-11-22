@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -100,7 +101,7 @@ class PlaybackService : MediaSessionService() {
                 return super.onCustomCommand(session, controller, customCommand, args)
             }
             val minutes = args.getInt(sleepTimerMinutes, -1)
-            if (minutes !in 0..60) return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+            if (minutes !in 0..60) return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
             handler.removeCallbacks(sleep)
             if (minutes == 0) {
                 storage.edit().remove(sleepTimerDeadline).apply()
