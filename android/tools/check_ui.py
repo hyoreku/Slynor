@@ -141,7 +141,7 @@ def main(output):
     assert_queue(alpha, beta, gamma)
     track_action(gamma, "Убрать из очереди")
     assert_queue(alpha, beta)
-    tap(wait_for("Открыть экран текущего трека"), "Открыть экран текущего трека")
+    tap(wait_for(alpha), alpha)
     player = wait_for("Сейчас играет", "Следующий трек", "Пауза")
     (output / "playing.png").write_bytes(adb("exec-out", "screencap", "-p"))
     tap(player, "Следующий трек")
