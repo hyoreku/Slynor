@@ -74,7 +74,10 @@ class AudioEngine:
             self._instance = instance
             self._player = player
             if self._apply_eq_on_initialize:
-                self.set_equalizer(self._equalizer_config)
+                try:
+                    self.set_equalizer(self._equalizer_config)
+                except (RuntimeError, AttributeError, OSError):
+                    logger.warning("Could not apply saved equalizer on startup", exc_info=True)
         except BaseException:
             if self._native_eq is not None:
                 self._native_eq.release()
