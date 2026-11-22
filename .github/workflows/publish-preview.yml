@@ -34,6 +34,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: Slynor-Windows-x64
@@ -47,6 +51,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
           mkdir release-assets
           while IFS= read -r filename; do
             file=$(find input/windows -type f -name "$filename" -print -quit)
@@ -61,5 +67,5 @@ jobs:
           cd release-assets
           sha256sum Slynor-Setup.exe Slynor-Portable.zip Slynor-Android-debug.apk > SHA256SUMS.txt
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --prerelease --title "Slynor $GITHUB_REF_NAME" --notes-from-tag \
+            --prerelease --title "Slynor $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md" \
             Slynor-Setup.exe Slynor-Portable.zip Slynor-Android-debug.apk SHA256SUMS.txt
