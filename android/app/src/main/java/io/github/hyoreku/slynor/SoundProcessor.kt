@@ -107,6 +107,7 @@ internal class SoundProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        if (!inputBuffer.hasRemaining()) return
         val config = SoundState.equalizer.value
         val channels = inputAudioFormat.channelCount
         if (applied != config) {

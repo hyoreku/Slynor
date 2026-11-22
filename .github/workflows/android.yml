@@ -80,6 +80,7 @@ jobs:
           adb install app/build/outputs/apk/debug/app-debug.apk
           adb shell am start -W -n io.github.hyoreku.slynor.debug/io.github.hyoreku.slynor.MainActivity
           if ! python3 tools/check_ui.py "$RUNNER_TEMP/slynor-ui"; then
+            adb logcat -d -s ExoPlayerImplInternal DefaultAudioSink | tail -80
             adb logcat -d -s AndroidRuntime | tail -60
             exit 1
           fi
