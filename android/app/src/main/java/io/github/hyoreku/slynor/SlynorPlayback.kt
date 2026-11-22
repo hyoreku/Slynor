@@ -146,7 +146,10 @@ private fun TrackProgress(state: Playback, modifier: Modifier) = key(state.track
 }
 
 @Composable
-internal fun TrackScreen(player: MediaController, state: Playback, track: LocalTrack, onQueue: () -> Unit) {
+internal fun TrackScreen(
+    player: MediaController, state: Playback, track: LocalTrack, sleepRemaining: Long,
+    onFavorite: () -> Unit, onQueue: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val art = rememberArtwork(track.uri)
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -154,13 +157,13 @@ internal fun TrackScreen(player: MediaController, state: Playback, track: LocalT
         if (maxWidth >= 580.dp) {
             Row(content, horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
                 TrackArtwork(art, Modifier.weight(1f))
-                TrackControls(player, state, track, onQueue, Modifier.weight(1f))
+                TrackControls(player, state, track, sleepRemaining, onFavorite, onQueue, Modifier.weight(1f))
             }
         } else {
             Column(content, horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 TrackArtwork(art, Modifier.widthIn(max = 360.dp).fillMaxWidth())
-                TrackControls(player, state, track, onQueue, Modifier.fillMaxWidth())
+                TrackControls(player, state, track, sleepRemaining, onFavorite, onQueue, Modifier.fillMaxWidth())
             }
         }
     }
@@ -183,7 +186,10 @@ private fun TrackArtwork(art: Artwork?, modifier: Modifier) {
 }
 
 @Composable
-private fun TrackControls(player: MediaController, state: Playback, track: LocalTrack, onQueue: () -> Unit, modifier: Modifier) {
+private fun TrackControls(
+    player: MediaController, state: Playback, track: LocalTrack, sleepRemaining: Long,
+    onFavorite: () -> Unit, onQueue: () -> Unit, modifier: Modifier,
+) {
     var selected by remember(state.trackId) { mutableStateOf<Float?>(null) }
     val colors = MaterialTheme.colorScheme
     val artist = state.artist.ifBlank { track.artist }
@@ -219,11 +225,27 @@ private fun TrackControls(player: MediaController, state: Playback, track: Local
                 Glyph(R.drawable.ic_next, "Следующий трек")
             }
         }
-        if (state.queue.isNotEmpty()) {
-            TextButton(onClick = onQueue, modifier = Modifier.padding(top = 8.dp)) {
-                Glyph(R.drawable.ic_queue, null, Modifier.size(17.dp))
-                Text("Открыть очередь", Modifier.padding(start = 7.dp))
+        Row(
+            Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SpeedMenu(player, state.speed)
+            RepeatMenu(player, state.repeat)
+            FilledTonalIconButton(onClick = onFavorite) {
+                Glyph(
+                    if (track.favorite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
+                    if (track.favorite) "Убрать из избранного" else "В избранное",
+                )
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (state.queue.isNotEmpty()) {
+                TextButton(onClick = onQueue) {
+                    Glyph(R.drawable.ic_queue, null, Modifier.size(17.dp))
+                    Text("Открыть очередь", Modifier.padding(start = 7.dp))
+                }
+            }
+            SleepMenu(player, sleepRemaining, compact = true)
         }
     }
 }
@@ -350,6 +372,6 @@ private fun readCover(context: Context, uri: Uri): Bitmap? {
     } catch (_: RuntimeException) {
         null
     } finally {
-        retriever.release()
+        runCatching { retriever.release() }
     }
 }

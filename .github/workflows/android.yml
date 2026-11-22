@@ -3,7 +3,7 @@ name: Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [release/windows-acceptance]
+    branches: [main, release/windows-acceptance, codex/android-0.5-windows-fix]
     paths: [android/**, .github/workflows/android.yml]
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
           retention-days: 7
 
       - name: Check Android screens on the emulator
-        timeout-minutes: 9
+        timeout-minutes: 12
         working-directory: android
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"

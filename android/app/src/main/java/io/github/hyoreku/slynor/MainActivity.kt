@@ -1,14 +1,17 @@
 package io.github.hyoreku.slynor
 
 import android.content.ComponentName
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,14 +39,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
         val library = LocalLibrary(applicationContext)
+        val playbackStorage = playbackStorage()
         setContent {
-            SlynorTheme {
-                MusicLibrary(library, controller, connectionError)
+            var theme by remember { mutableStateOf(ThemeMode.read(library.storage)) }
+            val systemDark = isSystemInDarkTheme()
+            val dark = theme == ThemeMode.Dark || (theme == ThemeMode.System && systemDark)
+            LaunchedEffect(dark) {
+                val barStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+                    else SystemBarStyle.light(Color.TRANSPARENT, Color.BLACK)
+                enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
+            }
+            SlynorTheme(dark) {
+                MusicLibrary(library, playbackStorage, controller, connectionError, theme) {
+                    theme = it
+                    library.storage.edit().putString("theme", it.name).apply()
+                }
             }
         }
     }
@@ -75,25 +86,69 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MusicLibrary(library: LocalLibrary, player: MediaController?, connectionError: Boolean) {
-    var tracks by remember(library) { mutableStateOf(library.read()) }
+private fun MusicLibrary(
+    library: LocalLibrary,
+    playbackStorage: SharedPreferences,
+    player: MediaController?,
+    connectionError: Boolean,
+    theme: ThemeMode,
+    onTheme: (ThemeMode) -> Unit,
+) {
+    var data by remember(library) { mutableStateOf(library.snapshot()) }
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var deadline by remember(playbackStorage) { mutableStateOf(playbackStorage.getLong(sleepTimerDeadline, 0)) }
+    var remaining by remember { mutableStateOf(0L) }
     val playback = rememberPlayback(player)
     val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) {
-            importing = true
-            scope.launch {
-                try {
-                    val result = withContext(Dispatchers.IO) { library.add(uris) }
-                    tracks = result.tracks
-                    message = if (result.unavailable == 0) null else "Не удалось получить доступ к файлам (${result.unavailable})."
-                } finally {
-                    importing = false
+
+    DisposableEffect(library, playbackStorage) {
+        val libraryListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key in setOf("tracks", "playlists", "history")) data = library.snapshot()
+        }
+        val playbackListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == sleepTimerDeadline) deadline = playbackStorage.getLong(sleepTimerDeadline, 0)
+        }
+        library.storage.registerOnSharedPreferenceChangeListener(libraryListener)
+        playbackStorage.registerOnSharedPreferenceChangeListener(playbackListener)
+        data = library.snapshot()
+        deadline = playbackStorage.getLong(sleepTimerDeadline, 0)
+        onDispose {
+            library.storage.unregisterOnSharedPreferenceChangeListener(libraryListener)
+            playbackStorage.unregisterOnSharedPreferenceChangeListener(playbackListener)
+        }
+    }
+    LaunchedEffect(library) {
+        withContext(Dispatchers.IO) { library.refreshLegacyMetadata() }
+    }
+    LaunchedEffect(deadline) {
+        do {
+            remaining = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+            if (remaining > 0) delay(1000)
+        } while (remaining > 0)
+    }
+
+    fun importTracks(read: () -> LocalLibrary.ImportResult) {
+        if (importing) return
+        importing = true
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { read() }
+                message = when {
+                    result.unavailable > 0 -> "Добавлено: ${result.added}. Без доступа: ${result.unavailable}."
+                    result.added == 0 -> "Новых аудиофайлов не найдено."
+                    else -> null
                 }
+            } finally {
+                importing = false
             }
         }
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) importTracks { library.add(uris) }
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) importTracks { library.addFolder(uri) }
     }
 
     val status = when {
@@ -103,21 +158,22 @@ private fun MusicLibrary(library: LocalLibrary, player: MediaController?, connec
         else -> message
     }
     SlynorScreens(
-        tracks = tracks,
+        library = library,
+        data = data,
         player = player,
         playback = playback,
         status = status,
         importing = importing,
+        theme = theme,
+        onTheme = onTheme,
+        sleepRemaining = remaining,
         onAdd = { if (!importing) picker.launch(arrayOf("audio/*")) },
-        onPlay = { track, selection ->
-            player?.playSelection(track, selection)
-        },
-        onFavorite = { track ->
-            tracks = library.setFavorite(track.uri, !track.favorite)
-        },
+        onAddFolder = { if (!importing) folderPicker.launch(null) },
+        onPlay = { track, selection -> player?.playSelection(track, selection) },
+        onFavorite = { track -> library.setFavorite(track.id, !track.favorite) },
         onRemove = { track ->
             player?.removeFromQueue(track)
-            tracks = library.remove(track)
+            library.remove(track)
         },
     )
 }
@@ -135,6 +191,8 @@ internal data class Playback(
     val failed: Boolean = false,
     val queue: List<String> = emptyList(),
     val queueIndex: Int = -1,
+    val speed: Float = 1f,
+    val repeat: Int = Player.REPEAT_MODE_OFF,
 )
 
 private fun Player.snapshot() = Playback(
@@ -150,6 +208,8 @@ private fun Player.snapshot() = Playback(
     failed = playerError != null,
     queue = (0 until mediaItemCount).map { getMediaItemAt(it).mediaId },
     queueIndex = currentMediaItemIndex,
+    speed = playbackParameters.speed,
+    repeat = repeatMode,
 )
 
 @Composable

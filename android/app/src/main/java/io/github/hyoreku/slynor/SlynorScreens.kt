@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -53,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -64,11 +66,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
+import java.text.Collator
+import java.util.Locale
 
 private enum class Destination(val title: String, @param:DrawableRes val icon: Int) {
     Home("Главная", R.drawable.ic_home),
     Library("Моя музыка", R.drawable.ic_music),
+    Playlists("Плейлисты", R.drawable.ic_playlist),
     Queue("Очередь", R.drawable.ic_queue),
+    Settings("Настройки", R.drawable.ic_more),
 }
 
 private val screenMargin = 20.dp
@@ -76,12 +82,17 @@ private val screenWidth = 740.dp
 
 @Composable
 internal fun SlynorScreens(
-    tracks: List<LocalTrack>,
+    library: LocalLibrary,
+    data: LibrarySnapshot,
     player: MediaController?,
     playback: Playback,
     status: String?,
     importing: Boolean,
+    theme: ThemeMode,
+    onTheme: (ThemeMode) -> Unit,
+    sleepRemaining: Long,
     onAdd: () -> Unit,
+    onAddFolder: () -> Unit,
     onPlay: (LocalTrack, List<LocalTrack>) -> Unit,
     onFavorite: (LocalTrack) -> Unit,
     onRemove: (LocalTrack) -> Unit,
@@ -90,22 +101,42 @@ internal fun SlynorScreens(
     var showPlayer by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var sort by remember(library) {
+        val stored = library.storage.getString("librarySort", null)
+        mutableStateOf(LibrarySort.entries.firstOrNull { it.name == stored } ?: LibrarySort.Added)
+    }
+    var playlistId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addTrackId by rememberSaveable { mutableStateOf<String?>(null) }
+    var detailsId by rememberSaveable { mutableStateOf<String?>(null) }
+    val tracks = data.tracks
+    val playlist = data.playlists.firstOrNull { it.id == playlistId }
     val libraryScroll = rememberLazyListState()
-    val byId = remember(tracks) { tracks.associateBy { it.uri.toString() } }
+    val byId = remember(tracks) { tracks.associateBy(LocalTrack::id) }
+    val recentPlays = remember(data.history, byId) { data.history.mapNotNull(byId::get) }
     val current = byId[playback.trackId]
     val showingTrack = showPlayer && player != null && current != null
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val colors = MaterialTheme.colorScheme
 
-    BackHandler(showingTrack || destination != Destination.Home) {
-        if (showingTrack) showPlayer = false else destination = Destination.Home
+    fun goBack() {
+        when {
+            showingTrack -> showPlayer = false
+            destination == Destination.Playlists && playlist != null -> playlistId = null
+            else -> destination = Destination.Home
+        }
     }
+    BackHandler(showingTrack || destination != Destination.Home, onBack = ::goBack)
+
+    addTrackId?.let(byId::get)?.let {
+        AddTrackToPlaylist(it, data.playlists, library) { addTrackId = null }
+    }
+    detailsId?.let(byId::get)?.let { TrackDetails(it) { detailsId = null } }
 
     Surface(Modifier.fillMaxSize(), color = colors.background) {
         Column(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(colorStops = arrayOf(
-                    0f to Color(0xFF241C2C),
+                    0f to lerp(colors.background, colors.primary, .10f),
                     .50f to colors.background,
                 )),
             ).safeDrawingPadding().imePadding(),
@@ -113,8 +144,11 @@ internal fun SlynorScreens(
         ) {
             AppHeader(
                 title = if (showingTrack) "Сейчас играет" else "Slynor",
-                trackScreen = showingTrack, canAdd = tracks.isNotEmpty() && !importing,
-                onBack = { showPlayer = false }, onAdd = onAdd,
+                showBack = showingTrack || destination == Destination.Settings,
+                canAdd = !showingTrack && destination != Destination.Settings && tracks.isNotEmpty() && !importing,
+                showMenu = !showingTrack && destination != Destination.Settings,
+                importing = importing, onBack = ::goBack, onAdd = onAdd, onAddFolder = onAddFolder,
+                onSettings = { destination = Destination.Settings },
             )
             if (status != null) {
                 Surface(
@@ -129,29 +163,44 @@ internal fun SlynorScreens(
             }
             Box(Modifier.weight(1f).widthIn(max = screenWidth).fillMaxWidth()) {
                 if (showingTrack) {
-                    TrackScreen(player, playback, current) {
-                        showPlayer = false
-                        destination = Destination.Queue
-                    }
+                    TrackScreen(
+                        player, playback, current, sleepRemaining,
+                        onFavorite = { onFavorite(current) },
+                        onQueue = {
+                            showPlayer = false
+                            destination = Destination.Queue
+                        },
+                    )
                 } else {
                     Crossfade(destination, animationSpec = tween(170), label = "Раздел Slynor") { screen ->
                         when (screen) {
                             Destination.Home -> HomeScreen(
-                                tracks, current, playback, player, importing, onAdd, { onPlay(it, tracks) },
+                                tracks, recentPlays, current, playback, player,
+                                importing, onAdd, onPlay,
                                 { destination = Destination.Library }, { showPlayer = true },
                             )
                             Destination.Library -> {
                                 val query = search.trim()
-                                val filtered = remember(tracks, query, favoritesOnly) {
-                                    tracks.filter {
-                                        (!favoritesOnly || it.favorite) &&
-                                            (it.title.contains(query, ignoreCase = true) ||
-                                                it.artist.contains(query, ignoreCase = true))
-                                    }
+                                val filtered = remember(tracks, query, favoritesOnly, sort) {
+                                    sort.order(tracks.filter { (!favoritesOnly || it.favorite) && it.matches(query) })
                                 }
                                 Column(Modifier.fillMaxSize().padding(horizontal = screenMargin)) {
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         Box(Modifier.weight(1f)) { ScreenTitle(screen.title, trackCount(filtered.size)) }
+                                        TrackMenu("Сортировка библиотеки") { close ->
+                                            for (option in LibrarySort.entries) {
+                                                DropdownMenuItem(
+                                                    text = { Text(option.title) },
+                                                    onClick = {
+                                                        close()
+                                                        sort = option
+                                                        library.storage.edit().putString("librarySort", option.name).apply()
+                                                        libraryScroll.requestScrollToItem(0)
+                                                    },
+                                                    modifier = Modifier.semantics { selected = sort == option },
+                                                )
+                                            }
+                                        }
                                         IconButton(
                                             enabled = player != null && !importing && filtered.size > 1,
                                             onClick = { filtered.shuffled().let { onPlay(it.first(), it) } },
@@ -165,7 +214,7 @@ internal fun SlynorScreens(
                                             libraryScroll.requestScrollToItem(0)
                                         },
                                         modifier = Modifier.fillMaxWidth(),
-                                        placeholder = { Text("Поиск по библиотеке") },
+                                        placeholder = { Text("Трек, исполнитель или альбом") },
                                         leadingIcon = { Glyph(R.drawable.ic_search, null) },
                                         trailingIcon = if (search.isEmpty()) null else {
                                             { IconButton(onClick = { search = "" }) { Glyph(R.drawable.ic_close, "Очистить поиск") } }
@@ -224,6 +273,14 @@ internal fun SlynorScreens(
                                                             },
                                                         )
                                                         if (player != null && track != current) QueueMenuItems(player, track, close)
+                                                        DropdownMenuItem(text = { Text("Добавить в плейлист") }, onClick = {
+                                                            close()
+                                                            addTrackId = track.id
+                                                        })
+                                                        DropdownMenuItem(text = { Text("О треке") }, onClick = {
+                                                            close()
+                                                            detailsId = track.id
+                                                        })
                                                         DropdownMenuItem(text = { Text("Убрать из библиотеки") }, onClick = {
                                                             close()
                                                             onRemove(track)
@@ -235,6 +292,10 @@ internal fun SlynorScreens(
                                     }
                                 }
                             }
+                            Destination.Playlists -> PlaylistsScreen(
+                                library, data, playlist, current, player, { playlistId = it }, onPlay,
+                            )
+                            Destination.Settings -> SettingsScreen(theme, onTheme, player, playback, sleepRemaining)
                             Destination.Queue -> {
                                 val queue = remember(playback.queue, byId) {
                                     playback.queue.mapIndexedNotNull { index, id -> byId[id]?.let { index to it } }
@@ -258,6 +319,22 @@ internal fun SlynorScreens(
                                                 TrackRow(track, index == playback.queueIndex, player != null, { player?.playFromQueue(index) }) {
                                                     if (player != null) TrackMenu { close ->
                                                         if (index != playback.queueIndex) QueueMenuItems(player, track, close)
+                                                        if (index > 0) {
+                                                            DropdownMenuItem(text = { Text("Переместить выше") }, onClick = {
+                                                                close()
+                                                                if (index < player.mediaItemCount && player.getMediaItemAt(index).mediaId == track.id) {
+                                                                    player.moveMediaItem(index, index - 1)
+                                                                }
+                                                            })
+                                                        }
+                                                        if (index < playback.queue.lastIndex) {
+                                                            DropdownMenuItem(text = { Text("Переместить ниже") }, onClick = {
+                                                                close()
+                                                                if (index < player.mediaItemCount - 1 && player.getMediaItemAt(index).mediaId == track.id) {
+                                                                    player.moveMediaItem(index, index + 1)
+                                                                }
+                                                            })
+                                                        }
                                                         DropdownMenuItem(text = { Text("Убрать из очереди") }, onClick = {
                                                             close()
                                                             player.removeFromQueue(track)
@@ -273,7 +350,7 @@ internal fun SlynorScreens(
                     }
                 }
             }
-            if (!showingTrack && !keyboardVisible) {
+            if (!showingTrack && !keyboardVisible && destination != Destination.Settings) {
                 if (player != null && current != null) {
                     Box(Modifier.widthIn(max = screenWidth).fillMaxWidth().padding(horizontal = 12.dp)) {
                         PlayerBar(current, playback, { showPlayer = true }) { togglePlayback(player, playback) }
@@ -284,7 +361,7 @@ internal fun SlynorScreens(
                         .clip(RoundedCornerShape(22.dp)),
                     containerColor = colors.surface, tonalElevation = 0.dp,
                 ) {
-                    for (target in Destination.entries) {
+                    for (target in Destination.entries.filterNot { it == Destination.Settings }) {
                         NavigationBarItem(
                             selected = destination == target, onClick = { destination = target },
                             icon = { Glyph(target.icon, null) },
@@ -303,26 +380,39 @@ internal fun SlynorScreens(
 }
 
 @Composable
-private fun AppHeader(title: String, trackScreen: Boolean, canAdd: Boolean, onBack: () -> Unit, onAdd: () -> Unit) {
+private fun AppHeader(
+    title: String, showBack: Boolean, canAdd: Boolean, showMenu: Boolean, importing: Boolean,
+    onBack: () -> Unit, onAdd: () -> Unit, onAddFolder: () -> Unit, onSettings: () -> Unit,
+) {
     Row(
         Modifier.widthIn(max = screenWidth).fillMaxWidth().heightIn(min = 62.dp)
             .padding(horizontal = screenMargin, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (trackScreen) IconButton(onClick = onBack) { Glyph(R.drawable.ic_back, "Вернуться") }
+        if (showBack) IconButton(onClick = onBack) { Glyph(R.drawable.ic_back, "Вернуться") }
         else Image(painterResource(R.drawable.slynor_icon), null, Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)))
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-        if (!trackScreen && canAdd) {
+        if (canAdd) {
             FilledTonalButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 14.dp)) {
                 Glyph(R.drawable.ic_add, null, Modifier.size(17.dp))
                 Text("Добавить", Modifier.padding(start = 6.dp))
             }
         }
+        if (showMenu) TrackMenu("Меню Slynor") { close ->
+            DropdownMenuItem(text = { Text("Добавить папку") }, enabled = !importing, onClick = {
+                close()
+                onAddFolder()
+            })
+            DropdownMenuItem(text = { Text("Настройки") }, onClick = {
+                close()
+                onSettings()
+            })
+        }
     }
 }
 
 @Composable
-private fun ScreenTitle(title: String, detail: String? = null) {
+internal fun ScreenTitle(title: String, detail: String? = null) {
     Column(Modifier.padding(top = 12.dp, bottom = 16.dp)) {
         Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineLarge)
         detail?.let {
@@ -332,7 +422,7 @@ private fun ScreenTitle(title: String, detail: String? = null) {
     }
 }
 
-private fun trackCount(total: Int): String {
+internal fun trackCount(total: Int): String {
     val noun = when {
         total % 100 in 11..14 -> "треков"
         total % 10 == 1 -> "трек"
@@ -344,8 +434,9 @@ private fun trackCount(total: Int): String {
 
 @Composable
 private fun HomeScreen(
-    tracks: List<LocalTrack>, current: LocalTrack?, playback: Playback, player: MediaController?,
-    importing: Boolean, onAdd: () -> Unit, onPlay: (LocalTrack) -> Unit, onLibrary: () -> Unit, onOpenPlayer: () -> Unit,
+    tracks: List<LocalTrack>, history: List<LocalTrack>, current: LocalTrack?, playback: Playback,
+    player: MediaController?, importing: Boolean, onAdd: () -> Unit,
+    onPlay: (LocalTrack, List<LocalTrack>) -> Unit, onLibrary: () -> Unit, onOpenPlayer: () -> Unit,
 ) {
     val recent = remember(tracks) { tracks.asReversed().take(5) }
     LazyColumn(
@@ -365,8 +456,17 @@ private fun HomeScreen(
                 Text("Недавно добавленные", Modifier.padding(top = 14.dp, bottom = 4.dp).semantics { heading() },
                     style = MaterialTheme.typography.titleLarge)
             }
-            items(recent, key = { it.uri.toString() }) { track ->
-                TrackRow(track, track == current, player != null && !importing, { onPlay(track) })
+            items(recent, key = { "recent:${it.id}" }) { track ->
+                TrackRow(track, track == current, player != null && !importing, { onPlay(track, tracks) })
+            }
+        }
+        if (history.isNotEmpty()) {
+            item {
+                Text("Недавно слушали", Modifier.padding(top = 14.dp, bottom = 4.dp).semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge)
+            }
+            items(history.take(15), key = { "history:${it.id}" }) { track ->
+                TrackRow(track, track == current, player != null && !importing, { onPlay(track, history) })
             }
         }
     }
@@ -379,7 +479,7 @@ private fun LibraryCard(empty: Boolean, importing: Boolean, onAdd: () -> Unit, o
         color = colors.surface) {
         Column(
             Modifier.fillMaxWidth().background(
-                Brush.horizontalGradient(listOf(Color(0xFF3D3047), Color(0xFF24202D), Color(0xFF271F29))),
+                Brush.horizontalGradient(listOf(lerp(colors.surface, colors.primary, .18f), colors.surfaceContainer, colors.surface)),
             ).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -395,7 +495,7 @@ private fun LibraryCard(empty: Boolean, importing: Boolean, onAdd: () -> Unit, o
 }
 
 @Composable
-private fun EmptyState(@DrawableRes icon: Int, title: String, description: String, action: String,
+internal fun EmptyState(@DrawableRes icon: Int, title: String, description: String, action: String,
                        onAction: () -> Unit, enabled: Boolean = true) {
     val colors = MaterialTheme.colorScheme
     Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = colors.surface,
@@ -412,7 +512,7 @@ private fun EmptyState(@DrawableRes icon: Int, title: String, description: Strin
 }
 
 @Composable
-private fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPlay: () -> Unit,
+internal fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPlay: () -> Unit,
                      actions: @Composable () -> Unit = {}) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(14.dp)
@@ -427,11 +527,13 @@ private fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPla
             Cover(rememberArtwork(track.uri), Modifier.size(48.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                if (track.artist.isNotBlank()) {
-                    Text(track.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                val subtitle = listOf(track.artist, track.album).filter(String::isNotBlank).joinToString(" · ")
+                if (subtitle.isNotBlank()) {
+                    Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
+            if (track.duration > 0) Text(formatTime(track.duration), style = MaterialTheme.typography.bodySmall)
             if (track.favorite) Glyph(R.drawable.ic_heart, "В избранном", Modifier.size(16.dp), tint = colors.primary)
             actions()
         }
@@ -439,10 +541,10 @@ private fun TrackRow(track: LocalTrack, active: Boolean, enabled: Boolean, onPla
 }
 
 @Composable
-private fun TrackMenu(content: @Composable (() -> Unit) -> Unit) {
+internal fun TrackMenu(label: String = "Действия для трека", content: @Composable (() -> Unit) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) { Glyph(R.drawable.ic_more, "Действия для трека") }
+        IconButton(onClick = { expanded = true }) { Glyph(R.drawable.ic_more, label) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             content { expanded = false }
         }
@@ -450,7 +552,7 @@ private fun TrackMenu(content: @Composable (() -> Unit) -> Unit) {
 }
 
 @Composable
-private fun QueueMenuItems(player: MediaController, track: LocalTrack, close: () -> Unit) {
+internal fun QueueMenuItems(player: MediaController, track: LocalTrack, close: () -> Unit) {
     DropdownMenuItem(text = { Text("Играть следующим") }, onClick = {
         close()
         player.enqueue(track, playNext = true)
@@ -465,4 +567,47 @@ private fun QueueMenuItems(player: MediaController, track: LocalTrack, close: ()
 internal fun Glyph(@DrawableRes icon: Int, description: String?, modifier: Modifier = Modifier,
                    tint: Color = androidx.compose.material3.LocalContentColor.current) {
     Icon(painterResource(icon), description, modifier.size(20.dp), tint = tint)
+}
+
+private enum class LibrarySort(val title: String) {
+    Added("По порядку добавления"),
+    Newest("Сначала новые"),
+    Title("По названию"),
+    Artist("По исполнителю"),
+    Album("По альбому"),
+    Duration("По длительности");
+
+    fun order(tracks: List<LocalTrack>): List<LocalTrack> {
+        val localized = Collator.getInstance(Locale.forLanguageTag("ru")).apply { strength = Collator.PRIMARY }
+        val title = compareBy<LocalTrack, String>(localized, LocalTrack::title)
+        return when (this) {
+            Added -> tracks
+            Newest -> tracks.asReversed()
+            Title -> tracks.sortedWith(title)
+            Artist -> tracks.sortedWith(compareBy<LocalTrack> { it.artist.isBlank() }
+                .thenBy(localized, LocalTrack::artist).then(title))
+            Album -> tracks.sortedWith(compareBy<LocalTrack> { it.album.isBlank() }
+                .thenBy(localized, LocalTrack::album).then(title))
+            Duration -> tracks.sortedWith(compareByDescending<LocalTrack> { it.duration }.then(title))
+        }
+    }
+}
+
+@Composable
+private fun TrackDetails(track: LocalTrack, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(track.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (track.artist.isNotBlank()) Text("Исполнитель · ${track.artist}")
+                if (track.album.isNotBlank()) Text("Альбом · ${track.album}")
+                if (track.duration > 0) Text("Длительность · ${formatTime(track.duration)}")
+                if (track.artist.isBlank() && track.album.isBlank() && track.duration == 0L) {
+                    Text("У файла нет дополнительных метаданных.")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+    )
 }

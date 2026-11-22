@@ -1,8 +1,10 @@
 package io.github.hyoreku.slynor
 
+import android.content.SharedPreferences
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +40,34 @@ private val typography = Typography(
 )
 
 @Composable
-internal fun SlynorTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = graphite, typography = typography, content = content)
+internal fun SlynorTheme(dark: Boolean, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (dark) graphite else lilac, typography = typography, content = content)
+}
+
+private val lilac = lightColorScheme(
+    primary = Color(0xFF604B78),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFEBDCF7),
+    onPrimaryContainer = Color(0xFF30203F),
+    background = Color(0xFFFCF7FE),
+    onBackground = Color(0xFF201925),
+    surface = Color(0xFFFFFBFF),
+    surfaceContainer = Color(0xFFF4EDF7),
+    surfaceContainerHighest = Color(0xFFEDE4F1),
+    surfaceVariant = Color(0xFFECE2EF),
+    onSurface = Color(0xFF201925),
+    onSurfaceVariant = Color(0xFF504657),
+    outline = Color(0xFF82748A),
+    outlineVariant = Color(0xFFD9CEDF),
+)
+
+internal enum class ThemeMode(val title: String) {
+    System("Как в системе"),
+    Dark("Тёмная"),
+    Light("Светлая");
+
+    companion object {
+        fun read(storage: SharedPreferences): ThemeMode =
+            entries.firstOrNull { it.name == storage.getString("theme", null) } ?: Dark
+    }
 }

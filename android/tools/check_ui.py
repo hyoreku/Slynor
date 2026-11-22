@@ -193,8 +193,48 @@ def main(output):
     tap(wait_for("3 трека", "Перемешать и включить"), "Перемешать и включить")
     pause_active_playback()
     tap(wait_for("Очередь"), "Очередь")
-    wait_for("1 из 3", *TRACKS)
-    print("Imported three tracks through the file picker, verified favorites persist and exercised queue playback and editing.")
+    shuffled = wait_for("1 из 3", *TRACKS)
+    queue_order = sorted(TRACKS, key=lambda track: next(centers(shuffled, track))[1])
+    print("Imported three tracks through the file picker, verified favorites persist and exercised queue playback and editing.", flush=True)
+
+    tap(wait_for("Плейлисты"), "Плейлисты")
+    tap(wait_for("Плейлистов пока нет", "Создать"), "Создать")
+    tap(wait_for("Название"), "Название")
+    adb("shell", "input", "text", "Roadtrip")
+    tap(wait_for("Сохранить"), "Сохранить")
+    tap(wait_for("Roadtrip", "Плейлист пуст", "Добавить треки"), "Добавить треки")
+    tap(wait_for(alpha, beta, gamma), alpha)
+    tap(wait_for(beta), beta)
+    tap(wait_for("Добавить (2)"), "Добавить (2)")
+    playlist = wait_for("Roadtrip", alpha, beta, "2 трека")
+    assert next(centers(playlist, alpha))[1] < next(centers(playlist, beta))[1]
+    track_action(beta, "Переместить выше")
+    playlist = wait_for("Roadtrip", alpha, beta)
+    assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
+    (output / "playlist.png").write_bytes(adb("exec-out", "screencap", "-p"))
+
+    tap(wait_for("Меню Slynor"), "Меню Slynor")
+    tap(wait_for("Настройки"), "Настройки")
+    tap(wait_for("Тема", "Тёмная", "1×"), "1×")
+    tap(wait_for("1,5×"), "1,5×")
+    tap(wait_for("Без повтора", "1,5×"), "Без повтора")
+    tap(wait_for("Вся очередь"), "Вся очередь")
+    tap(wait_for("Тёмная"), "Тёмная")
+    tap(wait_for("Светлая"), "Светлая")
+    wait_for("1,5×", "Вся очередь", "Светлая")
+
+    adb("shell", "am", "force-stop", PACKAGE)
+    adb("shell", "am", "start", "-W", "-n", ACTIVITY)
+    tap(wait_for("Очередь"), "Очередь")
+    assert_queue(*queue_order)
+    tap(wait_for("Плейлисты"), "Плейлисты")
+    tap(wait_for("Roadtrip"), "Roadtrip")
+    playlist = wait_for("Roadtrip", alpha, beta)
+    assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
+    tap(wait_for("Меню Slynor"), "Меню Slynor")
+    tap(wait_for("Настройки"), "Настройки")
+    wait_for("1,5×", "Вся очередь", "Светлая")
+    print("Created and reordered a playlist, then verified playlist, queue, speed, repeat and theme survive a restart.")
 
 
 if __name__ == "__main__":

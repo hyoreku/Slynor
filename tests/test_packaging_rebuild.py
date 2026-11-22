@@ -21,13 +21,17 @@ class BuildContractTests(unittest.TestCase):
         import desktop
 
         for runtime in (None, Path('bundled-webview2')):
-            with self.subTest(runtime=runtime), patch.object(desktop, 'os', SimpleNamespace(name='nt')):
-                with patch('backend.startup_runtime.require_webview2', return_value=runtime) as require:
-                    with patch.object(desktop.webview, 'settings', {}) as settings:
-                        self.assertEqual(desktop.configure_webview(), 'edgechromium')
-                        require.assert_called_once_with()
-                        expected = {'WEBVIEW2_RUNTIME_PATH': str(runtime)} if runtime else {}
-                        self.assertEqual(settings, expected)
+            webview = SimpleNamespace(settings={})
+            with (
+                self.subTest(runtime=runtime),
+                patch.object(desktop, 'os', SimpleNamespace(name='nt')),
+                patch.object(desktop, 'webview', webview),
+                patch('backend.startup_runtime.require_webview2', return_value=runtime) as require,
+            ):
+                self.assertEqual(desktop.configure_webview(), 'edgechromium')
+                require.assert_called_once_with()
+                expected = {'WEBVIEW2_RUNTIME_PATH': str(runtime)} if runtime else {}
+                self.assertEqual(webview.settings, expected)
 
     def test_explicit_server_import(self):
         tree = ast.parse((ROOT / 'start.py').read_text(encoding='utf-8'))
