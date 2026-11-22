@@ -26,7 +26,10 @@ def adb(*args, timeout=24):
 
 
 def label_is(node, label):
-    return label in (node.get("text"), node.get("content-desc"))
+    values = (node.get("text", ""), node.get("content-desc", ""))
+    if isinstance(label, re.Pattern):
+        return any(label.fullmatch(value) for value in values)
+    return label in values
 
 
 def wait_for(*labels, any_label=False):
@@ -87,14 +90,16 @@ def track_action(track, action):
 def pick_document(filename):
     roots = "Show roots"
     storage = adb("shell", "getprop", "ro.product.model").decode().strip()
-    picker = wait_for(filename, roots, storage, any_label=True)
-    if not list(centers(picker, filename)):
+    # The image grid may expose the file name together with size and time.
+    document = re.compile(re.escape(filename) + r"(?:, .*)?")
+    picker = wait_for(document, roots, storage, any_label=True)
+    if not list(centers(picker, document)):
         if not list(centers(picker, storage)):
             tap(picker, roots)
             picker = wait_for(storage)
         tap(picker, storage)
         tap(wait_for(FIXTURE_FOLDER), FIXTURE_FOLDER)
-    tap(wait_for(filename), filename)
+    tap(wait_for(document), document)
 
 
 def import_tracks():
