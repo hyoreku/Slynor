@@ -40,7 +40,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Launch APK and check the home screen
+      - name: Check Android screens on the emulator
         timeout-minutes: 9
         working-directory: android
         run: |
@@ -78,16 +78,16 @@ jobs:
           adb shell wm dismiss-keyguard
           adb install app/build/outputs/apk/debug/app-debug.apk
           adb shell am start -W -n io.github.hyoreku.slynor.debug/io.github.hyoreku.slynor.MainActivity
-          for attempt in {1..12}; do
-            if adb shell uiautomator dump /sdcard/slynor-home.xml >/dev/null 2>&1 &&
-               adb shell cat /sdcard/slynor-home.xml > "$RUNNER_TEMP/slynor-home.xml" &&
-               grep -q 'Включите первую песню' "$RUNNER_TEMP/slynor-home.xml" &&
-               grep -q 'Моя музыка' "$RUNNER_TEMP/slynor-home.xml" &&
-               grep -q 'Очередь' "$RUNNER_TEMP/slynor-home.xml"; then
-              exit 0
-            fi
-            sleep 2
-          done
-          adb logcat -d -s AndroidRuntime | tail -60
-          echo 'Slynor home screen did not appear.'
-          exit 1
+          if ! python3 tools/check_ui.py "$RUNNER_TEMP/slynor-ui"; then
+            adb logcat -d -s AndroidRuntime | tail -60
+            exit 1
+          fi
+
+      - name: Upload Android screen captures
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: Slynor-Android-UI
+          path: ${{ runner.temp }}/slynor-ui/*.png
+          if-no-files-found: ignore
+          retention-days: 7

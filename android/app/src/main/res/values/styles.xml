@@ -1,0 +1,11 @@
+<resources>
+    <color name="slynor_window">#100E14</color>
+    <color name="slynor_icon_background">#2A2530</color>
+    <style name="Theme.Slynor.Base" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/slynor_window</item>
+        <item name="android:statusBarColor">@color/slynor_window</item>
+        <item name="android:navigationBarColor">@color/slynor_window</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.Slynor" parent="Theme.Slynor.Base" />
+</resources>

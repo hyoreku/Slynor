@@ -1,14 +1,14 @@
 package io.github.hyoreku.slynor
 
 import android.content.ComponentName
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -17,7 +17,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -37,10 +36,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         val library = LocalLibrary(applicationContext)
         setContent {
-            MaterialTheme(colorScheme = slynorColors) {
+            SlynorTheme {
                 MusicLibrary(library, controller, connectionError)
             }
         }
@@ -71,19 +73,6 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 }
-
-private val slynorColors = darkColorScheme(
-    primary = Color(0xFFCCBBFF),
-    onPrimary = Color(0xFF191227),
-    primaryContainer = Color(0xFF30254A),
-    onPrimaryContainer = Color(0xFFE6DAFF),
-    background = Color(0xFF0B0B0E),
-    surface = Color(0xFF17171F),
-    surfaceVariant = Color(0xFF24232D),
-    onSurface = Color(0xFFF2F1F6),
-    onSurfaceVariant = Color(0xFFB5B1C1),
-    outlineVariant = Color(0xFF363440),
-)
 
 @Composable
 private fun MusicLibrary(library: LocalLibrary, player: MediaController?, connectionError: Boolean) {
