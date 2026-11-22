@@ -48,7 +48,7 @@ def centers(tree, label):
                 yield ((left + right) // 2, (top + bottom) // 2)
 
 
-def tap(tree, *labels, near=None, long=False):
+def tap(tree, *labels, near=None):
     points = [point for label in labels for point in centers(tree, label)]
     if near is not None:
         y = next(centers(tree, near))[1]
@@ -56,10 +56,7 @@ def tap(tree, *labels, near=None, long=False):
     else:
         point = max(points, key=lambda point: point[1])
     x, y = map(str, point)
-    if long:
-        adb("shell", "input", "swipe", x, y, x, y, "900")
-    else:
-        adb("shell", "input", "tap", x, y)
+    adb("shell", "input", "tap", x, y)
 
 
 def track_action(track, action):
@@ -79,16 +76,17 @@ def import_tracks():
             adb("push", str(audio), remote)
             adb("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", f"file://{remote}")
 
-    tap(wait_for("Добавить музыку"), "Добавить музыку")
     roots = ("Show roots", "Show roots menu", "Показать корневые папки", "Открыть меню")
-    tap(wait_for(*roots, any_label=True), *roots)
     downloads = ("Downloads", "Загрузки")
-    tap(wait_for(*downloads, any_label=True), *downloads)
-    tap(wait_for(*TRACKS), TRACKS[0], long=True)
-    for track in TRACKS[1:]:
+    for index, track in enumerate(TRACKS):
+        add_label = "Добавить музыку" if index == 0 else "Добавить"
+        tap(wait_for(add_label), add_label)
+        picker = wait_for(track, *roots, any_label=True)
+        if not list(centers(picker, track)):
+            tap(picker, *roots)
+            tap(wait_for(*downloads, any_label=True), *downloads)
         tap(wait_for(track), track)
-    open_labels = ("Open", "OPEN", "Открыть", "ОТКРЫТЬ")
-    tap(wait_for(*open_labels, any_label=True), *open_labels)
+        wait_for("Недавно добавленные", track)
 
 
 def assert_queue(*tracks):
@@ -97,6 +95,23 @@ def assert_queue(*tracks):
     positions = [next(centers(tree, track))[1] for track in tracks]
     assert positions == sorted(positions), (tracks, positions)
     return tree
+
+
+def wait_for_media_state(state):
+    end = time.monotonic() + 15
+    while time.monotonic() < end:
+        sessions = adb("shell", "dumpsys", "media_session").decode()
+        if PACKAGE in sessions and re.search(rf"PlaybackState \{{state={state},", sessions):
+            return
+        time.sleep(.4)
+    raise RuntimeError(f"Slynor media session did not reach state {state}")
+
+
+def pause_active_playback():
+    # Keep the progress indicator still while uiautomator waits for an idle window.
+    wait_for_media_state(3)
+    adb("shell", "cmd", "media_session", "dispatch", "pause")
+    wait_for_media_state(2)
 
 
 def main(output):
@@ -127,7 +142,8 @@ def main(output):
     assert not list(centers(favorites, beta)), "A non-favorite track appears in Favorites"
     (output / "favorites.png").write_bytes(adb("exec-out", "screencap", "-p"))
     tap(favorites, alpha)
-    tap(wait_for("Пауза", "Очередь"), "Очередь")
+    pause_active_playback()
+    tap(wait_for("Очередь"), "Очередь")
     assert_queue(alpha)
     tap(wait_for("Моя музыка"), "Моя музыка")
     tap(wait_for("Все треки"), "Все треки")
@@ -142,14 +158,15 @@ def main(output):
     track_action(gamma, "Убрать из очереди")
     assert_queue(alpha, beta)
     tap(wait_for(alpha), alpha)
-    player = wait_for("Сейчас играет", "Следующий трек", "Пауза")
+    player = wait_for("Сейчас играет", "Следующий трек", "Воспроизвести")
     (output / "playing.png").write_bytes(adb("exec-out", "screencap", "-p"))
     tap(player, "Следующий трек")
-    wait_for(beta, "Пауза")
+    wait_for(beta, "Воспроизвести")
 
     tap(wait_for("Вернуться"), "Вернуться")
     tap(wait_for("Моя музыка"), "Моя музыка")
     tap(wait_for("3 трека", "Перемешать и включить"), "Перемешать и включить")
+    pause_active_playback()
     tap(wait_for("Очередь"), "Очередь")
     wait_for("1 из 3", *TRACKS)
     print("Imported three tracks through the file picker, verified favorites persist and exercised queue playback and editing.")
