@@ -3,6 +3,15 @@ name: Android APK
 on:
   workflow_dispatch:
   workflow_call:
+    secrets:
+      ANDROID_SIGNING_KEYSTORE_B64:
+        required: false
+      ANDROID_SIGNING_STORE_PASSWORD:
+        required: false
+      ANDROID_SIGNING_KEY_ALIAS:
+        required: false
+      ANDROID_SIGNING_KEY_PASSWORD:
+        required: false
   push:
     branches: [main, release/windows-acceptance, codex/android-0.5-windows-fix]
     paths: [android/**, .github/workflows/android.yml]
@@ -19,8 +28,16 @@ jobs:
         with:
           persist-credentials: false
       - name: Install SDK and build APK
+        id: build
         working-directory: android
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}
+          SLYNOR_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          SLYNOR_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          SLYNOR_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
         run: |
+          set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export PATH="$JAVA_HOME/bin:$PATH"
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
@@ -28,15 +45,44 @@ jobs:
             sdkmanager=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -print -quit)
           fi
           "$sdkmanager" 'platforms;android-36' 'build-tools;36.0.0'
-          ./gradlew --no-daemon :app:lintDebug :app:assembleDebug
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk Slynor-Android-debug.apk
-          sha256sum Slynor-Android-debug.apk > SHA256.txt
+          variant=Debug
+          package=io.github.hyoreku.slynor.debug
+          filename=Slynor-Android-debug.apk
+          if [[ -n "$SIGNING_KEYSTORE_B64$SLYNOR_SIGNING_STORE_PASSWORD$SLYNOR_SIGNING_KEY_ALIAS$SLYNOR_SIGNING_KEY_PASSWORD$SIGNING_CERT_SHA256" ]]; then
+            : "${SIGNING_KEYSTORE_B64:?Missing ANDROID_SIGNING_KEYSTORE_B64}"
+            : "${SLYNOR_SIGNING_STORE_PASSWORD:?Missing ANDROID_SIGNING_STORE_PASSWORD}"
+            : "${SLYNOR_SIGNING_KEY_ALIAS:?Missing ANDROID_SIGNING_KEY_ALIAS}"
+            : "${SLYNOR_SIGNING_KEY_PASSWORD:?Missing ANDROID_SIGNING_KEY_PASSWORD}"
+            [[ "$SIGNING_CERT_SHA256" =~ ^[a-fA-F0-9]{64}$ ]]
+            umask 077
+            export SLYNOR_SIGNING_STORE_FILE
+            SLYNOR_SIGNING_STORE_FILE=$(mktemp "$RUNNER_TEMP/slynor-signing.XXXXXX")
+            trap 'rm -f -- "$SLYNOR_SIGNING_STORE_FILE"' EXIT
+            printf '%s' "$SIGNING_KEYSTORE_B64" | base64 --decode > "$SLYNOR_SIGNING_STORE_FILE"
+            unset SIGNING_KEYSTORE_B64
+            variant=Release
+            package=io.github.hyoreku.slynor
+            filename=Slynor-Android.apk
+          fi
+          signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          apk="app/build/outputs/apk/${variant,,}/app-${variant,,}.apk"
+          ./gradlew --no-daemon ":app:assemble$variant" -PslynorUpgradeFixture=true
+          cp "$apk" "$RUNNER_TEMP/slynor-upgrade-fixture.apk"
+          ./gradlew --no-daemon ":app:lint$variant" ":app:assemble$variant"
+          report=$("$signer" verify --print-certs "$apk")
+          if [[ "$variant" == Release ]]; then
+            fingerprint=$(awk '/^Signer #1 certificate SHA-256 digest:/ {print $NF}' <<< "$report")
+            [[ "$fingerprint" == "${SIGNING_CERT_SHA256,,}" ]] || { echo "Unexpected APK signing certificate" >&2; exit 1; }
+          fi
+          cp "$apk" "$filename"
+          sha256sum "$filename" > SHA256.txt
+          echo "filename=$filename" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: Slynor-Android-APK
           path: |
-            android/Slynor-Android-debug.apk
+            android/${{ steps.build.outputs.filename }}
             android/SHA256.txt
           if-no-files-found: error
           retention-days: 7
@@ -44,6 +90,9 @@ jobs:
       - name: Check Android screens on the emulator
         timeout-minutes: 12
         working-directory: android
+        env:
+          SLYNOR_PACKAGE: ${{ steps.build.outputs.package }}
+          SLYNOR_APK: ${{ steps.build.outputs.filename }}
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
@@ -77,8 +126,14 @@ jobs:
             exit 1
           fi
           adb shell wm dismiss-keyguard
-          adb install app/build/outputs/apk/debug/app-debug.apk
-          adb shell am start -W -n io.github.hyoreku.slynor.debug/io.github.hyoreku.slynor.MainActivity
+          if [[ "$SLYNOR_PACKAGE" != *.debug ]]; then
+            adb root
+            adb wait-for-device
+            test "$(adb shell id -u | tr -d '\r')" = 0
+          fi
+          adb install "$RUNNER_TEMP/slynor-upgrade-fixture.apk"
+          adb shell am start -W -n "$SLYNOR_PACKAGE/io.github.hyoreku.slynor.MainActivity"
+          export SLYNOR_UPGRADE_APK="$PWD/$SLYNOR_APK"
           if ! python3 tools/check_ui.py "$RUNNER_TEMP/slynor-ui"; then
             adb logcat -d -s ExoPlayerImplInternal DefaultAudioSink | tail -80
             adb logcat -d -s AndroidRuntime | tail -60

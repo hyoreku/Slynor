@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import json
+from io import BytesIO
+import os
 import re
 import struct
 import subprocess
@@ -10,19 +12,28 @@ from tempfile import TemporaryDirectory
 import time
 import wave
 import xml.etree.ElementTree as ET
+import zipfile
 import zlib
 
 
-PACKAGE = "io.github.hyoreku.slynor.debug"
+PACKAGE = os.environ.get("SLYNOR_PACKAGE", "io.github.hyoreku.slynor.debug")
 ACTIVITY = f"{PACKAGE}/io.github.hyoreku.slynor.MainActivity"
 TRACKS = [f"Slynor-{name}.wav" for name in ("Alpha", "Beta", "Gamma")]
 FIXTURE_FOLDER = "0-slynor-ui"
 COVER_FIXTURE = "Slynor-cover.png"
+BACKUP_FIXTURE = "Slynor-restore.zip"
 PLAYER = "Открыть экран текущего трека"
 
 
 def adb(*args, timeout=24):
     return subprocess.check_output(["adb", *args], timeout=timeout)
+
+
+def private_file(path):
+    if PACKAGE.endswith(".debug"):
+        return adb("exec-out", "run-as", PACKAGE, "cat", path)
+    # The release case runs on a fresh Google APIs emulator with adb root enabled.
+    return adb("exec-out", "cat", f"/data/user/0/{PACKAGE}/{path}")
 
 
 def label_is(node, label):
@@ -158,9 +169,32 @@ def collapse_player():
 
 
 def saved_playlist(name):
-    library = ET.fromstring(adb("exec-out", "run-as", PACKAGE, "cat", "shared_prefs/library.xml"))
+    library = ET.fromstring(private_file("shared_prefs/library.xml"))
     rows = json.loads(library.find("./string[@name='playlists']").text)
     return next(playlist for playlist in rows if playlist["name"] == name)
+
+
+def export_backup():
+    tap(wait_for("Сохранить копию"), "Сохранить копию")
+    save = re.compile("save", re.IGNORECASE)
+    tap(wait_for(save), save)
+    wait_for("Резервная копия сохранена.")
+    try:
+        found = adb("shell", "find", "/sdcard/", "-name", "Slynor-backup.zip")
+    except subprocess.CalledProcessError as error:
+        found = error.output
+    paths = found.decode().splitlines()
+    assert len(paths) == 1, paths
+    payload = adb("exec-out", "cat", paths[0])
+    with zipfile.ZipFile(BytesIO(payload)) as archive:
+        saved = json.loads(archive.read("library.json"))
+        playlist = next(row for row in saved["playlists"] if row["name"] == "Roadtrip")
+        assert archive.read(f"covers/{playlist['cover']}.jpg").startswith(b"\xff\xd8")
+        assert saved["settings"]["library"]["theme"] == "Light"
+    with TemporaryDirectory() as directory:
+        destination = Path(directory) / BACKUP_FIXTURE
+        destination.write_bytes(payload)
+        adb("push", str(destination), f"/sdcard/{FIXTURE_FOLDER}/{BACKUP_FIXTURE}")
 
 
 def assert_queue(*tracks):
@@ -292,7 +326,37 @@ def main(output):
     matching = wait_for("1 из 2", alpha, "Очистить поиск в плейлисте")
     assert not list(centers(matching, beta)), "Playlist search displayed a non-matching track"
     tap(matching, "Очистить поиск в плейлисте")
-    wait_for(alpha, beta, "Поиск в плейлисте")
+    drag_label = f"Перетащить {beta}"
+    playlist = wait_for(alpha, beta, drag_label)
+    x, y = next(centers(playlist, drag_label))
+    target_y = next(centers(playlist, alpha))[1]
+    adb("shell", "input", "swipe", str(x), str(y), str(x), str(target_y + 8), "600")
+    playlist = wait_for(alpha, beta)
+    assert next(centers(playlist, alpha))[1] < next(centers(playlist, beta))[1], "Playlist drag did not change the order"
+    track_action(beta, "Переместить выше")
+    playlist = wait_for(alpha, beta)
+    assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
+
+    tap(wait_for("Действия плейлиста"), "Действия плейлиста")
+    tap(wait_for("Дублировать плейлист"), "Дублировать плейлист")
+    copy = "Roadtrip (копия)"
+    tap(wait_for(copy, "Выбрать треки"), "Выбрать треки")
+    tap(wait_for("Выбрать все"), "Выбрать все")
+    wait_for("Выбрано: 2")
+    assert saved_playlist(copy)["cover"] == saved_playlist("Roadtrip")["cover"]
+    (output / "playlist-selection.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    tap(wait_for("В плейлисты"), "В плейлисты")
+    tap(wait_for("Новый плейлист"), "Новый плейлист")
+    tap(wait_for("Название"), "Название")
+    adb("shell", "input", "text", "Batch")
+    tap(wait_for("Сохранить"), "Сохранить")
+    tap(wait_for(copy, "Выбрать треки"), "Выбрать треки")
+    tap(wait_for("Выбрать все"), "Выбрать все")
+    tap(wait_for("Убрать выбранные"), "Убрать выбранные")
+    tap(wait_for("Убрать выбранные треки?", "Убрать"), "Убрать")
+    wait_for(copy, "Плейлист пуст")
+    assert saved_playlist(copy)["tracks"] == []
+    assert saved_playlist("Batch")["tracks"] == saved_playlist("Roadtrip")["tracks"]
 
     tap(wait_for("Настройки"), "Настройки")
     settings = wait_for("Тема приложения", "Тёмная", "Визуализатор")
@@ -302,8 +366,14 @@ def main(output):
     tap(settings, "Тёмная")
     tap(wait_for("Светлая"), "Светлая")
     wait_for("Тема приложения", "Светлая")
+    export_backup()
 
     adb("shell", "am", "force-stop", PACKAGE)
+    update = os.environ.get("SLYNOR_UPGRADE_APK")
+    if update:
+        assert re.search(r"\bversionCode=8\b", adb("shell", "dumpsys", "package", PACKAGE).decode())
+        adb("install", "-r", update, timeout=60)
+        assert re.search(r"\bversionCode=9\b", adb("shell", "dumpsys", "package", PACKAGE).decode())
     adb("shell", "am", "start", "-W", "-n", ACTIVITY)
     open_queue(3)
     assert_queue(*queue_order)
@@ -316,7 +386,7 @@ def main(output):
     playlist = wait_for("Roadtrip", alpha, beta)
     assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
     cover = saved_playlist("Roadtrip")["cover"]
-    image = adb("exec-out", "run-as", PACKAGE, "cat", f"files/playlist-covers/{cover}.jpg")
+    image = private_file(f"files/playlist-covers/{cover}.jpg")
     assert image.startswith(b"\xff\xd8"), "Playlist cover was not saved locally as a JPEG"
     tap(wait_for("Редактировать плейлист"), "Редактировать плейлист")
     wait_for("Редактирование плейлиста", "Сменить обложку")
@@ -325,7 +395,16 @@ def main(output):
     tap(wait_for("Выбрать обложку", "Сохранить"), "Сохранить")
     wait_for("Roadtrip", alpha, beta)
     assert "cover" not in saved_playlist("Roadtrip"), "The removed cover is still assigned"
-    print("Verified playlist search, sorting, persistent artwork, manual track order, theme and playback controls.")
+    assert saved_playlist(copy)["cover"] == cover, "Editing the original broke the copy's artwork"
+    tap(wait_for("Настройки"), "Настройки")
+    tap(wait_for("Восстановить"), "Восстановить")
+    pick_document(BACKUP_FIXTURE)
+    tap(wait_for("Восстановить копию"), "Восстановить копию")
+    wait_for("Плейлистов восстановлено: 3.")
+    restored = saved_playlist("Roadtrip")
+    assert restored["tracks"] == saved_playlist("Batch")["tracks"]
+    assert private_file(f"files/playlist-covers/{restored['cover']}.jpg") == image
+    print("Verified drag, bulk playlist actions, backup restoration and data preservation during APK upgrade.")
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ internal enum class ThemeAccent(val label: String, val light: Color, val dark: C
 
 internal class AppearanceSettings(private val context: Context) {
     private val prefs = context.getSharedPreferences("appearance", Context.MODE_PRIVATE)
-    private val image = AtomicFile(File(context.filesDir, "slynor-wallpaper.jpg"))
+    private val image = AtomicFile(File(context.filesDir, WALLPAPER_FILE))
     var accent by mutableStateOf(ThemeAccent.entries.firstOrNull { it.name == prefs.getString("accent", null) } ?: ThemeAccent.Lilac)
         private set
     var wallpaper by mutableStateOf<Bitmap?>(null)
@@ -40,6 +40,11 @@ internal class AppearanceSettings(private val context: Context) {
         wallpaper = withContext(Dispatchers.IO) {
             runCatching { image.openRead().use { BitmapFactory.decodeStream(it) } }.getOrNull()
         }
+    }
+
+    suspend fun reload() {
+        accent = ThemeAccent.entries.firstOrNull { it.name == prefs.getString("accent", null) } ?: ThemeAccent.Lilac
+        loadWallpaper()
     }
 
     suspend fun updateWallpaper(uri: Uri?): Boolean {

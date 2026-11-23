@@ -56,6 +56,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -125,12 +126,20 @@ internal fun SlynorScreens(
     val screenState = rememberSaveableStateHolder()
     var search by rememberSaveable { mutableStateOf("") }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
-    var sort by remember(library) {
+    fun savedSort(): LibrarySort {
         val stored = library.storage.getString("librarySort", null)
-        mutableStateOf(LibrarySort.entries.firstOrNull { it.name == stored } ?: LibrarySort.Added)
+        return LibrarySort.entries.firstOrNull { it.name == stored } ?: LibrarySort.Added
+    }
+    var sort by remember(library) { mutableStateOf(savedSort()) }
+    DisposableEffect(library) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "librarySort") sort = savedSort()
+        }
+        library.storage.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { library.storage.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     var playlistId by rememberSaveable { mutableStateOf<String?>(null) }
-    var addTrackId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addTrackIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var detailsId by rememberSaveable { mutableStateOf<String?>(null) }
     val tracks = data.tracks
     val playlist = data.playlists.firstOrNull { it.id == playlistId }
@@ -164,8 +173,8 @@ internal fun SlynorScreens(
     }
 
 
-    addTrackId?.let(byId::get)?.let {
-        AddTrackToPlaylist(it, data.playlists, library) { addTrackId = null }
+    if (addTrackIds.any(byId::containsKey)) {
+        AddTracksToPlaylist(addTrackIds, data.playlists, library) { addTrackIds = arrayListOf() }
     }
     detailsId?.let(byId::get)?.let { TrackDetails(it) { detailsId = null } }
     if (showQueue && player != null) {
@@ -354,7 +363,7 @@ internal fun SlynorScreens(
                                                 if (player != null && track != current) QueueMenuItems(player, track, close)
                                                 DropdownMenuItem(text = { Text("Добавить в плейлист") }, onClick = {
                                                     close()
-                                                    addTrackId = track.id
+                                                    addTrackIds = arrayListOf(track.id)
                                                 })
                                                 DropdownMenuItem(text = { Text("О треке") }, onClick = {
                                                     close()
@@ -374,10 +383,10 @@ internal fun SlynorScreens(
                             library, data, playlist, current, player, { playlistId = it },
                             { editPlaylist() }, { editPlaylist(it.id) }, onPlay,
                             onFavorite = onFavorite,
-                            onAddTrack = { addTrackId = it.id },
+                            onAddTracks = { addTrackIds = ArrayList(it) },
                             onTrackDetails = { detailsId = it.id },
                         )
-                        Destination.Settings -> SettingsScreen(theme, onTheme, appearance)
+                        Destination.Settings -> SettingsScreen(theme, onTheme, appearance, library)
                     }
                 }
             }

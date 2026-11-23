@@ -4,8 +4,10 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -26,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,7 +85,7 @@ internal fun PlaylistsScreen(
     onEdit: (Playlist) -> Unit,
     onPlay: (LocalTrack, List<LocalTrack>) -> Unit,
     onFavorite: (LocalTrack) -> Unit,
-    onAddTrack: (LocalTrack) -> Unit,
+    onAddTracks: (List<String>) -> Unit,
     onTrackDetails: (LocalTrack) -> Unit,
 ) {
     AnimatedContent(
@@ -130,7 +133,7 @@ internal fun PlaylistsScreen(
         } else {
             PlaylistDetail(
                 library, data, playlist, current, player, { onSelect(null) }, { onEdit(playlist) }, onPlay,
-                onFavorite, onAddTrack, onTrackDetails,
+                onFavorite, onAddTracks, onTrackDetails, { onSelect(it.id) },
             )
         }
     }
@@ -176,12 +179,20 @@ internal fun PlaylistTile(
 private fun PlaylistDetail(
     library: LocalLibrary, data: LibrarySnapshot, playlist: Playlist, current: LocalTrack?, player: MediaController?,
     onBack: () -> Unit, onEdit: () -> Unit, onPlay: (LocalTrack, List<LocalTrack>) -> Unit,
-    onFavorite: (LocalTrack) -> Unit, onAddTrack: (LocalTrack) -> Unit, onTrackDetails: (LocalTrack) -> Unit,
+    onFavorite: (LocalTrack) -> Unit, onAddTracks: (List<String>) -> Unit, onTrackDetails: (LocalTrack) -> Unit,
+    onDuplicate: (Playlist) -> Unit,
 ) {
     var picking by rememberSaveable(playlist.id) { mutableStateOf(false) }
     var search by rememberSaveable(playlist.id) { mutableStateOf("") }
     var sort by rememberSaveable(playlist.id) { mutableStateOf(LibrarySort.Added) }
+    var selecting by rememberSaveable(playlist.id) { mutableStateOf(false) }
+    var selection by rememberSaveable(playlist.id) { mutableStateOf(arrayListOf<String>()) }
+    var confirmRemove by rememberSaveable(playlist.id) { mutableStateOf(false) }
+    var duplicating by remember { mutableStateOf(false) }
+    var duplicateError by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     val tracks = remember(playlist.trackIds, data.tracks) {
         val byId = data.tracks.associateBy(LocalTrack::id)
         playlist.trackIds.mapNotNull(byId::get)
@@ -190,15 +201,51 @@ private fun PlaylistDetail(
     val matching = remember(tracks, query, sort) {
         sort.order(tracks.filter { it.matches(query) })
     }
-    val canReorder = sort == LibrarySort.Added && query.isEmpty()
+    val canReorder = sort == LibrarySort.Added && query.isEmpty() && !selecting
+    val manualIds = remember(matching) { matching.map(LocalTrack::id) }
+    val drag = rememberPlaylistDrag(listState) { from, anchor -> library.moveInPlaylist(playlist.id, from, anchor) }
+    val displayed = remember(matching, drag.order) {
+        val preview = drag.order ?: return@remember matching
+        val byId = matching.associateBy(LocalTrack::id)
+        preview.mapNotNull(byId::get)
+    }
+    val selectedIds = remember(playlist.trackIds, selection) {
+        val selected = selection.toSet()
+        playlist.trackIds.filter(selected::contains)
+    }
+    fun endSelection() {
+        selecting = false
+        selection = arrayListOf()
+    }
+    BackHandler(selecting) { endSelection() }
+
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("Все плейлисты") }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBack, modifier = Modifier.weight(1f)) {
+                    Glyph(R.drawable.ic_back, null)
+                    Text("Все плейлисты", Modifier.padding(start = 5.dp))
+                }
+                TrackMenu("Действия плейлиста") { close ->
+                    DropdownMenuItem(text = { Text("Дублировать плейлист") }, enabled = !duplicating, onClick = {
+                        close()
+                        duplicating = true
+                        duplicateError = false
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { runCatching { library.duplicatePlaylist(playlist.id) } }
+                            duplicating = false
+                            result.onSuccess(onDuplicate).onFailure { duplicateError = true }
+                        }
+                    })
+                }
+            }
             PlaylistSummary(library, playlist, tracks.size, matching, player != null, onEdit, onPlay)
+            if (duplicateError) Text("Не удалось дублировать плейлист.", color = MaterialTheme.colorScheme.error)
         }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -243,7 +290,47 @@ private fun PlaylistDetail(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
                     modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
                 )
+            }
+            item {
+                Column(Modifier.animateContentSize()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (selecting) "Выбрано: ${selectedIds.size}" else if (canReorder && tracks.size > 1) "Ручной порядок" else "",
+                            Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        TextButton(onClick = {
+                            if (selecting) endSelection() else {
+                                focus.clearFocus()
+                                selecting = true
+                            }
+                        }) { Text(if (selecting) "Готово" else "Выбрать треки") }
+                    }
+                    AnimatedVisibility(selecting) {
+                        Column {
+                            TextButton(
+                                enabled = matching.isNotEmpty(),
+                                onClick = {
+                                    selection = ArrayList(if (manualIds.all(selection::contains)) {
+                                        selection - manualIds.toSet()
+                                    } else (selection + manualIds).distinct())
+                                },
+                            ) { Text(if (matching.isNotEmpty() && manualIds.all(selection::contains)) "Снять выбор" else "Выбрать все") }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(enabled = selectedIds.isNotEmpty(), onClick = {
+                                    onAddTracks(selectedIds)
+                                    endSelection()
+                                }) { Text("В плейлисты") }
+                                TextButton(enabled = selectedIds.isNotEmpty(), onClick = { confirmRemove = true }) {
+                                    Text("Убрать выбранные", color = MaterialTheme.colorScheme.error.takeIf { selectedIds.isNotEmpty() }
+                                        ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         if (tracks.isEmpty()) {
@@ -263,8 +350,23 @@ private fun PlaylistDetail(
                     })
             }
         }
-        itemsIndexed(matching, key = { _, track -> track.id }) { index, track ->
-            TrackRow(track, track.id == current?.id, player != null, { onPlay(track, matching) }, Modifier.animateItem()) {
+        itemsIndexed(displayed, key = { _, track -> track.id }) { index, track ->
+            val checked = track.id in selection
+            val rowModifier = drag.rowModifier(track.id, Modifier.animateItem(placementSpec = if (drag.activeId == track.id) null
+                else androidx.compose.animation.core.spring()))
+            TrackRow(
+                track, if (selecting) checked else track.id == current?.id, selecting || player != null,
+                {
+                    if (selecting) selection = ArrayList(if (checked) selection - track.id else selection + track.id)
+                    else onPlay(track, matching)
+                },
+                rowModifier,
+            ) {
+                if (selecting) {
+                    Checkbox(checked, onCheckedChange = null)
+                    return@TrackRow
+                }
+                if (canReorder && matching.size > 1) PlaylistDragHandle(track, manualIds, drag)
                 TrackMenu { close ->
                     if (player != null && track.id != current?.id) QueueMenuItems(player, track, close)
                     DropdownMenuItem(
@@ -276,7 +378,7 @@ private fun PlaylistDetail(
                     )
                     DropdownMenuItem(text = { Text("Добавить в плейлист") }, onClick = {
                         close()
-                        onAddTrack(track)
+                        onAddTracks(listOf(track.id))
                     })
                     DropdownMenuItem(text = { Text("О треке") }, onClick = {
                         close()
@@ -296,7 +398,7 @@ private fun PlaylistDetail(
                     }
                     DropdownMenuItem(text = { Text("Убрать из плейлиста") }, onClick = {
                         close()
-                        library.removeFromPlaylist(playlist.id, track.id)
+                        library.removeFromPlaylist(playlist.id, setOf(track.id))
                     })
                 }
             }
@@ -308,6 +410,19 @@ private fun PlaylistDetail(
             library.addToPlaylist(playlist.id, ids)
         }
     }
+    if (confirmRemove) AlertDialog(
+        onDismissRequest = { confirmRemove = false },
+        title = { Text("Убрать выбранные треки?") },
+        text = { Text("${trackCount(selectedIds.size)} будут убраны из плейлиста «${playlist.name}».") },
+        confirmButton = {
+            TextButton(onClick = {
+                library.removeFromPlaylist(playlist.id, selectedIds.toSet())
+                confirmRemove = false
+                endSelection()
+            }) { Text("Убрать") }
+        },
+        dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Отмена") } },
+    )
 }
 
 private val playlistSortOptions = listOf(LibrarySort.Added, LibrarySort.Title, LibrarySort.Artist,
@@ -359,7 +474,7 @@ private sealed interface CoverPreview {
 @Composable
 internal fun PlaylistEditor(
     library: LocalLibrary, playlist: Playlist?, onDismiss: () -> Unit,
-    firstTrack: String? = null, onSaved: (Playlist) -> Unit, onDeleted: () -> Unit = {},
+    initialTracks: List<String> = emptyList(), onSaved: (Playlist) -> Unit, onDeleted: () -> Unit = {},
 ) {
     var name by rememberSaveable(playlist?.id) { mutableStateOf(playlist?.name.orEmpty()) }
     var uriText by rememberSaveable(playlist?.id) { mutableStateOf<String?>(null) }
@@ -428,7 +543,7 @@ internal fun PlaylistEditor(
                     val reset = removeCover
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
-                            runCatching { library.savePlaylist(playlist?.id, title, chosen, reset, firstTrack) }
+                            runCatching { library.savePlaylist(playlist?.id, title, chosen, reset, initialTracks) }
                         }
                         saving = false
                         result.onSuccess { onSaved(it); close() }
@@ -465,14 +580,14 @@ internal fun PlaylistEditor(
 }
 
 @Composable
-internal fun AddTrackToPlaylist(
-    track: LocalTrack, playlists: List<Playlist>, library: LocalLibrary, onDismiss: () -> Unit,
+internal fun AddTracksToPlaylist(
+    trackIds: List<String>, playlists: List<Playlist>, library: LocalLibrary, onDismiss: () -> Unit,
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
     var createNext by rememberSaveable { mutableStateOf(false) }
     var selected by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     if (creating) {
-        PlaylistEditor(library, null, onDismiss, firstTrack = track.id, onSaved = {})
+        PlaylistEditor(library, null, onDismiss, initialTracks = trackIds, onSaved = {})
     } else {
         SlynorSheet("Добавить в плейлист", "Закрыть выбор плейлистов", {
             if (createNext) {
@@ -486,7 +601,10 @@ internal fun AddTrackToPlaylist(
             ) {
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 265.dp)) {
                     items(playlists, key = Playlist::id) { playlist ->
-                        val included = track.id in playlist.trackIds
+                        val included = remember(trackIds, playlist.trackIds) {
+                            val existing = playlist.trackIds.toHashSet()
+                            trackIds.all(existing::contains)
+                        }
                         val checked = included || playlist.id in selected
                         Row(
                             Modifier.fillMaxWidth().animateItem().toggleable(
@@ -497,12 +615,12 @@ internal fun AddTrackToPlaylist(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(checked, onCheckedChange = null, enabled = !included)
-                            Text(if (included) "${playlist.name} · добавлен" else playlist.name, Modifier.padding(start = 8.dp))
+                            Text(if (included) "${playlist.name} · уже в списке" else playlist.name, Modifier.padding(start = 8.dp))
                         }
                     }
                 }
                 if (selected.isNotEmpty()) Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                    library.addToPlaylists(track.id, selected.toSet())
+                    library.addToPlaylists(trackIds, selected.toSet())
                     close()
                 }) { Text("Добавить (${selected.size})") }
                 TextButton(onClick = {

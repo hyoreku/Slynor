@@ -59,21 +59,9 @@ internal class LocalLibrary(private val context: Context) {
         LibrarySnapshot(read(), readPlaylists(), JSONArray(storage.getString("history", "[]")).strings())
     }
 
-    fun read(): List<LocalTrack> = JSONArray(storage.getString("tracks", "[]")).objects { track ->
-        LocalTrack(
-            Uri.parse(track.getString("uri")), track.getString("title"),
-            track.optString("artist"), track.optBoolean("favorite"),
-            track.optString("album"), track.optLong("duration").coerceAtLeast(0),
-            track.optBoolean("metadataRead", track.has("duration")),
-        )
-    }
+    fun read(): List<LocalTrack> = decodeTracks(JSONArray(storage.getString("tracks", "[]")))
 
-    private fun readPlaylists(): List<Playlist> = JSONArray(storage.getString("playlists", "[]")).objects { playlist ->
-        Playlist(
-            playlist.getString("id"), playlist.getString("name"), playlist.getJSONArray("tracks").strings(),
-            playlist.optString("cover", "").takeIf { coverId.matches(it) },
-        )
-    }
+    private fun readPlaylists(): List<Playlist> = decodePlaylists(JSONArray(storage.getString("playlists", "[]")))
 
     data class ImportResult(val added: Int = 0, val unavailable: Int = 0)
 
@@ -222,11 +210,12 @@ internal class LocalLibrary(private val context: Context) {
         }
     }
 
-    fun savePlaylist(id: String?, name: String, cover: Bitmap?, removeCover: Boolean, firstTrack: String? = null): Playlist =
+    fun savePlaylist(id: String?, name: String, cover: Bitmap?, removeCover: Boolean, initialTracks: List<String> = emptyList()): Playlist =
         synchronized(lock) {
             val playlists = readPlaylists()
             val previous = if (id == null) {
-                val tracks = listOfNotNull(firstTrack?.takeIf { trackId -> read().any { it.id == trackId } })
+                val available = read().mapTo(mutableSetOf(), LocalTrack::id)
+                val tracks = initialTracks.filter { it in available }.distinct()
                 Playlist(UUID.randomUUID().toString(), name, tracks)
             } else playlists.firstOrNull { it.id == id } ?: throw IOException("Playlist no longer exists")
             if ((id == null || !previous.name.equals(name, ignoreCase = true)) &&
@@ -241,11 +230,25 @@ internal class LocalLibrary(private val context: Context) {
             val updated = previous.copy(name = name, cover = coverKey)
             val next = if (id == null) playlists + updated else playlists.map { if (it.id == id) updated else it }
             if (!storage.edit().putString("playlists", encodePlaylists(next)).commit()) {
+                replacement?.let { coverFile(it).delete() }
                 throw IOException("Could not save playlist")
             }
-            if (previous.cover != coverKey) previous.cover?.let { coverFile(it).delete() }
+            deleteUnusedCover(previous.cover, next)
             updated
         }
+
+    fun duplicatePlaylist(id: String): Playlist = synchronized(lock) {
+        val playlists = readPlaylists()
+        val source = playlists.firstOrNull { it.id == id } ?: throw IOException("Playlist no longer exists")
+        val duplicate = source.copy(
+            id = UUID.randomUUID().toString(),
+            name = availablePlaylistName(source.name, "копия", playlists.map(Playlist::name)),
+        )
+        if (!storage.edit().putString("playlists", encodePlaylists(playlists + duplicate)).commit()) {
+            throw IOException("Could not duplicate playlist")
+        }
+        duplicate
+    }
 
     fun deletePlaylist(id: String) = synchronized(lock) {
         val playlists = readPlaylists()
@@ -254,19 +257,79 @@ internal class LocalLibrary(private val context: Context) {
         if (!storage.edit().putString("playlists", encodePlaylists(next)).commit()) {
             throw IOException("Could not delete playlist")
         }
-        removed.cover?.let { coverFile(it).delete() }
+        deleteUnusedCover(removed.cover, next)
+    }
+
+    private fun deleteUnusedCover(key: String?, playlists: List<Playlist>) {
+        if (key != null && playlists.none { it.cover == key }) coverFile(key).delete()
     }
 
     fun readPlaylistCover(key: String): Bitmap? = BitmapFactory.decodeFile(coverFile(key).path)
 
+    fun exportLibrary(): BackupLibrary = synchronized(lock) {
+        val playlists = readPlaylists()
+        val covers = playlists.mapNotNull(Playlist::cover).distinct().mapNotNull { key ->
+            val file = coverFile(key)
+            if (file.isFile) key to file.readBytes() else null
+        }.toMap()
+        BackupLibrary(read(), playlists, covers)
+    }
+
+    fun restoreLibrary(backup: BackupLibrary): BackupResult = synchronized(lock) {
+        val active = read().associateByTo(linkedMapOf(), LocalTrack::id)
+        val byDocument = active.values.associateBy { documentKey(it.uri) }
+        val permitted = resolver.persistedUriPermissions.filter { it.isReadPermission }.mapTo(hashSetOf()) { it.uri }
+        val resolved = mutableMapOf<String, String>()
+        for (track in backup.tracks) {
+            val existing = byDocument[documentKey(track.uri)]
+            val local = when {
+                existing != null -> existing.copy(favorite = track.favorite)
+                grantUri(track.uri) in permitted -> track
+                else -> continue
+            }
+            active[local.id] = local
+            resolved[track.id] = local.id
+        }
+        val before = readPlaylists()
+        val restored = before.associateByTo(linkedMapOf(), Playlist::id)
+        val covers = mutableMapOf<String, String>()
+        try {
+            for (playlist in backup.playlists) {
+                val cover = playlist.cover?.let { key ->
+                    backup.covers[key]?.let { data -> covers.getOrPut(key) { createCover { it.write(data) } } }
+                }
+                val usedNames = restored.values.filter { it.id != playlist.id }.map(Playlist::name)
+                val name = if (usedNames.any { it.equals(playlist.name, ignoreCase = true) }) {
+                    availablePlaylistName(playlist.name, "импорт", usedNames)
+                } else playlist.name
+                restored[playlist.id] = playlist.copy(name = name, cover = cover,
+                    trackIds = playlist.trackIds.mapNotNull(resolved::get).distinct())
+            }
+            val playlists = restored.values.toList()
+            if (!storage.edit().putString("tracks", encodeTracks(active.values.toList()))
+                    .putString("playlists", encodePlaylists(playlists)).commit()) {
+                throw IOException("Could not restore library")
+            }
+            before.mapNotNull(Playlist::cover).distinct().forEach { deleteUnusedCover(it, playlists) }
+        } catch (error: IOException) {
+            covers.values.forEach { coverFile(it).delete() }
+            throw error
+        }
+        BackupResult(backup.playlists.size, backup.tracks.size - resolved.size)
+    }
+
     private fun coverFile(key: String) = File(coverDirectory, "$key.jpg")
 
-    private fun writeCover(bitmap: Bitmap): String {
+    private fun writeCover(bitmap: Bitmap): String = createCover {
+        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) throw IOException("Could not save cover")
+    }
+
+    private fun createCover(write: (java.io.OutputStream) -> Unit): String {
         if (!coverDirectory.isDirectory && !coverDirectory.mkdirs()) throw IOException("Could not create cover directory")
         val key = UUID.randomUUID().toString()
         val file = coverFile(key)
         try {
-            file.outputStream().use { if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) throw IOException("Could not save cover") }
+            file.outputStream().use(write)
         } catch (error: IOException) {
             file.delete()
             throw error
@@ -279,21 +342,30 @@ internal class LocalLibrary(private val context: Context) {
         it.copy(trackIds = (it.trackIds + trackIds.filter { trackId -> trackId in available }).distinct())
     }
 
-    fun addToPlaylists(trackId: String, playlistIds: Set<String>) = updatePlaylists { playlists ->
-        if (read().none { it.id == trackId }) playlists
-        else playlists.map { playlist ->
-            if (playlist.id in playlistIds && trackId !in playlist.trackIds) {
-                playlist.copy(trackIds = playlist.trackIds + trackId)
-            } else playlist
+    fun addToPlaylists(trackIds: List<String>, playlistIds: Set<String>) = updatePlaylists { playlists ->
+        val available = read().mapTo(mutableSetOf(), LocalTrack::id)
+        val newTracks = trackIds.filter { it in available }
+        playlists.map { playlist ->
+            if (playlist.id in playlistIds) playlist.copy(trackIds = (playlist.trackIds + newTracks).distinct())
+            else playlist
         }
     }
 
-    fun removeFromPlaylist(id: String, trackId: String) = updatePlaylist(id) { it.copy(trackIds = it.trackIds - trackId) }
+    fun removeFromPlaylist(id: String, trackIds: Set<String>) = updatePlaylist(id) {
+        it.copy(trackIds = it.trackIds.filterNot(trackIds::contains))
+    }
 
     fun moveInPlaylist(id: String, trackId: String, offset: Int) = updatePlaylist(id) {
         val from = it.trackIds.indexOf(trackId)
         val to = from + offset
         if (from < 0 || to !in it.trackIds.indices) it
+        else it.copy(trackIds = it.trackIds.toMutableList().apply { add(to, removeAt(from)) })
+    }
+
+    fun moveInPlaylist(id: String, trackId: String, anchorId: String) = updatePlaylist(id) {
+        val from = it.trackIds.indexOf(trackId)
+        val to = it.trackIds.indexOf(anchorId)
+        if (from < 0 || to < 0 || from == to) it
         else it.copy(trackIds = it.trackIds.toMutableList().apply { add(to, removeAt(from)) })
     }
 
@@ -314,8 +386,17 @@ internal class LocalLibrary(private val context: Context) {
 
     private companion object {
         val lock = Any()
-        val coverId = Regex("[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}")
         val audioExtensions = setOf("mp3", "flac", "wav", "ogg", "oga", "m4a", "aac", "opus", "wma", "aiff", "amr", "mka")
+    }
+}
+
+private fun availablePlaylistName(name: String, label: String, taken: Collection<String>): String {
+    var number = 1
+    while (true) {
+        val suffix = if (number == 1) " ($label)" else " ($label $number)"
+        val candidate = name.take(80 - suffix.length).trimEnd() + suffix
+        if (taken.none { it.equals(candidate, ignoreCase = true) }) return candidate
+        number++
     }
 }
 
@@ -323,7 +404,25 @@ private fun JSONArray.strings() = List(length()) { getString(it) }
 
 private fun <T> JSONArray.objects(decode: (JSONObject) -> T) = List(length()) { decode(getJSONObject(it)) }
 
-private fun encodeTracks(tracks: List<LocalTrack>): String = JSONArray().apply {
+internal val localUuid = Regex("[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}")
+
+internal fun decodeTracks(array: JSONArray): List<LocalTrack> = array.objects { track ->
+    LocalTrack(
+        Uri.parse(track.getString("uri")), track.getString("title"),
+        track.optString("artist"), track.optBoolean("favorite"),
+        track.optString("album"), track.optLong("duration").coerceAtLeast(0),
+        track.optBoolean("metadataRead", track.has("duration")),
+    )
+}
+
+internal fun decodePlaylists(array: JSONArray): List<Playlist> = array.objects { playlist ->
+    Playlist(
+        playlist.getString("id"), playlist.getString("name"), playlist.getJSONArray("tracks").strings(),
+        playlist.optString("cover", "").takeIf(localUuid::matches),
+    )
+}
+
+internal fun encodeTracks(tracks: List<LocalTrack>): String = JSONArray().apply {
     tracks.forEach { track ->
         put(JSONObject().put("uri", track.id).put("title", track.title).put("artist", track.artist)
             .put("favorite", track.favorite).put("album", track.album).put("duration", track.duration)
@@ -331,7 +430,7 @@ private fun encodeTracks(tracks: List<LocalTrack>): String = JSONArray().apply {
     }
 }.toString()
 
-private fun encodePlaylists(playlists: List<Playlist>): String = JSONArray().apply {
+internal fun encodePlaylists(playlists: List<Playlist>): String = JSONArray().apply {
     playlists.forEach { playlist ->
         put(JSONObject().put("id", playlist.id).put("name", playlist.name)
             .put("tracks", JSONArray(playlist.trackIds)).put("cover", playlist.cover))

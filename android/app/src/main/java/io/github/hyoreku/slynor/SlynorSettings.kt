@@ -1,5 +1,6 @@
 package io.github.hyoreku.slynor
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
@@ -27,16 +29,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
-internal fun SettingsScreen(theme: ThemeMode, onTheme: (ThemeMode) -> Unit, appearance: AppearanceSettings) {
+internal fun SettingsScreen(
+    theme: ThemeMode, onTheme: (ThemeMode) -> Unit, appearance: AppearanceSettings, library: LocalLibrary,
+) {
     val context = LocalContext.current
     val sound = remember(context) { SoundSettings(context.applicationContext) }
     val visualizer by SoundState.visualizer.collectAsState()
@@ -59,6 +66,75 @@ internal fun SettingsScreen(theme: ThemeMode, onTheme: (ThemeMode) -> Unit, appe
                 ChoiceMenu(visualizer.label, VisualizerStyle.entries, VisualizerStyle::label, onChoice = sound::setVisualizer)
             }
         }
+        SettingsGroup("Резервная копия") {
+            BackupControls(library) {
+                onTheme(ThemeMode.read(library.storage))
+                appearance.reload()
+                sound.restore()
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupControls(library: LocalLibrary, onRestore: suspend () -> Unit) {
+    val context = LocalContext.current
+    val backup = remember(context, library) { AndroidBackup(context.applicationContext, library) }
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var status by rememberSaveable { mutableStateOf<String?>(null) }
+    var source by rememberSaveable { mutableStateOf<String?>(null) }
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) {
+            busy = true
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { runCatching { backup.write(uri) } }
+                status = if (result.isSuccess) "Резервная копия сохранена." else "Не удалось сохранить копию."
+                busy = false
+            }
+        }
+    }
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        source = uri?.toString()
+    }
+    Text(
+        "Плейлисты, обложки, избранное и настройки. При переносе сначала добавьте аудиофайлы в библиотеку.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+        FilledTonalButton(onClick = { export.launch("Slynor-backup.zip") }, enabled = !busy) { Text("Сохранить копию") }
+        TextButton(onClick = { importPicker.launch(arrayOf("application/zip", "application/octet-stream")) }, enabled = !busy) {
+            Text("Восстановить")
+        }
+    }
+    if (busy) Text("Обработка резервной копии…")
+    status?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    source?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { source = null },
+            title = { Text("Восстановить из копии?") },
+            text = { Text("Плейлисты из копии и настройки будут обновлены.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    source = null
+                    busy = true
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { runCatching { backup.restore(Uri.parse(uri)) } }
+                        status = result.fold(
+                            onSuccess = {
+                                onRestore()
+                                val missing = if (it.unavailable == 0) "" else
+                                    " Треков без доступа: ${it.unavailable}. Добавьте файлы и повторите восстановление."
+                                "Плейлистов восстановлено: ${it.playlists}.$missing"
+                            },
+                            onFailure = { "Не удалось восстановить копию. Проверьте файл." },
+                        )
+                        busy = false
+                    }
+                }) { Text("Восстановить копию") }
+            },
+            dismissButton = { TextButton(onClick = { source = null }) { Text("Отмена") } },
+        )
     }
 }
 

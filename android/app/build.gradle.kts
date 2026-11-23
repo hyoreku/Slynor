@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseStore = providers.environmentVariable("SLYNOR_SIGNING_STORE_FILE").orNull
+val upgradeFixture = providers.gradleProperty("slynorUpgradeFixture").orNull == "true"
+
 android {
     namespace = "io.github.hyoreku.slynor"
     compileSdk = 36
@@ -13,12 +16,25 @@ android {
         applicationId = "io.github.hyoreku.slynor"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.8.0"
+        versionCode = if (upgradeFixture) 8 else 9
+        versionName = if (upgradeFixture) "0.8.0" else "0.9.0"
     }
 
+    signingConfigs {
+        if (releaseStore != null) {
+            create("distribution") {
+                storeFile = file(releaseStore)
+                storePassword = providers.environmentVariable("SLYNOR_SIGNING_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("SLYNOR_SIGNING_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("SLYNOR_SIGNING_KEY_PASSWORD").get()
+            }
+        }
+    }
     buildFeatures { compose = true }
-    buildTypes { debug { applicationIdSuffix = ".debug" } }
+    buildTypes {
+        debug { applicationIdSuffix = ".debug" }
+        release { signingConfig = signingConfigs.findByName("distribution") }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

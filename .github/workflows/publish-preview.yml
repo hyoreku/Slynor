@@ -26,6 +26,11 @@ jobs:
   android:
     needs: verify-source
     uses: ./.github/workflows/android.yml
+    secrets:
+      ANDROID_SIGNING_KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}
+      ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+      ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+      ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
 
   publish:
     needs: [windows, android]
@@ -63,9 +68,11 @@ jobs:
           Slynor-Portable.zip
           FILES
           (cd input/android && sha256sum --check SHA256.txt)
-          cp input/android/Slynor-Android-debug.apk release-assets/
+          android_apk=Slynor-Android.apk
+          if [[ ! -f "input/android/$android_apk" ]]; then android_apk=Slynor-Android-debug.apk; fi
+          cp "input/android/$android_apk" release-assets/
           cd release-assets
-          sha256sum Slynor-Setup.exe Slynor-Portable.zip Slynor-Android-debug.apk > SHA256SUMS.txt
+          sha256sum Slynor-Setup.exe Slynor-Portable.zip "$android_apk" > SHA256SUMS.txt
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --prerelease --title "Slynor $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md" \
-            Slynor-Setup.exe Slynor-Portable.zip Slynor-Android-debug.apk SHA256SUMS.txt
+            Slynor-Setup.exe Slynor-Portable.zip "$android_apk" SHA256SUMS.txt

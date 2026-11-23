@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,7 +59,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -152,7 +152,7 @@ internal fun TrackScreen(
     val art = rememberArtwork(track.uri)
     val glow by animateColorAsState(art?.tone ?: colors.primary, tween(420), label = "Фон обложки")
     BoxWithConstraints(Modifier.fillMaxSize().background(
-        Brush.radialGradient(listOf(glow.copy(alpha = .23f), Color.Transparent)),
+        Brush.verticalGradient(listOf(glow.copy(alpha = .27f), glow.copy(alpha = .10f), Color.Transparent)),
     )) {
         val content = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 10.dp)
         if (maxWidth >= 580.dp) {
@@ -197,12 +197,23 @@ private fun TrackControls(
     val colors = MaterialTheme.colorScheme
     val artist = state.artist.ifBlank { track.artist }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(state.title.ifBlank { track.title }, maxLines = 3, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-        if (artist.isNotBlank()) Text(artist, Modifier.padding(top = 5.dp), color = colors.onSurfaceVariant,
-            textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
-        if (track.album.isNotBlank()) Text(track.album, Modifier.padding(top = 3.dp), color = colors.onSurfaceVariant,
-            textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Crossfade(state.title.ifBlank { track.title } to listOf(artist, track.album).filter(String::isNotBlank)
+                .joinToString(" · "), modifier = Modifier.weight(1f), animationSpec = tween(200), label = "Данные трека") { (title, subtitle) ->
+                Column {
+                    Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineMedium)
+                    if (subtitle.isNotEmpty()) Text(subtitle, Modifier.padding(top = 4.dp), color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            FilledTonalIconButton(onClick = onFavorite) {
+                Glyph(
+                    if (track.favorite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
+                    if (track.favorite) "Убрать из избранного" else "В избранное",
+                )
+            }
+        }
         Slider(
             value = selected ?: state.progress,
             onValueChange = { selected = it },
@@ -231,22 +242,16 @@ private fun TrackControls(
                 Glyph(R.drawable.ic_next, "Следующий трек")
             }
         }
-        Row(
-            Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        FlowRow(
+            Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
+            TextButton(onClick = { showEqualizer = true }) {
+                Glyph(R.drawable.ic_equalizer, null, Modifier.size(18.dp))
+                Text("Эквалайзер", Modifier.padding(start = 5.dp))
+            }
             SpeedMenu(player, state.speed)
             RepeatMenu(player, state.repeat)
-            FilledTonalIconButton(onClick = onFavorite) {
-                Glyph(
-                    if (track.favorite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
-                    if (track.favorite) "Убрать из избранного" else "В избранное",
-                )
-            }
-        }
-        TextButton(onClick = { showEqualizer = true }) {
-            Glyph(R.drawable.ic_equalizer, null)
-            Text("Эквалайзер", Modifier.padding(start = 6.dp))
         }
     }
 }
