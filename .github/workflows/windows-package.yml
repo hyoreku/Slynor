@@ -122,6 +122,22 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+      - name: Print startup diagnostics for failed checks
+        if: failure()
+        run: |
+          $paths = @('build-logs', (Join-Path $env:RUNNER_TEMP 'slynor-installed-check\Slynor\logs'),
+            (Join-Path $env:RUNNER_TEMP 'slynor-installed-window\Slynor\logs'),
+            (Join-Path $env:RUNNER_TEMP 'slynor-portable-window\Slynor\logs'))
+          foreach ($path in $paths) {
+              if (Test-Path -LiteralPath $path) {
+                  Get-ChildItem -LiteralPath $path -File | Where-Object Name -match '(startup\.log|check\.json)$' | ForEach-Object {
+                      Write-Host "::group::$($_.FullName)"
+                      Get-Content -LiteralPath $_.FullName -Encoding utf8 -Tail 120
+                      Write-Host '::endgroup::'
+                  }
+              }
+          }
+
       - name: Upload packaging diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
