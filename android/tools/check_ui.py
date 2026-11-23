@@ -21,7 +21,7 @@ ACTIVITY = f"{PACKAGE}/io.github.hyoreku.slynor.MainActivity"
 TRACKS = [f"Slynor-{name}.wav" for name in ("Alpha", "Beta", "Gamma")]
 FIXTURE_FOLDER = "0-slynor-ui"
 COVER_FIXTURE = "Slynor-cover.png"
-BACKUP_FIXTURE = "Slynor-restore.zip"
+BACKUP_FIXTURE = "Slynor-backup.zip"
 PLAYER = "Открыть экран текущего трека"
 
 
@@ -180,7 +180,7 @@ def export_backup():
     tap(wait_for(save), save)
     wait_for("Резервная копия сохранена.")
     try:
-        found = adb("shell", "find", "/sdcard/", "-name", "Slynor-backup.zip")
+        found = adb("shell", "find", "/sdcard/", "-name", BACKUP_FIXTURE)
     except subprocess.CalledProcessError as error:
         found = error.output
     paths = found.decode().splitlines()
@@ -191,11 +191,6 @@ def export_backup():
         playlist = next(row for row in saved["playlists"] if row["name"] == "Roadtrip")
         assert archive.read(f"covers/{playlist['cover']}.jpg").startswith(b"\xff\xd8")
         assert saved["settings"]["library"]["theme"] == "Light"
-    with TemporaryDirectory() as directory:
-        destination = Path(directory) / BACKUP_FIXTURE
-        destination.write_bytes(payload)
-        adb("push", str(destination), f"/sdcard/{FIXTURE_FOLDER}/{BACKUP_FIXTURE}")
-
 
 def assert_queue(*tracks):
     counter = f"1 из {len(tracks)}"

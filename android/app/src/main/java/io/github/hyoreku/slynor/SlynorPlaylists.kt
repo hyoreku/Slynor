@@ -209,10 +209,9 @@ private fun PlaylistDetail(
         val byId = matching.associateBy(LocalTrack::id)
         preview.mapNotNull(byId::get)
     }
-    val selectedIds = remember(playlist.trackIds, selection) {
-        val selected = selection.toSet()
-        playlist.trackIds.filter(selected::contains)
-    }
+    val selectedSet = remember(selection) { selection.toHashSet() }
+    val selectedIds = remember(playlist.trackIds, selectedSet) { playlist.trackIds.filter(selectedSet::contains) }
+    val allVisibleSelected = matching.isNotEmpty() && manualIds.all(selectedSet::contains)
     fun endSelection() {
         selecting = false
         selection = arrayListOf()
@@ -313,11 +312,11 @@ private fun PlaylistDetail(
                             TextButton(
                                 enabled = matching.isNotEmpty(),
                                 onClick = {
-                                    selection = ArrayList(if (manualIds.all(selection::contains)) {
+                                    selection = ArrayList(if (allVisibleSelected) {
                                         selection - manualIds.toSet()
                                     } else (selection + manualIds).distinct())
                                 },
-                            ) { Text(if (matching.isNotEmpty() && manualIds.all(selection::contains)) "Снять выбор" else "Выбрать все") }
+                            ) { Text(if (allVisibleSelected) "Снять выбор" else "Выбрать все") }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(enabled = selectedIds.isNotEmpty(), onClick = {
                                     onAddTracks(selectedIds)
@@ -351,7 +350,7 @@ private fun PlaylistDetail(
             }
         }
         itemsIndexed(displayed, key = { _, track -> track.id }) { index, track ->
-            val checked = track.id in selection
+            val checked = track.id in selectedSet
             val rowModifier = drag.rowModifier(track.id, Modifier.animateItem(placementSpec = if (drag.activeId == track.id) null
                 else androidx.compose.animation.core.spring()))
             TrackRow(

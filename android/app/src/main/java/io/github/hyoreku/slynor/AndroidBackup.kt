@@ -133,10 +133,10 @@ internal class AndroidBackup(private val context: Context, private val library: 
 
 internal const val WALLPAPER_FILE = "slynor-wallpaper.jpg"
 private const val MAX_MANIFEST = 8 * 1024 * 1024
-private const val MAX_COVER = 2 * 1024 * 1024
+internal const val MAX_COVER = 2 * 1024 * 1024
 private const val MAX_WALLPAPER = 5 * 1024 * 1024
-private const val MAX_BACKUP = 40 * 1024 * 1024
-private const val MAX_COVERS = 1024
+internal const val MAX_BACKUP = 40 * 1024 * 1024
+internal const val MAX_COVERS = 1024
 
 private fun ZipOutputStream.writeEntry(name: String, data: ByteArray) {
     putNextEntry(ZipEntry(name))

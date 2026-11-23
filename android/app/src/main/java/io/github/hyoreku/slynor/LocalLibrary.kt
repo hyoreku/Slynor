@@ -268,9 +268,16 @@ internal class LocalLibrary(private val context: Context) {
 
     fun exportLibrary(): BackupLibrary = synchronized(lock) {
         val playlists = readPlaylists()
-        val covers = playlists.mapNotNull(Playlist::cover).distinct().mapNotNull { key ->
+        val keys = playlists.mapNotNull(Playlist::cover).distinct()
+        require(keys.size <= MAX_COVERS)
+        var remaining = MAX_BACKUP.toLong()
+        val covers = keys.mapNotNull { key ->
             val file = coverFile(key)
-            if (file.isFile) key to file.readBytes() else null
+            if (!file.isFile) return@mapNotNull null
+            val size = file.length()
+            require(size in 1..MAX_COVER.toLong() && size <= remaining)
+            remaining -= size
+            key to file.readBytes()
         }.toMap()
         BackupLibrary(read(), playlists, covers)
     }
