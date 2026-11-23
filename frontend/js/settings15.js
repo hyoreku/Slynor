@@ -180,5 +180,15 @@
             output.disabled = !settingsReady || !devicesAvailable;
         }
     });
-    void refreshOutputs();
+    // Do not enumerate audio devices until this panel actually needs them.
+    const technicalPanel = document.getElementById('settings-technical');
+    let requestedOutputs = false;
+    const whenTechnicalShown = () => {
+        if (requestedOutputs || technicalPanel.hidden || document.getElementById('screen-settings').hidden) return;
+        requestedOutputs = true;
+        void refreshOutputs();
+    };
+    const panelObserver = new MutationObserver(whenTechnicalShown);
+    panelObserver.observe(technicalPanel, { attributes: true, attributeFilter: ['hidden'] });
+    window.addEventListener('player-screen-changed', whenTechnicalShown);
 })();

@@ -48,20 +48,37 @@ internal data class LibrarySnapshot(
     val tracks: List<LocalTrack>,
     val playlists: List<Playlist>,
     val history: List<String>,
+    val byId: Map<String, LocalTrack>,
 )
 
-internal class LocalLibrary(private val context: Context) {
+internal class LocalLibrary private constructor(private val context: Context) {
     internal val storage = context.getSharedPreferences("library", Context.MODE_PRIVATE)
     private val resolver = context.contentResolver
     private val coverDirectory = File(context.filesDir, "playlist-covers")
+    private val storedTracks = StoredArray(::decodeTracks)
+    private val storedPlaylists = StoredArray(::decodePlaylists)
+    private val storedHistory = StoredArray { it.strings() }
+    private var indexedTracks: List<LocalTrack>? = null
+    private var index = emptyMap<String, LocalTrack>()
 
     fun snapshot(): LibrarySnapshot = synchronized(lock) {
-        LibrarySnapshot(read(), readPlaylists(), JSONArray(storage.getString("history", "[]")).strings())
+        LibrarySnapshot(read(), readPlaylists(), readHistory(), readById())
     }
 
-    fun read(): List<LocalTrack> = decodeTracks(JSONArray(storage.getString("tracks", "[]")))
+    fun read(): List<LocalTrack> = synchronized(lock) { storedTracks.read(storage.getString("tracks", "[]")) }
 
-    private fun readPlaylists(): List<Playlist> = decodePlaylists(JSONArray(storage.getString("playlists", "[]")))
+    fun readById(): Map<String, LocalTrack> = synchronized(lock) {
+        val tracks = read()
+        if (tracks !== indexedTracks) {
+            index = tracks.associateBy(LocalTrack::id)
+            indexedTracks = tracks
+        }
+        index
+    }
+
+    private fun readPlaylists(): List<Playlist> = storedPlaylists.read(storage.getString("playlists", "[]"))
+
+    private fun readHistory(): List<String> = storedHistory.read(storage.getString("history", "[]"))
 
     data class ImportResult(val added: Int = 0, val unavailable: Int = 0)
 
@@ -183,7 +200,7 @@ internal class LocalLibrary(private val context: Context) {
     fun remove(track: LocalTrack) = synchronized(lock) {
         val tracks = read().filterNot { it.id == track.id }
         val playlists = readPlaylists().map { it.copy(trackIds = it.trackIds - track.id) }
-        val history = JSONArray(storage.getString("history", "[]")).strings() - track.id
+        val history = readHistory() - track.id
         storage.edit().putString("tracks", encodeTracks(tracks))
             .putString("playlists", encodePlaylists(playlists)).putString("history", JSONArray(history).toString()).apply()
         releaseIfUnused(grantUri(track.uri), tracks)
@@ -204,8 +221,8 @@ internal class LocalLibrary(private val context: Context) {
     }
 
     fun rememberPlayed(id: String) = synchronized(lock) {
-        val history = JSONArray(storage.getString("history", "[]")).strings()
-        if (history.firstOrNull() != id && read().any { it.id == id }) {
+        val history = readHistory()
+        if (history.firstOrNull() != id && id in readById()) {
             storage.edit().putString("history", JSONArray((listOf(id) + (history - id)).take(50)).toString()).apply()
         }
     }
@@ -391,9 +408,27 @@ internal class LocalLibrary(private val context: Context) {
         DocumentsContract.buildTreeDocumentUri(uri.authority, DocumentsContract.getTreeDocumentId(uri))
     } else uri
 
-    private companion object {
-        val lock = Any()
-        val audioExtensions = setOf("mp3", "flac", "wav", "ogg", "oga", "m4a", "aac", "opus", "wma", "aiff", "amr", "mka")
+    companion object {
+        private val lock = Any()
+        private var instance: LocalLibrary? = null
+        private val audioExtensions = setOf("mp3", "flac", "wav", "ogg", "oga", "m4a", "aac", "opus", "wma", "aiff", "amr", "mka")
+
+        fun get(context: Context): LocalLibrary = synchronized(lock) {
+            instance ?: LocalLibrary(context.applicationContext).also { instance = it }
+        }
+    }
+}
+
+private class StoredArray<T>(private val decode: (JSONArray) -> List<T>) {
+    private var source: String? = null
+    private var rows = emptyList<T>()
+
+    fun read(serialized: String?): List<T> {
+        if (source != serialized) {
+            rows = decode(JSONArray(serialized ?: "[]"))
+            source = serialized
+        }
+        return rows
     }
 }
 

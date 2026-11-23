@@ -10,7 +10,7 @@ import time
 import types
 import unittest
 from copy import deepcopy
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 class FakeEvents:
     def __init__(self): self.callbacks = {}
@@ -88,6 +88,25 @@ class EngineRegressionTests(unittest.TestCase):
         self.engine.set_equalizer(config)
     def start(self):
         self.engine.play_queue(self.paths,0); self.native.started()
+    def test_rejected_saved_audio_device_retries_system_output(self):
+        self.engine._output_device = "disconnected-output"
+        select = self.native.audio_output_device_set = Mock()
+        with patch.object(self.native, "play", side_effect=[-1, 0]) as play:
+            self.engine.play_queue(self.paths, 0)
+        self.assertEqual(play.call_count, 2)
+        self.assertEqual(select.call_args_list, [call(None, "disconnected-output"), call(None, None)])
+        self.assertEqual(self.engine.get_state()["file_path"], self.paths[0])
+
+    def test_decoder_error_at_opening_retries_saved_output_once(self):
+        self.engine._output_device = "disconnected-output"
+        self.native.audio_output_device_set = Mock()
+        self.engine.play_queue(self.paths, 0)
+        self.native.events.emit("error")
+        self.wait(lambda: self.native.play_calls == 2)
+        self.native.events.emit("error")
+        self.wait(lambda: self.engine.get_state()["state"] == "error")
+        self.assertEqual(self.native.play_calls, 2)
+        self.native.audio_output_device_set.assert_called_with(None, None)
     def test_speed_idle_deferred_until_decoder_starts(self):
         self.mode('speedup'); self.assertEqual(self.native.rate_calls,[])
         self.start(); self.wait(lambda:self.native.rate==1.25)

@@ -145,6 +145,8 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: Slynor-Android-UI
-          path: ${{ runner.temp }}/slynor-ui/*.png
+          path: |
+            ${{ runner.temp }}/slynor-ui/*.png
+            ${{ runner.temp }}/slynor-ui/android-frames.txt
           if-no-files-found: ignore
           retention-days: 7

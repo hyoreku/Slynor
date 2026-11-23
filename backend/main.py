@@ -11,6 +11,7 @@ from starlette.background import BackgroundTask
 from urllib.parse import urlparse
 from secrets import compare_digest
 from backend.local_session import APP_TOKEN, COOKIE_NAME, DEFAULT_DESKTOP_URL, DESKTOP_PORT
+from backend.playback_start import PlaybackStart
 from backend.online_music import OnlineLibrary, ProviderError
 from backend.internet_music import InternetLibrary
 from backend.catalog_music import CatalogueLibrary
@@ -59,7 +60,10 @@ async def lifespan(app: FastAPI):
     app.state.library_service.start_background(
         prepare=service_runtime.ensure_started if service_runtime is not None else None,
     )
-    app.state.audio_engine = AudioEngine(defer_native=True)
+    app.state.audio_engine = AudioEngine(
+        defer_native=True, native_options=getattr(app.state, 'smoke_audio_options', ()),
+    )
+    app.state.playback_start = PlaybackStart()
     try:
         import json
         saved=json.loads((get_data_dir()/'settings.json').read_text('utf-8')).get('audio_output','')
@@ -77,7 +81,10 @@ async def lifespan(app: FastAPI):
     finally:
         app.state.library_service.stop_background()
         app.state.spectrum_analyzer.close()
-        app.state.audio_engine.close()
+        if app.state.playback_start.wait(2):
+            app.state.audio_engine.close()
+        else:
+            logging.getLogger('ownplayer').warning('Audio device is still opening during shutdown')
         app.state.online.close()
         if app.state.service_runtime is not None:
             app.state.service_runtime.stop()
@@ -276,6 +283,9 @@ def stop_track():
 
 @app.get("/api/player/state")
 def get_player_state():
+    pending = getattr(app.state, 'playback_start', None)
+    if pending is not None and pending.opening():
+        return {'state': 'opening', 'pending_start': True}
     result=app.state.audio_engine.get_state()
     from backend.desktop_controls import get_controller
     controller=get_controller()
@@ -348,10 +358,23 @@ def _queue_command_response(command):
 # Запуск выбранной песни и всего списка в обычном или случайном режиме.
 # Команда интерфейса → аудиодвижок; ошибки превращаются в HTTP-ответ.
 @app.post("/api/player/queue/play")
-def play_queue(body: QueuePlayRequest):
-    return _queue_command_response(
-        lambda: app.state.audio_engine.play_queue(body.paths, body.index)
-    )
+def play_queue(body: QueuePlayRequest, deferred: bool = False):
+    if body.index >= len(body.paths):
+        raise HTTPException(409, 'Выбранный трек отсутствует в списке.')
+    return _start_queue(lambda engine: engine.play_queue(body.paths, body.index), deferred)
+
+
+def _start_queue(command, deferred):
+    engine = app.state.audio_engine
+    if deferred:
+        identifier = app.state.playback_start.submit(lambda: _queue_command_response(lambda: command(engine)))
+        return JSONResponse({'id': identifier}, status_code=202)
+    return _queue_command_response(lambda: command(engine))
+
+
+@app.get("/api/player/queue/starts/{identifier}")
+def playback_start_status(identifier: str):
+    return app.state.playback_start.status(identifier)
 
 
 # Long queues keep the existing small-request guard and are assembled in
@@ -367,6 +390,7 @@ class QueueCommitRequest(BaseModel):
     expected_count: int = Field(ge=1,strict=True)
     index: int = Field(default=0,ge=0,strict=True)
     shuffle: bool = Field(default=False,strict=True)
+    deferred: bool = Field(default=False, strict=True)
 
 @app.post('/api/player/queue/uploads')
 def begin_queue_upload():
@@ -388,7 +412,9 @@ def commit_queue_upload(key:str,body:QueueCommitRequest):
     except QueueUploadError as error:raise HTTPException(409,str(error)) from error
     if body.shuffle:
         return _queue_command_response(lambda:app.state.audio_engine.set_shuffle(True,paths))
-    return _queue_command_response(lambda:app.state.audio_engine.play_queue(paths,body.index))
+    if body.index >= len(paths):
+        raise HTTPException(409, 'Выбранный трек отсутствует в списке.')
+    return _start_queue(lambda engine: engine.play_queue(paths, body.index), body.deferred)
 
 
 # Команда перехода вперёд в текущей очереди.
@@ -509,6 +535,9 @@ def get_wallpaper(filename: str):
 # Анализируется только текущий локальный трек движка: клиент не передаёт путь к файлу.
 @app.get("/api/player/spectrum")
 def get_player_spectrum():
+    pending = getattr(app.state, 'playback_start', None)
+    if pending is not None and pending.opening():
+        return {"available": False, "reason": "opening", "bands": []}
     state = app.state.audio_engine.get_state()
     if (state.get('file_path') or '').startswith('online:'):
         app.state.spectrum_analyzer.suspend()

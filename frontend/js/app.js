@@ -604,7 +604,7 @@ function setPlaybackControlsBusy(busy) {
 
 // Large queues are uploaded in small byte-bounded portions, not an unbounded
 // JSON body. The server also enforces a memory budget and expires abandoned jobs.
-async function uploadLargeQueue(paths,index,shuffle=false) {
+async function uploadLargeQueue(paths,index,shuffle=false,deferred=false) {
     let id=null;
     const request=async(url,body)=>{
         const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
@@ -623,11 +623,25 @@ async function uploadLargeQueue(paths,index,shuffle=false) {
             }
             await request(`/api/player/queue/uploads/${id}/chunks`,{offset,paths:chunk});offset+=chunk.length;
         }
-        const response=await request(`/api/player/queue/uploads/${id}/commit`,{expected_count:paths.length,index,shuffle});
+        const response=await request(`/api/player/queue/uploads/${id}/commit`,{expected_count:paths.length,index,shuffle,deferred});
         id=null;return response;
     } finally {
         if(id)void fetch(`/api/player/queue/uploads/${id}`,{method:'DELETE',signal:AbortSignal.timeout(2000)}).catch(()=>{});
     }
+}
+
+async function waitForPlaybackStart(id) {
+    const deadline = performance.now() + 45000;
+    const url = `/api/player/queue/starts/${encodeURIComponent(id)}`;
+    while (performance.now() < deadline) {
+        const response = await fetch(url, { signal: AbortSignal.timeout(4500) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Не удалось проверить запуск трека.");
+        if (data.status === "ok") return data;
+        if (data.status === "error") throw new Error(data.message);
+        await new Promise(resolve => setTimeout(resolve, 350));
+    }
+    throw new Error("Аудиодвижок долго открывает трек. Подождите или проверьте аудиовыход в настройках.");
 }
 
 async function sendCommand(action, { path: selectedPath, queue, context } = {}) {
@@ -675,8 +689,9 @@ async function sendCommand(action, { path: selectedPath, queue, context } = {}) 
                 ? selectedIndex
                 : 0;
 
-            if(queuePaths.length>10000)preparedResponse=await uploadLargeQueue(queuePaths,queueIndex);
-            url = "/api/player/queue/play";
+            const deferred = !path.startsWith("online:");
+            if(queuePaths.length>10000)preparedResponse=await uploadLargeQueue(queuePaths,queueIndex,false,deferred);
+            url = deferred ? "/api/player/queue/play?deferred=true" : "/api/player/queue/play";
 
             options.headers = {
                 "Content-Type": "application/json"
@@ -689,7 +704,7 @@ async function sendCommand(action, { path: selectedPath, queue, context } = {}) 
         }
 
         const response = preparedResponse || await fetch(url, options);
-        const data = await response.json();
+        let data = await response.json();
 
         if (!response.ok) {
             const message = typeof data.detail === "string"
@@ -699,6 +714,10 @@ async function sendCommand(action, { path: selectedPath, queue, context } = {}) 
             throw new Error(message);
         }
 
+        if (response.status === 202) {
+            result.textContent = "Открываем трек…";
+            data = await waitForPlaybackStart(data.id);
+        }
         result.textContent = data.message;
         if (action === "pause" || action === "resume") window.playerVisuals?.playbackChanged(action === "pause" ? "paused" : "playing");
         if (action === "pause" || action === "resume") window.playerMotion?.playback(action === "pause" ? "paused" : "playing");
@@ -720,7 +739,8 @@ async function sendCommand(action, { path: selectedPath, queue, context } = {}) 
             setPlayerVisible(false, restoreAfterStop);
         }
     } catch (error) {
-        result.textContent = "Ошибка: " + error.message;
+        const message = error.name === "TimeoutError" ? "Локальный плеер не ответил вовремя." : error.message;
+        result.textContent = "Ошибка: " + message;
     } finally {
         setPlaybackControlsBusy(false);
         void refreshPlayerState();
@@ -921,7 +941,7 @@ async function updatePlayerState() {
             visibilityChanged = true;
         }
         if (mainVisible === false) return;
-        if (commandBusy || requestedPlaybackRevision !== playbackRevision) return;
+        if (data.pending_start || commandBusy || requestedPlaybackRevision !== playbackRevision) return;
         publishPlayerState = true;
         currentTrackPath = data.file_path || null;
         currentPlaybackState = data.state;

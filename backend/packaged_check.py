@@ -1,4 +1,4 @@
-"""Packaged preflight and real local HTTP smoke test. No playback or online queries."""
+"""Packaged preflight with real local HTTP and LibVLC decoding checks."""
 from contextlib import contextmanager
 import importlib
 import json
@@ -12,7 +12,8 @@ import sys
 from tempfile import TemporaryDirectory
 import threading
 import time
-from urllib.request import build_opener, ProxyHandler
+import wave
+from urllib.request import build_opener, ProxyHandler, Request
 from urllib.error import URLError
 from backend.startup_runtime import log_dir
 
@@ -39,7 +40,13 @@ def _isolated_music_service():
 
 def _smoke(app):
     with _isolated_music_service() as music_url:
-        _smoke_api(app, music_url)
+        # CI hosts can lack a speaker. The same engine and decoder send PCM to
+        # a dummy output, while the normal application uses the selected device.
+        app.state.smoke_audio_options = ('--aout=dummy',)
+        try:
+            _smoke_api(app, music_url)
+        finally:
+            del app.state.smoke_audio_options
 
 
 def _smoke_api(app, music_url):
@@ -84,6 +91,7 @@ def _smoke_api(app, music_url):
             time.sleep(.2)
         else:
             raise RuntimeError('Music Service did not start its job dispatchers')
+        _smoke_local_audio(opener, f'http://127.0.0.1:{port}')
     finally:
         server.should_exit = True
         thread.join(12)
@@ -93,10 +101,59 @@ def _smoke_api(app, music_url):
             raise TimeoutError('Smoke server did not stop')
 
 
+def _smoke_local_audio(opener, base_url):
+    from backend.local_session import APP_TOKEN
+
+    def request(route, body=None, method=None, status=200):
+        payload = None if body is None else json.dumps(body).encode()
+        headers = {'X-OwnPlayer-Token': APP_TOKEN, 'Content-Type': 'application/json'}
+        with opener.open(Request(base_url + route, data=payload, headers=headers, method=method), timeout=4) as response:
+            if response.status != status:
+                raise RuntimeError(f'Unexpected playback smoke HTTP status: {response.status}')
+            return json.load(response)
+
+    def wait_for_playing(path):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            state = request('/api/player/state')
+            if state['state'] == 'error':
+                raise RuntimeError('LibVLC reported a playback error')
+            if state.get('file_path') == path and state['state'] == 'playing' and state['time_ms'] > 0:
+                return
+            time.sleep(.1)
+        raise TimeoutError('LibVLC did not advance playback for the local WAV')
+
+    with TemporaryDirectory(prefix='Slynor local audio ') as temporary:
+        paths = [str(Path(temporary) / name) for name in ('Первый.wav', 'Second.wav')]
+        for path in paths:
+            with wave.open(path, 'wb') as audio:
+                audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+                audio.writeframes(b'\x00\x00' * 8000 * 8)
+        started = request('/api/player/queue/play?deferred=true', {'paths': paths, 'index': 0}, status=202)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            result = request('/api/player/queue/starts/' + started['id'])
+            if result['status'] == 'ok':
+                break
+            if result['status'] == 'error':
+                raise RuntimeError('Local audio command failed: ' + result['message'])
+            time.sleep(.1)
+        else:
+            raise TimeoutError('Local audio command did not complete')
+        try:
+            wait_for_playing(paths[0])
+            request('/api/player/next', method='POST')
+            wait_for_playing(paths[1])
+        finally:
+            request('/api/player/stop', method='POST')
+    logging.getLogger('ownplayer').info('Verified local WAV playback and queue advancement using LibVLC')
+
+
 def run_check(smoke=False):
     data = {'app': 'Slynor', 'check_version': 1, 'frozen': bool(getattr(sys, 'frozen', False)),
             'python': sys.version.split()[0], 'checks': {},
-            'scope': 'Dependency imports, assets, native initialization; no sound, online availability or visible GUI is tested.'}
+            'scope': ('Dependency imports, assets and native initialization. Smoke also checks local WAV decoding '
+                      'and queue advancement with a dummy audio output.')}
     def check(name, fn):
         try:
             fn()

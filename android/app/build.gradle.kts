@@ -6,6 +6,7 @@ plugins {
 
 val releaseStore = providers.environmentVariable("SLYNOR_SIGNING_STORE_FILE").orNull
 val upgradeFixture = providers.gradleProperty("slynorUpgradeFixture").orNull == "true"
+val currentVersionCode = 10
 
 android {
     namespace = "io.github.hyoreku.slynor"
@@ -16,8 +17,8 @@ android {
         applicationId = "io.github.hyoreku.slynor"
         minSdk = 26
         targetSdk = 36
-        versionCode = if (upgradeFixture) 8 else 9
-        versionName = if (upgradeFixture) "0.8.0" else "0.9.0"
+        versionCode = if (upgradeFixture) currentVersionCode - 1 else currentVersionCode
+        versionName = if (upgradeFixture) "0.9.0" else "0.9.1"
     }
 
     signingConfigs {

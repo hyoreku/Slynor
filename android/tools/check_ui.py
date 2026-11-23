@@ -174,6 +174,30 @@ def saved_playlist(name):
     return next(playlist for playlist in rows if playlist["name"] == name)
 
 
+def check_large_library():
+    adb("shell", "am", "force-stop", PACKAGE)
+    root = ET.fromstring(private_file("shared_prefs/library.xml"))
+    tracks = root.find("./string[@name='tracks']")
+    rows = json.loads(tracks.text)
+    sample = rows[0]
+    rows.extend({
+        **sample, "uri": f"{sample['uri']}#test-{index}", "title": f"Fixture{index:04d}", "favorite": False,
+    } for index in range(1, 601))
+    tracks.text = json.dumps(rows)
+    path = "shared_prefs/library.xml"
+    command = f"run-as {PACKAGE} sh -c 'cat > {path}'" if PACKAGE.endswith(".debug") else (
+        f"cat > /data/user/0/{PACKAGE}/{path}"
+    )
+    subprocess.run(["adb", "shell", command], input=ET.tostring(root, encoding="utf-8"), check=True, timeout=15)
+    adb("shell", "am", "start", "-W", "-n", ACTIVITY)
+    tap(wait_for("Моя музыка"), "Моя музыка")
+    field = "Трек, исполнитель или альбом"
+    tap(wait_for("603 трека", field), field)
+    adb("shell", "input", "text", "Fixture0600")
+    wait_for("1 трек", "Fixture0600")
+    print("Verified search in a 603-entry library")
+
+
 def export_backup():
     tap(wait_for("Сохранить копию"), "Сохранить копию")
     save = re.compile("save", re.IGNORECASE)
@@ -366,9 +390,12 @@ def main(output):
     adb("shell", "am", "force-stop", PACKAGE)
     update = os.environ.get("SLYNOR_UPGRADE_APK")
     if update:
-        assert re.search(r"\bversionCode=8\b", adb("shell", "dumpsys", "package", PACKAGE).decode())
+        def installed_version():
+            details = adb("shell", "dumpsys", "package", PACKAGE).decode()
+            return int(re.search(r"\bversionCode=(\d+)\b", details)[1])
+        previous = installed_version()
         adb("install", "-r", update, timeout=60)
-        assert re.search(r"\bversionCode=9\b", adb("shell", "dumpsys", "package", PACKAGE).decode())
+        assert installed_version() == previous + 1
     adb("shell", "am", "start", "-W", "-n", ACTIVITY)
     open_queue(3)
     assert_queue(*queue_order)
@@ -399,6 +426,9 @@ def main(output):
     restored = saved_playlist("Roadtrip")
     assert restored["tracks"] == saved_playlist("Batch")["tracks"]
     assert private_file(f"files/playlist-covers/{restored['cover']}.jpg") == image
+    check_large_library()
+    frames = adb("shell", "dumpsys", "gfxinfo", PACKAGE)
+    (output / "android-frames.txt").write_bytes(frames)
     print("Verified drag, bulk playlist actions, backup restoration and data preservation during APK upgrade.")
 
 

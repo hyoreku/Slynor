@@ -57,9 +57,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -86,6 +88,9 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import java.text.Collator
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private enum class Destination(val title: String, @param:DrawableRes val icon: Int) {
     Home("Главная", R.drawable.ic_home),
@@ -106,6 +111,7 @@ internal fun SlynorScreens(
     data: LibrarySnapshot,
     player: MediaController?,
     playback: Playback,
+    playhead: State<Long>,
     status: String?,
     importing: Boolean,
     theme: ThemeMode,
@@ -144,7 +150,7 @@ internal fun SlynorScreens(
     val tracks = data.tracks
     val playlist = data.playlists.firstOrNull { it.id == playlistId }
     val libraryScroll = rememberLazyListState()
-    val byId = remember(tracks) { tracks.associateBy(LocalTrack::id) }
+    val byId = data.byId
     val recentPlays = remember(data.history, byId) { data.history.mapNotNull(byId::get) }
     val current = byId[playback.trackId]
     val showingTrack = showPlayer && player != null && current != null
@@ -255,18 +261,16 @@ internal fun SlynorScreens(
                 screenState.SaveableStateProvider(screen) {
                     when (screen) {
                         Destination.Player -> if (player != null && current != null) {
-                            TrackScreen(player, playback, current, onFavorite = { onFavorite(current) })
+                            TrackScreen(player, playback, playhead, current, onFavorite = { onFavorite(current) })
                         }
                         Destination.Home -> HomeScreen(
-                            library, tracks, data.playlists, recentPlays, current, playback, player,
+                            library, tracks, data.playlists, recentPlays, current, playback, playhead, player,
                             importing, onAdd, onPlay, { destination = Destination.Library }, { showPlayer = true },
                             ::showPlaylist, { editPlaylist() }, { editPlaylist(it.id) },
                         )
                         Destination.Library -> {
                             val query = search.trim()
-                            val filtered = remember(tracks, query, favoritesOnly, sort) {
-                                sort.order(tracks.filter { (!favoritesOnly || it.favorite) && it.matches(query) })
-                            }
+                            val filtered = rememberTrackFilter(tracks, query, sort, favoritesOnly)
                             Column(Modifier.fillMaxSize().padding(horizontal = screenMargin)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.weight(1f)) { ScreenTitle(screen.title, trackCount(filtered.size)) }
@@ -403,7 +407,7 @@ internal fun SlynorScreens(
                     ) {
                         if (player != null && current != null) {
                             Box(Modifier.widthIn(max = screenWidth).fillMaxWidth().padding(horizontal = 12.dp)) {
-                                PlayerBar(current, playback, { showPlayer = true }) { togglePlayback(player, playback) }
+                                PlayerBar(current, playback, playhead, { showPlayer = true }) { togglePlayback(player, playback) }
                             }
                         }
                     }
@@ -544,7 +548,7 @@ internal fun trackCount(total: Int): String {
 @Composable
 private fun HomeScreen(
     library: LocalLibrary, tracks: List<LocalTrack>, playlists: List<Playlist>, history: List<LocalTrack>,
-    current: LocalTrack?, playback: Playback, player: MediaController?, importing: Boolean, onAdd: () -> Unit,
+    current: LocalTrack?, playback: Playback, playhead: State<Long>, player: MediaController?, importing: Boolean, onAdd: () -> Unit,
     onPlay: (LocalTrack, List<LocalTrack>) -> Unit, onLibrary: () -> Unit, onOpenPlayer: () -> Unit,
     onPlaylist: (String?) -> Unit, onCreate: () -> Unit, onEdit: (Playlist) -> Unit,
 ) {
@@ -562,7 +566,7 @@ private fun HomeScreen(
                 label = "Карточка текущего трека",
             ) { track ->
                 if (track != null && player != null) {
-                    CurrentTrackCard(track, playback, onOpenPlayer) { togglePlayback(player, playback) }
+                    CurrentTrackCard(track, playback, playhead, onOpenPlayer) { togglePlayback(player, playback) }
                 } else {
                     LibraryCard(tracks.isEmpty(), importing, onAdd, onLibrary)
                 }
@@ -663,7 +667,7 @@ internal fun TrackRow(
                 .padding(start = 8.dp, end = 6.dp, top = 7.dp, bottom = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
-            Cover(rememberArtwork(track.uri), Modifier.size(42.dp))
+            Cover(rememberArtwork(track.uri), Modifier.size(42.dp), animate = false)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                 val subtitle = listOf(track.artist, track.album).filter(String::isNotBlank).joinToString(" · ")
@@ -717,6 +721,8 @@ internal enum class LibrarySort(val title: String) {
     Duration("По длительности");
 
     fun order(tracks: List<LocalTrack>): List<LocalTrack> {
+        if (this == Added) return tracks
+        if (this == Newest) return tracks.asReversed()
         val localized = Collator.getInstance(Locale.forLanguageTag("ru")).apply { strength = Collator.PRIMARY }
         val title = compareBy<LocalTrack, String>(localized, LocalTrack::title)
         return when (this) {
@@ -730,6 +736,20 @@ internal enum class LibrarySort(val title: String) {
             Duration -> tracks.sortedWith(compareByDescending<LocalTrack> { it.duration }.then(title))
         }
     }
+}
+
+@Composable
+internal fun rememberTrackFilter(
+    tracks: List<LocalTrack>, query: String, sort: LibrarySort, favoritesOnly: Boolean = false,
+): List<LocalTrack> {
+    if (query.isEmpty() && !favoritesOnly && sort == LibrarySort.Added) return tracks
+    fun filter() = sort.order(tracks.filter { (!favoritesOnly || it.favorite) && it.matches(query) })
+    if (tracks.size <= 256) return remember(tracks, query, sort, favoritesOnly) { filter() }
+    val result by produceState(emptyList<LocalTrack>(), tracks, query, sort, favoritesOnly) {
+        if (query.isNotEmpty()) delay(100)
+        value = withContext(Dispatchers.Default) { filter() }
+    }
+    return result
 }
 
 @Composable

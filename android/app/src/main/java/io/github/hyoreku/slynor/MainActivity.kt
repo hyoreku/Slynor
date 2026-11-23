@@ -11,14 +11,22 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -27,6 +35,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import java.util.Locale
 import java.util.concurrent.ExecutionException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,7 +47,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val library = LocalLibrary(applicationContext)
+        val library = LocalLibrary.get(applicationContext)
         setContent {
             var theme by remember { mutableStateOf(ThemeMode.read(library.storage)) }
             val appearance = remember { AppearanceSettings(applicationContext) }
@@ -94,19 +103,26 @@ private fun MusicLibrary(
     appearance: AppearanceSettings,
     onTheme: (ThemeMode) -> Unit,
 ) {
-    var data by remember(library) { mutableStateOf(library.snapshot()) }
+    var data by remember(library) { mutableStateOf<LibrarySnapshot?>(null) }
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val playback = rememberPlayback(player)
+    val playhead = rememberPlayhead(player, playback)
     val scope = rememberCoroutineScope()
 
-    DisposableEffect(library) {
+    LaunchedEffect(library) {
+        val changes = Channel<Unit>(Channel.CONFLATED)
         val libraryListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key in setOf("tracks", "playlists", "history")) data = library.snapshot()
+            if (key == "tracks" || key == "playlists" || key == "history") changes.trySend(Unit)
         }
         library.storage.registerOnSharedPreferenceChangeListener(libraryListener)
-        data = library.snapshot()
-        onDispose { library.storage.unregisterOnSharedPreferenceChangeListener(libraryListener) }
+        try {
+            changes.trySend(Unit)
+            for (change in changes) data = withContext(Dispatchers.IO) { library.snapshot() }
+        } finally {
+            library.storage.unregisterOnSharedPreferenceChangeListener(libraryListener)
+            changes.close()
+        }
     }
     LaunchedEffect(library) {
         withContext(Dispatchers.IO) { library.refreshLegacyMetadata() }
@@ -140,11 +156,17 @@ private fun MusicLibrary(
         importing -> "Добавление файлов…"
         else -> message
     }
+    val snapshot = data
+    if (snapshot == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Загружаем медиатеку…") }
+        return
+    }
     SlynorScreens(
         library = library,
-        data = data,
+        data = snapshot,
         player = player,
         playback = playback,
+        playhead = playhead,
         status = status,
         importing = importing,
         theme = theme,
@@ -153,14 +175,15 @@ private fun MusicLibrary(
         onAdd = { if (!importing) picker.launch(arrayOf("audio/*")) },
         onAddFolder = { if (!importing) folderPicker.launch(null) },
         onPlay = { track, selection -> player?.playSelection(track, selection) },
-        onFavorite = { track -> library.setFavorite(track.id, !track.favorite) },
+        onFavorite = { track -> scope.launch(Dispatchers.IO) { library.setFavorite(track.id, !track.favorite) } },
         onRemove = { track ->
             player?.removeFromQueue(track)
-            library.remove(track)
+            scope.launch(Dispatchers.IO) { library.remove(track) }
         },
     )
 }
 
+@Immutable
 internal data class Playback(
     val trackId: String? = null,
     val title: String = "",
@@ -178,7 +201,9 @@ internal data class Playback(
     val repeat: Int = Player.REPEAT_MODE_OFF,
 )
 
-private fun Player.snapshot() = Playback(
+private fun Player.queueIds(): List<String> = (0 until mediaItemCount).map { getMediaItemAt(it).mediaId }
+
+private fun Player.snapshot(queue: List<String>) = Playback(
     trackId = currentMediaItem?.mediaId,
     title = mediaMetadata.title?.toString().orEmpty(),
     artist = mediaMetadata.artist?.toString().orEmpty(),
@@ -189,7 +214,7 @@ private fun Player.snapshot() = Playback(
     hasNext = hasNextMediaItem(),
     seekable = isCurrentMediaItemSeekable,
     failed = playerError != null,
-    queue = (0 until mediaItemCount).map { getMediaItemAt(it).mediaId },
+    queue = queue,
     queueIndex = currentMediaItemIndex,
     speed = playbackParameters.speed,
     repeat = repeatMode,
@@ -197,23 +222,33 @@ private fun Player.snapshot() = Playback(
 
 @Composable
 private fun rememberPlayback(player: MediaController?): Playback {
-    var state by remember(player) { mutableStateOf(player?.snapshot() ?: Playback()) }
+    var state by remember(player) { mutableStateOf(player?.let { it.snapshot(it.queueIds()) } ?: Playback()) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) { state = player.snapshot() }
+            override fun onEvents(player: Player, events: Player.Events) {
+                val queue = if (events.contains(Player.EVENT_TIMELINE_CHANGED)) player.queueIds() else state.queue
+                state = player.snapshot(queue)
+            }
         }
         player?.addListener(listener)
         onDispose { player?.removeListener(listener) }
     }
-    LaunchedEffect(player, state.playing) {
+    return state
+}
+
+@Composable
+private fun rememberPlayhead(player: MediaController?, state: Playback): State<Long> {
+    val position = remember(player) { mutableLongStateOf(state.position) }
+    LaunchedEffect(player, state.trackId, state.playing, state.position) {
+        position.longValue = state.position
         if (player != null && state.playing) {
             while (true) {
                 delay(250)
-                state = state.copy(position = player.currentPosition.coerceAtLeast(0))
+                position.longValue = player.currentPosition.coerceAtLeast(0)
             }
         }
     }
-    return state
+    return position
 }
 
 internal fun formatTime(ms: Long): String = String.format(Locale.ROOT, "%d:%02d", ms / 60_000, ms / 1000 % 60)

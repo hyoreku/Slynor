@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+from threading import Event
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, call, patch
@@ -18,6 +19,38 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BuildContractTests(unittest.TestCase):
+    def test_pending_native_playback_does_not_block_its_http_status(self):
+        from fastapi.testclient import TestClient
+        from backend.local_session import APP_TOKEN
+        from backend.main import app
+        from backend.playback_start import PlaybackStart
+
+        release = Event()
+
+        def slow_play(paths, index):
+            if not release.wait(5):
+                raise TimeoutError('test did not release playback')
+            return 'track.wav'
+
+        starting = PlaybackStart()
+        state = SimpleNamespace(audio_engine=SimpleNamespace(play_queue=slow_play), playback_start=starting)
+        client = TestClient(app, base_url='http://127.0.0.1:8765', headers={'X-OwnPlayer-Token': APP_TOKEN})
+        with patch.object(app, 'state', state):
+            try:
+                body = {'paths': ['track.wav'], 'index': 0}
+                response = client.post('/api/player/queue/play?deferred=true', json=body)
+                self.assertEqual(response.status_code, 202)
+                status = '/api/player/queue/starts/' + response.json()['id']
+                self.assertEqual(client.get(status).json(), {'status': 'opening'})
+                self.assertEqual(client.get('/api/player/state').json(), {'state': 'opening', 'pending_start': True})
+                self.assertEqual(client.post('/api/player/queue/play?deferred=true', json=body).status_code, 409)
+                release.set()
+                self.assertTrue(starting.wait(1))
+                self.assertEqual(client.get(status).json()['status'], 'ok')
+            finally:
+                release.set()
+                client.close()
+
     def test_desktop_selects_windows_webview_with_either_runtime(self):
         import desktop
 

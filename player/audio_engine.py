@@ -18,7 +18,7 @@ VLC_EQ_FREQUENCIES = (60., 170., 310., 600., 1000., 3000., 6000., 12000., 14000.
 
 class AudioEngine:
     # Создание объектов и приватного состояния; вызывается один раз при запуске.
-    def __init__(self, *, defer_native=False):
+    def __init__(self, *, defer_native=False, native_options=()):
         self._lock = RLock()
         self._instance = None
         self._player = None
@@ -34,6 +34,8 @@ class AudioEngine:
         self.playback_changed = None
         self._current_stream_url = None
         self._output_device = ""
+        self._retry_system_output = False
+        self._native_options = native_options
         self._startup = None
         self._startup_started = None
 
@@ -61,7 +63,7 @@ class AudioEngine:
         if self._closed:
             raise RuntimeError("Плеер уже закрыт.")
         logger.info("Initializing LibVLC audio")
-        instance = vlc.Instance("--no-video", "--no-audio-time-stretch")
+        instance = vlc.Instance("--no-video", "--no-audio-time-stretch", *self._native_options)
         if instance is None:
             raise RuntimeError("Не удалось создать движок VLC.")
         player = None
@@ -134,7 +136,7 @@ class AudioEngine:
         return ordered
 
     # Загрузка файла в VLC и запуск. События старого трека становятся неактуальными.
-    def _play_file(self, path: str):
+    def _play_file(self, path: str, *, use_system_output=False):
         started = perf_counter()
         online = path.startswith('online:')
         if online:
@@ -153,6 +155,8 @@ class AudioEngine:
             self._generation += 1
             generation = self._generation
             self._seek_target = None
+            output = '' if use_system_output else self._output_device
+            self._retry_system_output = bool(output and not online)
 
             for event_type in (vlc.EventType.MediaPlayerEndReached,
                                vlc.EventType.MediaPlayerPlaying,
@@ -170,7 +174,8 @@ class AudioEngine:
                 self._startup_started = started
                 self._startup = {'source':'online' if online else 'local', 'request_to_play_ms':None, 'request_to_playing_event_ms':None}
                 self._player.set_media(media)
-                if self._output_device:self._player.audio_output_device_set(None,self._output_device)
+                if self._output_device:
+                    self._player.audio_output_device_set(None, output or None)
                 self._current_filename = display_name
                 self._current_stream_url = media_url if online else None
                 self._playback_error = None
@@ -187,16 +192,21 @@ class AudioEngine:
                         raise RuntimeError("Не удалось подключить событие VLC.")
 
                 if self._player.play() == -1:
-                    raise RuntimeError(
-                        "VLC не смог запустить воспроизведение."
-                    )
+                    if not self._retry_system_output:
+                        raise RuntimeError("VLC не смог запустить воспроизведение.")
+                    retry = True
+                else:
+                    retry = False
 
-                # set_rate during Opening may be ignored/reset by the new decoder.
-                # The generation-checked Playing event applies the latest requested mode.
-                self._startup['request_to_play_ms'] = round((perf_counter()-started)*1000)
-                self._auto_advance_enabled = True
+                    # The generation-checked Playing event applies the latest speed.
+                    self._startup['request_to_play_ms'] = round((perf_counter()-started)*1000)
+                    self._auto_advance_enabled = True
             finally:
                 media.release()
+
+            if retry:
+                logger.warning("LibVLC rejected the selected output. Trying the system default.")
+                return self._play_file(path, use_system_output=True)
 
         return display_name
 
@@ -335,6 +345,7 @@ class AudioEngine:
                 if self._closed or generation != self._generation:
                     continue
                 if kind == "playing":
+                    self._retry_system_output = False
                     if self._startup and self._startup["request_to_playing_event_ms"] is None:
                         self._startup["request_to_playing_event_ms"] = round((perf_counter()-self._startup_started)*1000)
                         logging.getLogger("ownplayer").info(
@@ -354,6 +365,13 @@ class AudioEngine:
                     continue
                 if kind == "error":
                     self._auto_advance_enabled = False
+                    if self._retry_system_output and self._queue_index is not None:
+                        logger.warning("LibVLC could not open the selected output. Trying the system default.")
+                        try:
+                            self._play_file(self._queue[self._queue_index], use_system_output=True)
+                            continue
+                        except (OSError, RuntimeError, ValueError):
+                            logger.exception("Playback on the system audio output failed")
                     if not self._playback_error:
                         self._playback_error = "VLC не смог запустить воспроизведение."
                     continue

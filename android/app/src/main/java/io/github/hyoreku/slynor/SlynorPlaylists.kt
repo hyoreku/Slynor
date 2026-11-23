@@ -108,7 +108,7 @@ internal fun PlaylistsScreen(
                     EmptyState(R.drawable.ic_playlist, "Плейлистов пока нет", "Соберите треки в свой список.",
                         "Создать плейлист", onCreate)
                 } else {
-                    val tracksById = remember(data.tracks) { data.tracks.associateBy(LocalTrack::id) }
+                    val tracksById = data.byId
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(126.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -193,17 +193,16 @@ private fun PlaylistDetail(
     val focus = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val tracks = remember(playlist.trackIds, data.tracks) {
-        val byId = data.tracks.associateBy(LocalTrack::id)
-        playlist.trackIds.mapNotNull(byId::get)
+    val tracks = remember(playlist.trackIds, data.byId) {
+        playlist.trackIds.mapNotNull(data.byId::get)
     }
     val query = search.trim()
-    val matching = remember(tracks, query, sort) {
-        sort.order(tracks.filter { it.matches(query) })
-    }
+    val matching = rememberTrackFilter(tracks, query, sort)
     val canReorder = sort == LibrarySort.Added && query.isEmpty() && !selecting
     val manualIds = remember(matching) { matching.map(LocalTrack::id) }
-    val drag = rememberPlaylistDrag(listState) { from, anchor -> library.moveInPlaylist(playlist.id, from, anchor) }
+    val drag = rememberPlaylistDrag(listState) { from, anchor ->
+        scope.launch(Dispatchers.IO) { library.moveInPlaylist(playlist.id, from, anchor) }
+    }
     val displayed = remember(matching, drag.order) {
         val preview = drag.order ?: return@remember matching
         val byId = matching.associateBy(LocalTrack::id)

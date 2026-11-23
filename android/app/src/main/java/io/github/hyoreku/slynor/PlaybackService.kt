@@ -18,6 +18,8 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import org.json.JSONArray
 
 internal val playbackSpeeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
@@ -29,6 +31,8 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private val handler = Handler(Looper.getMainLooper())
     private val storage by lazy { playbackStorage() }
+    private val libraryWorker = Executors.newSingleThreadExecutor()
+    private var restoringQueue = true
     private val checkpoint = object : Runnable {
         override fun run() {
             val player = session?.player ?: return
@@ -56,14 +60,17 @@ class PlaybackService : MediaSessionService() {
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val library = LocalLibrary(applicationContext)
-        restore(player, library)
+        val library = LocalLibrary.get(applicationContext)
+        restoreModes(player)
         session = MediaSession.Builder(this, player).setSessionActivity(activity)
             .setCallback(callback(library)).build()
+        restoreQueue(player, library)
         player.addListener(object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
                 if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)) {
-                    if (player.isPlaying) player.currentMediaItem?.let { library.rememberPlayed(it.mediaId) }
+                    if (player.isPlaying) player.currentMediaItem?.mediaId?.let { id ->
+                        libraryWorker.execute { library.rememberPlayed(id) }
+                    }
                     handler.removeCallbacks(checkpoint)
                     if (player.isPlaying) handler.postDelayed(checkpoint, 5000)
                 }
@@ -71,7 +78,7 @@ class PlaybackService : MediaSessionService() {
                         Player.EVENT_TIMELINE_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_POSITION_DISCONTINUITY,
                         Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_PLAYBACK_PARAMETERS_CHANGED, Player.EVENT_REPEAT_MODE_CHANGED,
                     )
-                ) savePlayback(player)
+                ) savePlayback(player, writeQueue = events.contains(Player.EVENT_TIMELINE_CHANGED))
             }
         })
     }
@@ -82,34 +89,47 @@ class PlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>,
         ): ListenableFuture<List<MediaItem>> {
-            val tracks = library.read().associateBy(LocalTrack::id)
-            val queue = mediaItems.map { item ->
-                tracks[item.mediaId]?.mediaItem()
-                    ?: return Futures.immediateFailedFuture(IllegalArgumentException("Unknown local track"))
-            }
-            return Futures.immediateFuture(queue)
+            restoringQueue = false
+            return Futures.submit(Callable {
+                val tracks = library.readById()
+                mediaItems.map { item ->
+                    tracks[item.mediaId]?.mediaItem() ?: throw IllegalArgumentException("Unknown local track")
+                }
+            }, libraryWorker)
         }
     }
 
-    private fun restore(player: Player, library: LocalLibrary) {
+    private fun restoreModes(player: Player) {
         val speed = storage.getFloat("speed", 1f)
         player.setPlaybackSpeed(speed.takeIf { it in playbackSpeeds } ?: 1f)
         player.repeatMode = storage.getInt("repeat", Player.REPEAT_MODE_OFF)
             .coerceIn(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL)
-        val saved = JSONArray(storage.getString("queue", "[]"))
-        val tracks = library.read().associateBy(LocalTrack::id)
-        val queue = (0 until saved.length()).mapNotNull { tracks[saved.optString(it)] }
-        if (queue.isEmpty()) return
-        val current = storage.getString("current", null)
-        val index = queue.indexOfFirst { it.id == current }
-        val position = if (index >= 0) storage.getLong("position", 0).coerceAtLeast(0) else 0
-        player.setMediaItems(queue.map(LocalTrack::mediaItem), index.coerceAtLeast(0), position)
     }
 
-    private fun savePlayback(player: Player) {
-        val queue = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
-        storage.edit()
-            .putString("queue", JSONArray(queue).toString())
+    private fun restoreQueue(player: Player, library: LocalLibrary) {
+        libraryWorker.execute {
+            val saved = runCatching { JSONArray(storage.getString("queue", "[]")) }.getOrDefault(JSONArray())
+            val tracks = if (saved.length() == 0) emptyMap() else library.readById()
+            val queue = (0 until saved.length()).mapNotNull { tracks[saved.optString(it)]?.mediaItem() }
+            val current = storage.getString("current", null)
+            val index = queue.indexOfFirst { it.mediaId == current }
+            val position = if (index >= 0) storage.getLong("position", 0).coerceAtLeast(0) else 0
+            handler.post {
+                if (restoringQueue && session?.player === player) {
+                    restoringQueue = false
+                    if (queue.isNotEmpty()) player.setMediaItems(queue, index.coerceAtLeast(0), position)
+                }
+            }
+        }
+    }
+
+    private fun savePlayback(player: Player, writeQueue: Boolean) {
+        val edit = storage.edit()
+        if (writeQueue) {
+            val queue = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+            edit.putString("queue", JSONArray(queue).toString())
+        }
+        edit
             .putString("current", player.currentMediaItem?.mediaId)
             .putLong("position", player.currentPosition.coerceAtLeast(0))
             .putFloat("speed", player.playbackParameters.speed)
@@ -122,11 +142,12 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         handler.removeCallbacks(checkpoint)
         session?.let {
-            savePlayback(it.player)
+            if (!restoringQueue) savePlayback(it.player, writeQueue = false)
             it.player.release()
             it.release()
         }
         session = null
+        libraryWorker.shutdown()
         super.onDestroy()
     }
 }
