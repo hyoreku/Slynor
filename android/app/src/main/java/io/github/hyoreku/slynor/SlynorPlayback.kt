@@ -9,7 +9,6 @@ import android.util.LruCache
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -136,12 +135,9 @@ internal fun PlayerBar(track: LocalTrack, state: Playback, playhead: State<Long>
 }
 
 @Composable
-private fun TrackProgress(state: Playback, playhead: State<Long>, modifier: Modifier) = key(state.trackId) {
-    val progress by animateFloatAsState(
-        targetValue = progress(playhead.value, state.duration), animationSpec = tween(210), label = "Позиция воспроизведения",
-    )
+private fun TrackProgress(state: Playback, playhead: State<Long>, modifier: Modifier) {
     LinearProgressIndicator(
-        progress = { progress }, modifier = modifier,
+        progress = { progress(playhead.value, state.duration) }, modifier = modifier,
         trackColor = MaterialTheme.colorScheme.surfaceVariant, gapSize = 0.dp, drawStopIndicator = {},
     )
 }

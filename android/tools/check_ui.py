@@ -238,9 +238,9 @@ def wait_for_media_state(state):
 
 
 def pause_active_playback():
-    # Keep the progress indicator still while uiautomator waits for an idle window.
     wait_for_media_state(3)
-    adb("shell", "cmd", "media_session", "dispatch", "pause")
+    # Use Slynor's own controls so an unrelated emulator session cannot consume the key.
+    tap(wait_for("Пауза", PLAYER), "Пауза")
     wait_for_media_state(2)
 
 
