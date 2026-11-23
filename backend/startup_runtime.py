@@ -42,6 +42,13 @@ def load_packaged_dotnet():
     runtime = pythonnet.get_runtime_info()
     if runtime is None or runtime.kind.casefold() != 'coreclr' or not runtime.initialized:
         raise RuntimeError(f'Expected the packaged CoreCLR, found {runtime}')
+
+    import clr
+
+    # pywebview imports these types directly. CoreCLR keeps them in separate
+    # assemblies that are not loaded just by referencing System.Windows.Forms.
+    for assembly in ('Microsoft.Win32.SystemEvents', 'System.Drawing.Primitives', 'System.Drawing.Common'):
+        clr.AddReference(assembly)
     logging.getLogger('ownplayer').info('Packaged .NET Desktop Runtime initialized (%s)', runtime.kind)
 
 

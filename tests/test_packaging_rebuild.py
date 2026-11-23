@@ -10,7 +10,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 from backend.worker_runtime import worker_python, worker_available
 import start
 
@@ -45,15 +45,19 @@ class BuildContractTests(unittest.TestCase):
             config = dotnet / 'Slynor.runtimeconfig.json'
             config.touch()
             runtime = SimpleNamespace(kind='CoreCLR', initialized=True)
+            clr = SimpleNamespace(AddReference=Mock())
             with (
                 patch.object(sys, 'frozen', True, create=True),
                 patch.object(sys, 'executable', str(Path(root) / 'Slynor.exe')),
-                patch.dict(sys.modules, {'pythonnet': SimpleNamespace()}),
+                patch.dict(sys.modules, {'pythonnet': SimpleNamespace(), 'clr': clr}),
                 patch('pythonnet.load', create=True) as load,
                 patch('pythonnet.get_runtime_info', return_value=runtime, create=True),
             ):
                 load_packaged_dotnet()
                 load.assert_called_once_with('coreclr', dotnet_root=str(dotnet), runtime_config=str(config))
+                self.assertEqual(clr.AddReference.call_args_list, [
+                    call('Microsoft.Win32.SystemEvents'), call('System.Drawing.Primitives'), call('System.Drawing.Common'),
+                ])
 
     def test_explicit_server_import(self):
         tree = ast.parse((ROOT / 'start.py').read_text(encoding='utf-8'))
