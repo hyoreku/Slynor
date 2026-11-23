@@ -78,6 +78,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\windows\BUILD_WI
 
 Приватные окружения устанавливаются через `--only-binary=:all: --require-hashes` из Windows x64 lock-файлов `provider-win-py313.txt` и `search-win-py313.txt`. Проверка входного архива Python и структуры нативного комплекта выполняется до пересборки.
 
+При сборке фиксированная версия pywebview использует публичный диалог выбора папок WinForms. Скрипт `packaging/windows/patch_pywebview.py` проверяет SHA-256 исходного модуля перед правкой.
+
 ## 5. Результат успешной сборки
 
 - `dist\Slynor-Portable.zip` — распаковать **всю папку** и запускать `Slynor.exe`.

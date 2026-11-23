@@ -90,6 +90,7 @@ try {
     Run $buildPython @('-m','pip','install','--upgrade','pip')
     Run $buildPython @('-m','pip','install','--require-hashes','-r',$buildLock)
     Run $buildPython @('-m','pip','check')
+    Run $buildPython @('packaging\windows\patch_pywebview.py')
     & $buildPython -m pip freeze | Set-Content -Encoding UTF8 (Join-Path $logDirectory 'build-environment.txt')
     Run $buildPython @('tools\build_app_icon.py')
     if (Test-Path 'dist\Slynor') { Remove-Item 'dist\Slynor' -Recurse -Force }
