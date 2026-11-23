@@ -108,12 +108,17 @@ def run_check(smoke=False):
                    'PIL.Image', 'numpy', 'av', 'pystray', 'httpx', 'socksio', 'vlc', 'backend.main'):
         check('import:' + module, lambda m=module: importlib.import_module(m))
     if os.name == 'nt':
-        check('webview:winforms', lambda: importlib.import_module('webview.platforms.winforms'))
         def desktop_webview():
             from desktop import configure_webview
             if configure_webview() != 'edgechromium':
                 raise RuntimeError('Windows desktop did not select WebView2')
         check('webview:runtime', desktop_webview)
+        if data['checks']['webview:runtime']['ok']:
+            def winforms():
+                from webview.platforms import winforms
+                if winforms.renderer != 'edgechromium':
+                    raise RuntimeError(f'WinForms selected an unexpected renderer: {winforms.renderer}')
+            check('webview:winforms', winforms)
     def assets():
         root = Path(__file__).resolve().parent.parent
         for relative in ('frontend/index.html', 'frontend/mini.html', 'frontend/js/app.js',

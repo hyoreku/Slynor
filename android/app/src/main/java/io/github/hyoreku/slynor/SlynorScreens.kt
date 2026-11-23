@@ -373,6 +373,9 @@ internal fun SlynorScreens(
                         Destination.Playlists -> PlaylistsScreen(
                             library, data, playlist, current, player, { playlistId = it },
                             { editPlaylist() }, { editPlaylist(it.id) }, onPlay,
+                            onFavorite = onFavorite,
+                            onAddTrack = { addTrackId = it.id },
+                            onTrackDetails = { detailsId = it.id },
                         )
                         Destination.Settings -> SettingsScreen(theme, onTheme, appearance)
                     }
@@ -696,7 +699,7 @@ internal fun Glyph(@DrawableRes icon: Int, description: String?, modifier: Modif
     Icon(painterResource(icon), description, modifier.size(20.dp), tint = tint)
 }
 
-private enum class LibrarySort(val title: String) {
+internal enum class LibrarySort(val title: String) {
     Added("По порядку добавления"),
     Newest("Сначала новые"),
     Title("По названию"),

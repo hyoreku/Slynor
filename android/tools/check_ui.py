@@ -278,6 +278,21 @@ def main(output):
     playlist = wait_for("Roadtrip", alpha, beta)
     assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
     (output / "playlist.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    sort_button = "Сортировка плейлиста"
+    tap(wait_for(sort_button), sort_button)
+    tap(wait_for("По названию"), "По названию")
+    sorted_playlist = wait_for("Roadtrip", alpha, beta)
+    assert next(centers(sorted_playlist, alpha))[1] < next(centers(sorted_playlist, beta))[1]
+    tap(wait_for(sort_button), sort_button)
+    tap(wait_for("Порядок плейлиста"), "Порядок плейлиста")
+    playlist = wait_for("Roadtrip", alpha, beta, "Поиск в плейлисте")
+    assert next(centers(playlist, beta))[1] < next(centers(playlist, alpha))[1]
+    tap(playlist, "Поиск в плейлисте")
+    adb("shell", "input", "text", "alpha")
+    matching = wait_for("1 из 2", alpha, "Очистить поиск в плейлисте")
+    assert not list(centers(matching, beta)), "Playlist search displayed a non-matching track"
+    tap(matching, "Очистить поиск в плейлисте")
+    wait_for(alpha, beta, "Поиск в плейлисте")
 
     tap(wait_for("Настройки"), "Настройки")
     settings = wait_for("Тема приложения", "Тёмная", "Визуализатор")
@@ -310,7 +325,7 @@ def main(output):
     tap(wait_for("Выбрать обложку", "Сохранить"), "Сохранить")
     wait_for("Roadtrip", alpha, beta)
     assert "cover" not in saved_playlist("Roadtrip"), "The removed cover is still assigned"
-    print("Verified persistent playlist artwork, track order, theme and playback controls.")
+    print("Verified playlist search, sorting, persistent artwork, manual track order, theme and playback controls.")
 
 
 if __name__ == "__main__":

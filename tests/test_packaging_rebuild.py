@@ -28,11 +28,32 @@ class BuildContractTests(unittest.TestCase):
                 patch.object(desktop, 'os', SimpleNamespace(name='nt')),
                 patch.object(desktop, 'webview', webview),
                 patch('backend.startup_runtime.require_webview2', return_value=runtime) as require,
+                patch('backend.startup_runtime.load_packaged_dotnet') as load_dotnet,
             ):
                 self.assertEqual(desktop.configure_webview(), 'edgechromium')
                 require.assert_called_once_with()
+                load_dotnet.assert_called_once_with()
                 expected = {'WEBVIEW2_RUNTIME_PATH': str(runtime)} if runtime else {}
                 self.assertEqual(webview.settings, expected)
+
+    def test_frozen_app_initializes_coreclr_from_its_own_directory(self):
+        from backend.startup_runtime import load_packaged_dotnet
+
+        with tempfile.TemporaryDirectory(prefix='Slynor runtime ') as root:
+            dotnet = Path(root) / 'dotnet'
+            dotnet.mkdir()
+            config = dotnet / 'Slynor.runtimeconfig.json'
+            config.touch()
+            runtime = SimpleNamespace(kind='CoreCLR', initialized=True)
+            with (
+                patch.object(sys, 'frozen', True, create=True),
+                patch.object(sys, 'executable', str(Path(root) / 'Slynor.exe')),
+                patch.dict(sys.modules, {'pythonnet': SimpleNamespace()}),
+                patch('pythonnet.load', create=True) as load,
+                patch('pythonnet.get_runtime_info', return_value=runtime, create=True),
+            ):
+                load_packaged_dotnet()
+                load.assert_called_once_with('coreclr', dotnet_root=str(dotnet), runtime_config=str(config))
 
     def test_explicit_server_import(self):
         tree = ast.parse((ROOT / 'start.py').read_text(encoding='utf-8'))

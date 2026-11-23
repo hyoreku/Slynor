@@ -5,6 +5,8 @@ $Destination = New-Item -ItemType Directory -Force -Path $Destination | Select-O
 $native = Join-Path $Destination 'native'
 $licenses = Join-Path $native 'licenses'
 New-Item -ItemType Directory -Force -Path $licenses | Out-Null
+$runtimeConfig = Join-Path $PSScriptRoot 'Slynor.runtimeconfig.json'
+$dotnetVersion = (Get-Content -Raw -LiteralPath $runtimeConfig | ConvertFrom-Json).runtimeOptions.framework.version
 
 $sources = [ordered]@{
     python = @{
@@ -27,6 +29,18 @@ $sources = [ordered]@{
         Url = 'https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-pc-windows-msvc.zip'
         Sha256 = 'a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238'
     }
+    dotnet = @{
+        Name = "dotnet-runtime-${dotnetVersion}-win-x64.zip"
+        Url = "https://builds.dotnet.microsoft.com/dotnet/Runtime/$dotnetVersion/dotnet-runtime-${dotnetVersion}-win-x64.zip"
+        HashAlgorithm = 'SHA512'
+        Sha512 = '06f0bedd59ae4ac722ada805a6d6bbf605bcdc790c71f59b7003878072902b5cde5dec8c40c0baa81192660d4748e9d79afdbdcb0c0ea9d6b821d0a044c4c6dd'
+    }
+    dotnetDesktop = @{
+        Name = "windowsdesktop-runtime-${dotnetVersion}-win-x64.zip"
+        Url = "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/$dotnetVersion/windowsdesktop-runtime-${dotnetVersion}-win-x64.zip"
+        HashAlgorithm = 'SHA512'
+        Sha512 = 'd82ee2e70f0c1ee7af3a908a944541993782aa80a3fd2b2e02a3fdf27edc81c0ad946f14a3fe34bae295f1b7a23f5d35a466239726e4457bb200de0344e077c4'
+    }
     webview2 = @{
         Name = 'Microsoft.WebView2.FixedVersionRuntime.157.0.4341.60.x64.cab'
         Url = 'https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/9d6605ff-c172-41a1-8116-e1bb02b93a01/Microsoft.WebView2.FixedVersionRuntime.157.0.4341.60.x64.cab'
@@ -48,14 +62,19 @@ foreach ($component in $sources.Keys) {
         Download $source.Url "$file.partial"
         Move-Item -LiteralPath "$file.partial" -Destination $file
     }
-    if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $source.Sha256) {
-        throw "SHA-256 mismatch: $($source.Name)"
+    $algorithm = if ($source.HashAlgorithm) { $source.HashAlgorithm } else { 'SHA256' }
+    if ((Get-FileHash -LiteralPath $file -Algorithm $algorithm).Hash -ne $source[$algorithm]) {
+        throw "$algorithm mismatch: $($source.Name)"
     }
 }
 
 Expand-Archive -LiteralPath (Join-Path $Destination $sources.vlc.Name) -DestinationPath $Destination -Force
 Expand-Archive -LiteralPath (Join-Path $Destination $sources.ffmpeg.Name) -DestinationPath $Destination -Force
 Expand-Archive -LiteralPath (Join-Path $Destination $sources.deno.Name) -DestinationPath (Join-Path $native 'deno') -Force
+$dotnetPath = Join-Path $native 'dotnet'
+Expand-Archive -LiteralPath (Join-Path $Destination $sources.dotnet.Name) -DestinationPath $dotnetPath -Force
+Expand-Archive -LiteralPath (Join-Path $Destination $sources.dotnetDesktop.Name) -DestinationPath $dotnetPath -Force
+Copy-Item -LiteralPath $runtimeConfig -Destination $dotnetPath -Force
 
 $vlcPath = Join-Path $native 'vlc'
 $ffmpegPath = Join-Path $native 'ffmpeg'
@@ -89,6 +108,8 @@ VLC source: https://download.videolan.org/pub/videolan/vlc/3.0.24/
 FFmpeg source: https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
 FFmpeg build information: https://github.com/GyanD/codexffmpeg/releases/tag/8.0.1
 Deno source: https://github.com/denoland/deno/tree/v2.9.7
+Microsoft .NET runtime and desktop runtime: https://dotnet.microsoft.com/download/dotnet/10.0
+Microsoft .NET Windows Forms source: https://github.com/dotnet/winforms
 Microsoft WebView2: https://developer.microsoft.com/microsoft-edge/webview2/
 Microsoft WebView2 license: https://aka.ms/webview2/License
 '@ | Set-Content -Encoding utf8 (Join-Path $licenses 'SOURCE-LINKS.txt')

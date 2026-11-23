@@ -25,6 +25,26 @@ def application_dir():
     return Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent
 
 
+def load_packaged_dotnet():
+    """Select the private CoreCLR before pywebview imports WinForms."""
+    if not getattr(sys, 'frozen', False):
+        return
+    import pythonnet
+
+    dotnet = application_dir() / 'dotnet'
+    config = dotnet / 'Slynor.runtimeconfig.json'
+    if not config.is_file():
+        raise FileNotFoundError(f'Packaged .NET Desktop configuration is missing: {config}')
+    try:
+        pythonnet.load('coreclr', dotnet_root=str(dotnet), runtime_config=str(config))
+    except Exception as exc:
+        raise RuntimeError(f'Could not initialize the packaged .NET Desktop Runtime at {dotnet}') from exc
+    runtime = pythonnet.get_runtime_info()
+    if runtime is None or runtime.kind.casefold() != 'coreclr' or not runtime.initialized:
+        raise RuntimeError(f'Expected the packaged CoreCLR, found {runtime}')
+    logging.getLogger('ownplayer').info('Packaged .NET Desktop Runtime initialized (%s)', runtime.kind)
+
+
 def require_webview2():
     """Return the fixed Runtime folder, or validate the registered Evergreen Runtime."""
     fixed = application_dir() / 'webview2'

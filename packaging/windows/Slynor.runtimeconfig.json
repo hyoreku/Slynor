@@ -1,0 +1,9 @@
+{
+  "runtimeOptions": {
+    "framework": {
+      "name": "Microsoft.WindowsDesktop.App",
+      "version": "10.0.15"
+    },
+    "rollForward": "Disable"
+  }
+}

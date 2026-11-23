@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 import ntpath
 import os
@@ -753,8 +754,9 @@ class DesktopApi:
 
 def configure_webview():
     if os.name == 'nt':
-        from backend.startup_runtime import require_webview2
+        from backend.startup_runtime import load_packaged_dotnet, require_webview2
         fixed_webview = require_webview2()
+        load_packaged_dotnet()
         if fixed_webview is not None:
             webview.settings['WEBVIEW2_RUNTIME_PATH'] = str(fixed_webview)
         return 'edgechromium'
@@ -785,6 +787,19 @@ def main(debug=False, base_url=DEFAULT_DESKTOP_URL):
     register(shell)
     window.events.closing += shell.closing
     window.events.closed += shell.stop_tray
+    logger = logging.getLogger('ownplayer')
+
+    def report_ui_ready():
+        if window.evaluate_js(
+            f"location.origin === {json.dumps(base_url)} && "
+            "Boolean(document.getElementById('screen-home')) && "
+            "typeof window.pywebview?.api?.load_settings === 'function'"
+        ):
+            logger.info('Desktop UI ready at %s/ui', base_url)
+        else:
+            logger.error('WebView loaded without the desktop UI or its bridge')
+
+    window.events.loaded += report_ui_ready
     shell.start_tray()
     # WebView2 visibilitychange is not reliable on native minimize/restore.
     # Notify the UI; do not pause or restart the main audio player.

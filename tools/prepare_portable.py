@@ -5,6 +5,7 @@ Inputs are developer-supplied official redistributables; never copy a venv.
 """
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -49,6 +50,14 @@ def check_inputs(native, embed, expected_hash, system_webview2=False):
         required += ('webview2/msedgewebview2.exe',)
     for relative in required:
         require_file(native / relative)
+    dotnet = native / 'dotnet'
+    config = json.loads((dotnet / 'Slynor.runtimeconfig.json').read_text(encoding='utf-8'))
+    framework = config['runtimeOptions']['framework']
+    version = framework['version']
+    for relative in (f'host/fxr/{version}/hostfxr.dll',
+                     f'shared/Microsoft.NETCore.App/{version}/coreclr.dll',
+                     f'shared/Microsoft.WindowsDesktop.App/{version}/System.Windows.Forms.dll'):
+        require_file(dotnet / relative)
     if not (native / 'vlc/plugins').is_dir() or not (native / 'licenses').is_dir():
         raise FileNotFoundError('Supply VLC plugins and redistributable licenses')
     with zipfile.ZipFile(embed) as archive:
@@ -67,7 +76,7 @@ def prepare(root, output, native, embed, expected_hash, system_webview2=False):
     root, output, native, embed = (Path(p).resolve() for p in (root, output, native, embed))
     require_file(output / 'Slynor.exe')
     check_inputs(native, embed, expected_hash, system_webview2)
-    for name in ('vlc', 'ffmpeg', 'deno', 'webview2', 'licenses'):
+    for name in ('vlc', 'ffmpeg', 'deno', 'dotnet', 'webview2', 'licenses'):
         destination = output / name
         if destination.exists():
             shutil.rmtree(destination)
@@ -94,7 +103,7 @@ def prepare(root, output, native, embed, expected_hash, system_webview2=False):
                     if system_webview2 else 'WebView2 Fixed Runtime is bundled.\n')
     (output / 'PORTABLE_README.txt').write_text(
         'Extract the entire Slynor folder and run Slynor.exe. Do not move the EXE alone.\n'
-        'Python, VLC, FFmpeg and Deno are private bundled components.\n'
+        'Python, .NET Desktop Runtime, VLC, FFmpeg and Deno are private bundled components.\n'
         + webview_note +
         'User data: %LOCALAPPDATA%\\OwnPlayerMusic (compatible with existing versions).\n'
         'Online services require Internet access and may impose access restrictions.\n', encoding='utf-8')

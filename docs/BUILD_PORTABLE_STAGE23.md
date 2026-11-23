@@ -15,7 +15,7 @@ Workflow [Windows packages](../.github/workflows/windows-package.yml) собир
 
 ## 2. Входные redistributable
 
-Чтобы повторить набор компонентов из Actions, выполните в PowerShell `.\packaging\windows\GET_BUILD_INPUTS.ps1 -Destination 'C:\SlynorDeps'`. Скрипт скачивает архивы закреплённых версий, сверяет SHA-256 и возвращает пути и хеш Python для команды сборки. Он сохраняет список источников в `native\licenses`.
+Чтобы повторить набор компонентов из Actions, выполните в PowerShell `.\packaging\windows\GET_BUILD_INPUTS.ps1 -Destination 'C:\SlynorDeps'`. Скрипт скачивает архивы закреплённых версий, сверяет SHA-512 для .NET и SHA-256 для остальных компонентов. Он возвращает пути и хеш Python для команды сборки и сохраняет список источников в `native\licenses`.
 
 Получить из официальных источников, проверить происхождение и условия распространения:
 
@@ -23,6 +23,7 @@ Workflow [Windows packages](../.github/workflows/windows-package.yml) собир
 - VLC x64 из https://www.videolan.org/vlc/ — полный переносимый комплект, включая библиотеки, плагины, данные и лицензии.
 - FFmpeg/ffprobe x64 — согласованный Windows-комплект из источника сборок, указанного на https://ffmpeg.org/download.html. Для shared build нужны и DLL, не только два EXE.
 - Deno x64 из https://deno.com/ / официальных выпусков.
+- .NET Runtime и .NET Desktop Runtime x64 версии из `packaging/windows/Slynor.runtimeconfig.json`. Распакуйте оба архива в `dotnet` и скопируйте туда файл конфигурации.
 - Для автономной сборки подготовьте распакованный **WebView2 Fixed Version Runtime x64**. Файл `msedgewebview2.exe` должен лежать непосредственно в папке `webview2`. [Microsoft WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)
 - Тексты лицензий всех этих компонентов и Python-зависимостей, уведомления/другие материалы, необходимые выбранными лицензиями. Наличие папки `licenses` не заменяет юридическую проверку LGPL/GPL и других условий.
 
@@ -39,6 +40,10 @@ C:\SlynorDeps\native\
          ...
   deno\deno.exe
         ...
+  dotnet\Slynor.runtimeconfig.json
+          host\fxr\...
+          shared\Microsoft.NETCore.App\...
+          shared\Microsoft.WindowsDesktop.App\...
   webview2\msedgewebview2.exe
            ...
   licenses\...
